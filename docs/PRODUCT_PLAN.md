@@ -96,6 +96,7 @@ EvidenceItem
 
 InvestigationResult
   requestId
+  classification: bug | feature_request | support_question | unknown
   likelyComponent
   confidence
   suspiciousFiles
@@ -105,13 +106,31 @@ InvestigationResult
   citations
   warnings
 
+WorkItemDraft
+  title
+  description
+  owner
+  areaPath
+  tags
+  severity
+  priority
+  sourceCitations
+
+ChannelProfile
+  goals
+  ownershipRules
+  responsePreferences
+  enabledProviders
+
 EvalCase
   id
   report
   repo
+  expectedClassification
   expectedComponent
   expectedFiles
   expectedOwners
+  expectedWorkItem
   notes
 ```
 
@@ -156,7 +175,38 @@ Initial providers should be deliberately simple:
 - OpenAI reasoner
 - CLI/markdown output adapter
 
-## MVP Build Sequence
+## Channel Agent Model
+
+FirstTrace should support a generic channel-agent model without tying the core
+product to any one chat platform or company workflow.
+
+```text
+ChannelProfile
+  goals
+  expected work types
+  ownership and SME routing rules
+  response preferences
+  enabled apps and providers
+
+SkillDefinition
+  triage feedback
+  log a bug or work item
+  link related work items
+  search existing work
+
+Trigger
+  manual CLI command
+  at-mention
+  emoji reaction
+  top-level channel message
+  API request
+```
+
+In this model, automatic triage can run on broad triggers, but write actions
+such as creating a bug should require a deliberate trigger or an explicit policy
+in the channel profile.
+
+## Phased Roadmap
 
 ### Phase 1: Local CLI Spike
 
@@ -171,35 +221,88 @@ firsttrace investigate \
 The command should:
 
 1. read the report text
-2. search files and commits in the repo
-3. load ownership metadata
-4. ask the reasoner to rank evidence
-5. print a concise result with citations
+2. classify the report as bug, feature request, support question, or unknown
+3. search files and commits in the repo
+4. load ownership metadata
+5. ask the reasoner to rank evidence
+6. print a concise result with citations
 
 No Slack, no queue, no Docker, no npm publishing yet.
 
-### Phase 2: Eval Runner
+### Phase 2: Evidence and Eval Runner
 
 Add eval cases before production integrations:
 
 ```bash
 firsttrace eval \
   --repo /path/to/repo \
-  --cases evals/wallspace.yaml
+  --cases evals/private-repo.yaml
 ```
 
 The eval runner should score:
 
+- classification matched
 - expected files found in top results
 - expected owner found in top results
 - expected component matched
 - citations present for claims
 - hallucinated or unsupported claims avoided
+- bug/work-item metadata quality when write-capable skills are tested
 
-WallSpace can be the first dogfood corpus because it has real historical bugs
-and known expected files.
+The first dogfood corpus can be any private repository with known historical
+bugs, expected files, expected owners, and known final outcomes. Public docs
+should describe this generically; customer- or company-specific eval cases should
+stay private.
 
-### Phase 3: Runtime Worker
+### Phase 3: Channel Profiles and Skill Definitions
+
+Add generic configuration files that describe channel behavior and task behavior:
+
+```text
+channel.md
+  channel goals
+  expected message types
+  SME/DRI ownership mapping
+  response preferences
+  enabled providers
+
+skills/triage.md
+  classify feedback
+  determine owner
+  gather evidence
+  suggest next action
+
+skills/log-a-bug.md
+  create a validated work item when explicitly triggered
+  fill title, description, owner, area, tags, severity, and priority
+  link evidence back to the source thread
+```
+
+These files should be generic and provider-neutral. A deployment can bind them
+to Slack, Teams, OCI work items, Jira, GitHub Issues, or another provider.
+
+### Phase 4: Local Dogfood Against a Private Repo
+
+Use a real private repository as a read-only dogfood target:
+
+```bash
+firsttrace eval \
+  --repo /path/to/private/repo \
+  --cases /path/to/private/evals.yaml
+```
+
+Goals:
+
+- prove the tool can localize real historical bugs
+- validate ownership mapping
+- validate classification quality
+- validate citation quality
+- tune prompts and ranking before chat integration
+
+This phase should not require publishing private repo names, private bug reports,
+or customer-specific provider details in the public repository.
+
+### Phase 5: Runtime Worker
 
 After the CLI and eval runner work, add an asynchronous runtime:
 
@@ -219,26 +322,44 @@ Minimum worker behavior:
 Temporal is not needed for v0. A simple worker plus queue/status tracking is
 enough until investigations become long-running, multi-step, or human-involved.
 
-### Phase 4: Slack Adapter
+### Phase 6: Chat Adapter and Triggers
 
-Slack should be the first chat adapter, not the core product:
+Slack can be the first chat adapter, but the core product should stay generic:
 
 ```text
 Slack app mention -> Receiver -> Queue -> Worker -> Slack thread reply
 ```
 
-The Slack adapter should:
+The first chat adapter should:
 
-- verify Slack requests
+- verify incoming requests
 - acknowledge quickly
 - fetch thread context
 - enqueue an investigation request
-- post the result back to the thread
+- post or return the result
+- support explicit triggers such as at-mentions and emoji reactions
+- optionally support automatic triage on top-level messages
 
 The investigation engine should remain chat-agnostic so Teams, Discord, Linear,
 or other sources can be added later.
 
-### Phase 5: Packaging and Deployment
+### Phase 7: Work Item Provider
+
+Add a write-capable provider only after triage output is trusted:
+
+```text
+WorkItemProvider
+  createWorkItem()
+  createChildWorkItem()
+  linkWorkItems()
+  searchWorkItems()
+```
+
+Initial write behavior should be explicit-trigger only. The provider interface
+should support OCI work items, Jira, GitHub Issues, Linear, or another work item
+system without changing the investigation engine.
+
+### Phase 8: Packaging and Deployment
 
 Packaging comes after the tool is useful locally:
 
@@ -256,17 +377,17 @@ Queue implementations should be adapters:
 JobQueue
   InMemoryQueue      local tests
   RedisQueue         generic Docker Compose
-  SupabaseQueue      WallSpace dogfood path
+  SupabaseQueue      Vercel/Supabase dogfood path
   VercelQueue        Vercel-native users
-  OciQueue           Oracle/OCI deployments
+  OciQueue           OCI deployments
 ```
 
 Recommended progression:
 
 1. in-memory queue for local development
 2. Redis queue for generic open-source Docker Compose
-3. Supabase queue for WallSpace dogfood
-4. OCI queue for Oracle-style deployments
+3. Supabase queue for Vercel/Supabase dogfood deployments
+4. OCI queue for OCI deployments
 
 The worker should be a normal long-running process. It can run locally, in a
 container, in OCI Container Instances, on Kubernetes, or behind another queue
@@ -292,12 +413,14 @@ Initial eval file:
 
 Useful metrics:
 
+- classification accuracy
 - top-3 expected file recall
 - top-5 expected file recall
 - owner match
 - component match
 - citation coverage
 - unsupported claim count
+- write-action precision for bug/work-item creation evals
 - result length
 
 ## Security and Privacy
@@ -350,9 +473,9 @@ features.
 2. Create the local CLI skeleton.
 3. Define the first JSON/YAML schemas for requests, results, owners, and evals.
 4. Implement local git file search and ownership YAML loading.
-5. Add the first WallSpace eval cases.
+5. Add the first private-repo eval cases outside the public repository.
 6. Add the first OpenAI-backed ranking pass.
-7. Run evals before adding Slack.
+7. Run evals before adding chat integrations.
 
 ## Open Questions
 

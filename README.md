@@ -140,9 +140,9 @@ The eval runner should answer:
 Teams should be able to bring their own infrastructure:
 
 - **Local/dev:** in-memory queue or Redis
-- **WallSpace dogfood path:** Vercel receiver + Supabase Queue + worker process
+- **Vercel/Supabase path:** Vercel receiver + Supabase Queue + worker process
 - **Generic open-source path:** Docker Compose + Redis or Postgres
-- **Oracle/OCI path:** OCI Container Instances or OKE + OCI Queue + OCI Vault
+- **OCI path:** OCI Container Instances or OKE + OCI Queue + OCI Vault
 
 Queue and runtime should be adapters:
 
@@ -157,10 +157,9 @@ JobQueue
 
 ## Initial Dogfood Plan
 
-The first real test corpus can be a private repo with known historical bugs. For
-example, a local app repo can provide old bug reports with known final files and
-owners. If FirstTrace cannot localize those bugs from git history and ownership
-metadata, chat integration will not save it.
+The first real test corpus can be any private repo with known historical bugs,
+expected files, and expected owners. If FirstTrace cannot localize those bugs
+from git history and ownership metadata, chat integration will not save it.
 
 ## Status
 
@@ -170,7 +169,7 @@ Idea stage. The next step is a small spike:
 2. Add ownership YAML support.
 3. Add a simple eval file format.
 4. Run against 5-10 historical bugs.
-5. Only then wire Slack.
+5. Only then wire the first chat adapter.
 
 ## License
 
