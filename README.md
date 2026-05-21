@@ -193,10 +193,11 @@ npm run firsttrace -- investigate \
 
 Next planned work:
 
-1. Add an eval runner and eval case format.
-2. Run against private historical bug cases outside the public repo.
-3. Add channel profiles and skill definitions.
-4. Only then wire the first chat adapter.
+1. Add OpenAI-backed reasoning for the local CLI.
+2. Add an eval runner and eval case format.
+3. Add a local worker runtime.
+4. Add a local message delivery adapter.
+5. Only then wire the first chat adapter.
 
 ## License
 

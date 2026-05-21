@@ -167,13 +167,17 @@ OutputAdapter
   send(result)
 ```
 
-Initial providers should be deliberately simple:
+Phase 1 providers are deliberately simple:
 
 - local git provider using the checked-out repository
 - ownership YAML provider using `firsttrace.owners.yaml`
-- fixture issue provider for evals
-- OpenAI reasoner
 - CLI/markdown output adapter
+
+Future phases add:
+
+- OpenAI reasoner
+- fixture issue provider for evals
+- queue-backed worker output adapter
 
 ## Channel Agent Model
 
@@ -208,121 +212,131 @@ in the channel profile.
 
 ## Phased Roadmap
 
-### Phase 1: Local CLI Spike
+### Phase 1: Deterministic Local CLI - Complete
 
-Build the smallest useful local flow:
-
-```bash
-firsttrace investigate \
-  --repo /path/to/repo \
-  --report "checkout retry leaves the artwork held"
-```
-
-The command should:
-
-1. read the report text
-2. classify the report as bug, feature request, support question, or unknown
-3. search files and commits in the repo
-4. load ownership metadata
-5. ask the reasoner to rank evidence
-6. print a concise result with citations
-
-No Slack, no queue, no Docker, no npm publishing yet.
-
-### Phase 2: Evidence and Eval Runner
-
-Add eval cases before production integrations:
+The implemented Phase 1 flow is:
 
 ```bash
-firsttrace eval \
-  --repo /path/to/repo \
-  --cases evals/private-repo.yaml
+npm run firsttrace -- investigate \
+  --config firsttrace.config.yaml \
+  --report "README deployment plan is unclear"
 ```
 
-The eval runner should score:
+Current capability:
 
-- classification matched
+- read a YAML config with explicit repositories, docs, issue exports, owners,
+  and search limits
+- classify the report as bug, feature request, support question, or unknown
+- search local files, configured docs, configured issue exports, and recent git
+  commits
+- resolve owners from path/glob rules
+- rank deterministic evidence and print Markdown with citations
+
+Limitations:
+
+- no OpenAI reasoning
+- no eval runner
+- no worker
+- no message delivery adapter
+- no Slack, Docker, or npm publishing
+
+### Phase 2: OpenAI Reasoner for Local CLI
+
+Add an optional AI reasoning pass on top of Phase 1 evidence:
+
+```bash
+npm run firsttrace -- investigate \
+  --config firsttrace.config.yaml \
+  --report "checkout retry leaves the buyer stuck" \
+  --ai
+```
+
+The CLI should continue to gather deterministic evidence first. OpenAI should
+reason over that bounded evidence bundle, not crawl the repository blindly.
+
+The AI-assisted result should include:
+
+- likely files and components
+- confidence
+- owner and implementer hints from ownership rules and git history
+- short explanation grounded in citations
+- missing-information questions when evidence is weak
+
+Local configuration:
+
+- `OPENAI_API_KEY` from `.env.local` or the shell
+- `OPENAI_MODEL_CHAT` from `.env.local` or the shell
+- explicit opt-in through `--ai` or a config flag
+
+### Phase 3: Eval Runner
+
+Add eval cases before chat or worker integrations:
+
+```bash
+npm run firsttrace -- eval \
+  --config firsttrace.config.yaml \
+  --cases evals/example.yaml
+```
+
+The eval runner should compare deterministic and AI-assisted results and score:
+
+- classification accuracy
 - expected files found in top results
 - expected owner found in top results
 - expected component matched
-- citations present for claims
-- hallucinated or unsupported claims avoided
-- bug/work-item metadata quality when write-capable skills are tested
+- citation coverage
+- unsupported claim count
+- result usefulness
 
-The first dogfood corpus can be any private repository with known historical
-bugs, expected files, expected owners, and known final outcomes. Public docs
-should describe this generically; customer- or company-specific eval cases should
-stay private.
+Private or customer-specific eval cases should stay outside the public
+repository.
 
-### Phase 3: Channel Profiles and Skill Definitions
+### Phase 4: Local Worker Runtime
 
-Add generic configuration files that describe channel behavior and task behavior:
+Add a local asynchronous runtime that reuses the same investigation engine as the
+CLI:
 
 ```text
-channel.md
-  channel goals
-  expected message types
-  SME/DRI ownership mapping
-  response preferences
-  enabled providers
-
-skills/triage.md
-  classify feedback
-  determine owner
-  gather evidence
-  suggest next action
-
-skills/log-a-bug.md
-  create a validated work item when explicitly triggered
-  fill title, description, owner, area, tags, severity, and priority
-  link evidence back to the source thread
+submit report -> queued job -> worker -> investigation result
 ```
 
-These files should be generic and provider-neutral. A deployment can bind them
-to Slack, Teams, OCI work items, Jira, GitHub Issues, or another provider.
+Job states:
 
-### Phase 4: Local Dogfood Against a Private Repo
+- queued
+- running
+- succeeded
+- failed
 
-Use a real private repository as a read-only dogfood target:
+Start with a filesystem or in-memory queue. Do not add Redis, Supabase, OCI, or
+Temporal until the local worker path is useful.
+
+The worker should:
+
+- accept jobs containing report text and config path
+- run deterministic collection and optional OpenAI reasoning
+- persist status, timestamps, result, and failure details
+- make retries explicit and bounded
+
+### Phase 5: Message Input Adapter
+
+Add the simplest way to deliver messages to the worker before adding Slack:
 
 ```bash
-firsttrace eval \
-  --repo /path/to/private/repo \
-  --cases /path/to/private/evals.yaml
+npm run firsttrace -- submit \
+  --config firsttrace.config.yaml \
+  --report "checkout retry leaves the buyer stuck"
 ```
 
-Goals:
-
-- prove the tool can localize real historical bugs
-- validate ownership mapping
-- validate classification quality
-- validate citation quality
-- tune prompts and ranking before chat integration
-
-This phase should not require publishing private repo names, private bug reports,
-or customer-specific provider details in the public repository.
-
-### Phase 5: Runtime Worker
-
-After the CLI and eval runner work, add an asynchronous runtime:
+or a local HTTP endpoint:
 
 ```text
-Receiver -> JobQueue -> Worker -> OutputAdapter
+POST /investigations
 ```
 
-Minimum worker behavior:
+The output should let a user submit a bug report, watch or fetch the result, and
+confirm that the worker path works end to end.
 
-- enqueue request
-- mark job running
-- run investigation
-- mark succeeded or failed
-- retry failed jobs with an attempt limit
-- keep enough run history to debug failures
-
-Temporal is not needed for v0. A simple worker plus queue/status tracking is
-enough until investigations become long-running, multi-step, or human-involved.
-
-### Phase 6: Chat Adapter and Triggers
+### Later: Chat Adapter and Triggers
 
 Slack can be the first chat adapter, but the core product should stay generic:
 
@@ -343,7 +357,7 @@ The first chat adapter should:
 The investigation engine should remain chat-agnostic so Teams, Discord, Linear,
 or other sources can be added later.
 
-### Phase 7: Work Item Provider
+### Later: Work Item Provider
 
 Add a write-capable provider only after triage output is trusted:
 
@@ -359,11 +373,10 @@ Initial write behavior should be explicit-trigger only. The provider interface
 should support OCI work items, Jira, GitHub Issues, Linear, or another work item
 system without changing the investigation engine.
 
-### Phase 8: Packaging and Deployment
+### Later: Packaging and Deployment
 
 Packaging comes after the tool is useful locally:
 
-- `package.json` for development once the implementation starts
 - npm publishing once the CLI is useful to external users
 - Docker image once there is a real receiver/worker to run
 - GitHub Container Registry first: `ghcr.io/temaus91/firsttrace`
@@ -469,18 +482,16 @@ features.
 
 ## Immediate Next Steps
 
-1. Keep Phase 1 deterministic CLI behavior stable while testing local reports.
+1. Implement OpenAI reasoner for the local CLI.
 2. Add the eval runner and eval case format.
-3. Add the first private-repo eval cases outside the public repository.
-4. Run evals before adding chat integrations.
-5. Add OpenAI-backed ranking only after deterministic eval baselines exist.
+3. Add local worker runtime.
+4. Add local message delivery adapter.
+5. Only then add Slack.
 
 ## Open Questions
 
-- Should v0 be TypeScript-first, Java-first, or another runtime?
 - Should the CLI be the same binary/process as the worker?
 - How much source text should be sent to the LLM by default?
-- Should we support local-only/no-LLM scoring as a baseline?
 - What is the minimum useful ownership file format?
 - Should the first issue provider be Jira, GitHub Issues, or fixtures only?
 - What result format should become the stable external contract?
