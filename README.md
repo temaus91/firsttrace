@@ -169,4 +169,4 @@ Idea stage. The next step is a small spike:
 
 ## License
 
-TBD.
+Apache License 2.0.
