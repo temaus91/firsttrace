@@ -18,7 +18,15 @@ help. FirstTrace automates that first pass and replies with cited evidence.
 
 ## What It Does
 
-The initial version is chat-triggered and read-only:
+The current Phase 1 version is local and read-only:
+
+1. An engineer runs `firsttrace investigate` with a bug report and config file.
+2. FirstTrace searches configured local repositories, docs, issue exports, and
+   recent git commits.
+3. It classifies the report, ranks likely evidence, maps owners, and prints a
+   concise investigation starting point with citations.
+
+The later channel-agent version is chat-triggered:
 
 1. An engineer posts a bug report in a chat channel.
 2. They ask `@FirstTrace investigate`.
@@ -80,6 +88,18 @@ not care whether jobs come from Slack, Teams, Discord, a CLI, or a test fixture.
 
 See [docs/PRODUCT_PLAN.md](docs/PRODUCT_PLAN.md) for the working build plan,
 core architecture, eval strategy, runtime adapter strategy, and open questions.
+
+## Local CLI
+
+Phase 1 is a deterministic local CLI. It requires an explicit YAML config file
+and does not call OpenAI, Slack, a queue, or any write-capable provider.
+
+```bash
+npm install
+npm run firsttrace -- investigate \
+  --config firsttrace.config.yaml \
+  --report "README deployment plan is unclear"
+```
 
 ## MVP Scope
 
@@ -163,13 +183,20 @@ from git history and ownership metadata, chat integration will not save it.
 
 ## Status
 
-Idea stage. The next step is a small spike:
+Phase 1 local CLI is implemented. The current command is:
 
-1. Implement a CLI-only investigation flow against a local git repo.
-2. Add ownership YAML support.
-3. Add a simple eval file format.
-4. Run against 5-10 historical bugs.
-5. Only then wire the first chat adapter.
+```bash
+npm run firsttrace -- investigate \
+  --config firsttrace.config.yaml \
+  --report "README deployment plan is unclear"
+```
+
+Next planned work:
+
+1. Add an eval runner and eval case format.
+2. Run against private historical bug cases outside the public repo.
+3. Add channel profiles and skill definitions.
+4. Only then wire the first chat adapter.
 
 ## License
 

@@ -469,13 +469,11 @@ features.
 
 ## Immediate Next Steps
 
-1. Choose the implementation language and package layout.
-2. Create the local CLI skeleton.
-3. Define the first JSON/YAML schemas for requests, results, owners, and evals.
-4. Implement local git file search and ownership YAML loading.
-5. Add the first private-repo eval cases outside the public repository.
-6. Add the first OpenAI-backed ranking pass.
-7. Run evals before adding chat integrations.
+1. Keep Phase 1 deterministic CLI behavior stable while testing local reports.
+2. Add the eval runner and eval case format.
+3. Add the first private-repo eval cases outside the public repository.
+4. Run evals before adding chat integrations.
+5. Add OpenAI-backed ranking only after deterministic eval baselines exist.
 
 ## Open Questions
 
