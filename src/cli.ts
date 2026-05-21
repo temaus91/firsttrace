@@ -3,11 +3,15 @@ import { buildAiReasonerRequest } from "./ai/evidence.js";
 import { createAiProviderFromEnv } from "./ai/provider-factory.js";
 import { loadConfig } from "./config.js";
 import { loadLocalEnv } from "./env.js";
+import { loadEvalCases } from "./eval/cases.js";
+import { renderEvalRun } from "./eval/render.js";
+import { runEval } from "./eval/runner.js";
 import { investigate } from "./investigate.js";
 import { renderInvestigation } from "./render.js";
 
 type ParsedArgs = {
   ai: boolean;
+  casesPath?: string;
   command?: string;
   configPath: string;
   help: boolean;
@@ -17,9 +21,12 @@ type ParsedArgs = {
 const usage = () => `Usage:
   npm run firsttrace -- investigate --config firsttrace.config.yaml --report "bug text"
   npm run firsttrace -- investigate --config firsttrace.config.yaml --report "bug text" --ai
+  npm run firsttrace -- eval --config firsttrace.config.yaml --cases evals/example.yaml
+  npm run firsttrace -- eval --config firsttrace.config.yaml --cases evals/example.yaml --ai
 
 Options:
   --ai              Add AI reasoning over the deterministic evidence bundle.
+  --cases <path>    Path to a FirstTrace eval cases YAML file.
   --config <path>   Path to a FirstTrace YAML config. Defaults to firsttrace.config.yaml.
   --report <text>   Bug report or feedback text to investigate.
   --help            Show this message.`;
@@ -57,6 +64,13 @@ const parseArgs = (argv: string[]): ParsedArgs => {
       index += 1;
       continue;
     }
+    if (arg === "--cases") {
+      const value = argv[index + 1];
+      if (!value) throw new Error("--cases requires a path.");
+      parsed.casesPath = value;
+      index += 1;
+      continue;
+    }
     if (arg === "--report") {
       const value = argv[index + 1];
       if (!value) throw new Error("--report requires text.");
@@ -77,14 +91,31 @@ const main = async () => {
     console.log(usage());
     return;
   }
-  if (args.command !== "investigate") {
+  if (args.command !== "investigate" && args.command !== "eval") {
     throw new Error(`Unknown or missing command: ${args.command ?? "<none>"}`);
   }
+
+  const config = loadConfig(args.configPath);
+
+  if (args.command === "eval") {
+    if (!args.casesPath?.trim()) {
+      throw new Error("Missing required --cases.");
+    }
+    const aiProvider = args.ai ? createAiProviderFromEnv() : undefined;
+    const evalResult = await runEval({
+      aiProvider,
+      cases: loadEvalCases(args.casesPath),
+      config,
+    });
+    console.log(renderEvalRun(evalResult));
+    if (!evalResult.passed) process.exit(1);
+    return;
+  }
+
   if (!args.report?.trim()) {
     throw new Error("Missing required --report.");
   }
 
-  const config = loadConfig(args.configPath);
   const result = investigate(args.report, config);
 
   if (args.ai) {

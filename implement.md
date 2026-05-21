@@ -77,29 +77,32 @@ Completed:
 
 1. Phase 1: deterministic local CLI.
 2. Phase 2: optional OpenAI AI provider for local CLI.
+3. Phase 3: eval runner.
 
 Next:
 
-1. Phase 3: eval runner.
-   - Add `firsttrace eval --config ... --cases ...`.
-   - Compare deterministic and AI-assisted results.
-   - Score classification, expected files, owners, citations, unsupported
-     claims, and usefulness.
-   - Keep private eval cases outside the public repo.
-2. Phase 4: local worker runtime.
+1. Phase 4: local worker runtime.
    - Add queued/running/succeeded/failed job model.
    - Start with local filesystem or in-memory queue.
    - Reuse the same investigation engine and AI provider path as the CLI.
-3. Phase 5: local message delivery adapter.
+2. Phase 5: local message delivery adapter.
    - Add `submit` CLI command or local HTTP endpoint.
    - Submit a report to the worker and fetch/store the result.
-4. Later: Slack as the first chat provider.
+3. Later: Slack as the first chat provider.
    - Preserve a generic `ChatProvider` boundary so Teams or other systems can
      use the same worker and investigation core.
-5. Later: provider expansion.
+4. Later: provider expansion.
    - GitHub provider for repo/issues.
    - Vercel/Supabase runtime or queue provider for dogfood deployment.
    - OCI runtime/queue/work-item provider for enterprise deployment.
+
+Eval runner details:
+
+- Public eval files live under `evals/` and must stay generic.
+- Private/customer eval files should stay outside the public repo.
+- Eval scoring must stay provider-neutral.
+- AI eval comparison is opt-in with `--ai` and reuses the same AI provider path
+  as `investigate --ai`.
 
 ## Testing Expectations
 

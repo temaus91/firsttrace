@@ -95,6 +95,48 @@ export type AiProvider = {
   reason(request: AiReasonerRequest): Promise<AiInvestigationResult>;
 };
 
+export type EvalCase = {
+  expectedClassification?: Classification;
+  expectedComponent?: string;
+  expectedFiles: string[];
+  expectedOwners: string[];
+  id: string;
+  notes?: string;
+  report: string;
+};
+
+export type EvalScore = {
+  citationCoverage: number;
+  citationsPassed: boolean;
+  classificationMatched?: boolean;
+  componentMatched?: boolean;
+  expectedFilesFound: string[];
+  expectedFilesMissing: string[];
+  expectedOwnersFound: string[];
+  expectedOwnersMissing: string[];
+  passed: boolean;
+  unsupportedAiCitationCount: number;
+  usefulness: number;
+};
+
+export type EvalCaseResult = {
+  aiScore?: EvalScore;
+  case: EvalCase;
+  deterministicResult: InvestigationResult;
+  deterministicScore: EvalScore;
+};
+
+export type EvalRunResult = {
+  aiEnabled: boolean;
+  caseResults: EvalCaseResult[];
+  passed: boolean;
+  summary: {
+    failed: number;
+    passed: number;
+    total: number;
+  };
+};
+
 export type RepoConfig = {
   name: string;
   path: string;

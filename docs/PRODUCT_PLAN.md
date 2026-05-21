@@ -299,9 +299,9 @@ Limitations:
 - no message delivery adapter
 - no Slack, Teams, Docker, npm publishing, or work-item creation
 
-### Phase 3: Eval Runner
+### Phase 3: Eval Runner - Complete
 
-Add eval cases before chat or worker integrations:
+The implemented Phase 3 flow adds eval cases before chat or worker integrations:
 
 ```bash
 npm run firsttrace -- eval \
@@ -309,18 +309,34 @@ npm run firsttrace -- eval \
   --cases evals/example.yaml
 ```
 
-The eval runner should compare deterministic and AI-assisted results and score:
+Optional AI comparison:
 
-- classification accuracy
-- expected files found in top results
-- expected owner found in top results
-- expected component matched
-- citation coverage
-- unsupported claim count
-- result usefulness
+```bash
+npm run firsttrace -- eval \
+  --config firsttrace.config.yaml \
+  --cases evals/example.yaml \
+  --ai
+```
+
+Current capability:
+
+- load YAML eval case arrays
+- run deterministic investigations for every case
+- optionally run the configured AI provider on the same deterministic evidence
+- score classification accuracy, expected files, expected owners, expected
+  component, citation coverage, unsupported AI citation warnings, and aggregate
+  usefulness
+- print a Markdown eval summary and per-case pass/fail detail
+- exit nonzero when a required expectation fails or the cases file is invalid
 
 Private or customer-specific eval cases should stay outside the public
 repository.
+
+Limitations:
+
+- no worker
+- no message delivery adapter
+- no Slack, Teams, Docker, npm publishing, or work-item creation
 
 ### Phase 4: Local Worker Runtime
 
@@ -513,11 +529,10 @@ features.
 
 ## Immediate Next Steps
 
-1. Add the eval runner and eval case format.
-2. Add local worker runtime.
-3. Add local message delivery adapter.
-4. Add Slack as the first chat provider.
-5. Add GitHub, Vercel/Supabase, OCI, and work-item providers only through the
+1. Add local worker runtime.
+2. Add local message delivery adapter.
+3. Add Slack as the first chat provider.
+4. Add GitHub, Vercel/Supabase, OCI, and work-item providers only through the
    generic provider interfaces.
 
 ## Open Questions

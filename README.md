@@ -118,6 +118,14 @@ npm run firsttrace -- investigate \
   --ai
 ```
 
+Eval run:
+
+```bash
+npm run firsttrace -- eval \
+  --config firsttrace.config.yaml \
+  --cases evals/example.yaml
+```
+
 ## MVP Scope
 
 FirstTrace v0 should stay small:
@@ -200,7 +208,7 @@ from git history and ownership metadata, chat integration will not save it.
 
 ## Status
 
-Phase 2 local CLI is implemented. The deterministic command is:
+Phase 3 local CLI and eval runner are implemented. The deterministic command is:
 
 ```bash
 npm run firsttrace -- investigate \
@@ -217,12 +225,19 @@ npm run firsttrace -- investigate \
   --ai
 ```
 
+The eval command is:
+
+```bash
+npm run firsttrace -- eval \
+  --config firsttrace.config.yaml \
+  --cases evals/example.yaml
+```
+
 Next planned work:
 
-1. Add an eval runner and eval case format.
-2. Add a local worker runtime.
-3. Add a local message delivery adapter.
-4. Wire Slack as the first chat provider.
+1. Add a local worker runtime.
+2. Add a local message delivery adapter.
+3. Wire Slack as the first chat provider.
 
 ## License
 

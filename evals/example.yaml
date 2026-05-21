@@ -1,0 +1,9 @@
+- id: readme-deployment-plan
+  report: "README deployment plan is unclear"
+  expected_classification: unknown
+  expected_component: README.md
+  expected_files:
+    - README.md
+  expected_owners:
+    - "@project-docs"
+  notes: "Public sample case only."
