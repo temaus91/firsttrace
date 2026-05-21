@@ -52,13 +52,15 @@ admin features can come later.
 
 ```mermaid
 flowchart TD
-  Source["Input Source<br/>CLI, Slack, later Teams/Discord"] --> Request["Investigation Request"]
+  Source["Input Source<br/>CLI, Slack, Teams, API"] --> ChatProvider["Chat/Input Provider"]
+  ChatProvider --> Request["Investigation Request"]
   Request --> Engine["Investigation Engine"]
 
   Engine --> Git["Git Provider<br/>local repo, internal git, GitHub"]
   Engine --> Owners["Ownership Provider<br/>CODEOWNERS, firsttrace.owners.yaml"]
   Engine --> Issues["Issue Provider<br/>Jira, GitHub Issues, fixtures"]
-  Engine --> Reasoner["Reasoner<br/>OpenAI or compatible LLM"]
+  Engine --> Reasoner["AI Provider<br/>OpenAI, Claude, Google AI, local model"]
+  Engine --> Runtime["Runtime Provider<br/>local, Vercel, Supabase, OCI"]
 
   Git --> Evidence["Evidence Store"]
   Owners --> Evidence
@@ -135,8 +137,8 @@ EvalCase
 ```
 
 The first implementation can keep these as TypeScript types or plain JSON
-schemas. The important boundary is that providers return evidence, and the
-reasoner ranks evidence instead of inventing facts.
+schemas. The important boundary is that providers return evidence, and the AI
+provider reasons over that evidence instead of inventing facts.
 
 ## Provider Interfaces
 
@@ -158,26 +160,43 @@ IssueProvider
   searchIssues(query)
   getIssue(id)
 
-Reasoner
-  rankEvidence(request, evidence)
-  summarizeResult(request, rankedEvidence)
+AiProvider
+  reason(request, evidence)
+
+InputProvider
+  receive()
+  normalize()
 
 OutputAdapter
   render(result)
   send(result)
+
+RuntimeProvider
+  enqueue(job)
+  runWorker()
+  persistResult(result)
 ```
 
 Phase 1 providers are deliberately simple:
 
 - local git provider using the checked-out repository
-- ownership YAML provider using `firsttrace.owners.yaml`
+- ownership YAML provider using `firsttrace.config.yaml`
 - CLI/markdown output adapter
 
 Future phases add:
 
-- OpenAI reasoner
+- OpenAI AI provider first, with Claude, Google AI, or local model providers
+  possible later
 - fixture issue provider for evals
-- queue-backed worker output adapter
+- Slack chat provider first, with Teams or other chat providers possible later
+- GitHub issue/code provider, Vercel/Supabase runtime providers, and OCI
+  deployment/runtime providers as adapters
+
+Provider implementations can depend on a vendor SDK, but the core investigation
+engine should only depend on the provider interfaces. Adding Slack, OpenAI,
+GitHub, Vercel, Supabase, OCI, Claude, Google AI, Teams, or another service
+should not require rewriting the core search, evidence, reasoning, evaluation,
+or rendering flow.
 
 ## Channel Agent Model
 
@@ -240,9 +259,10 @@ Limitations:
 - no message delivery adapter
 - no Slack, Docker, or npm publishing
 
-### Phase 2: OpenAI Reasoner for Local CLI
+### Phase 2: OpenAI Reasoner for Local CLI - Complete
 
-Add an optional AI reasoning pass on top of Phase 1 evidence:
+The implemented Phase 2 flow adds an optional AI reasoning pass on top of Phase
+1 evidence:
 
 ```bash
 npm run firsttrace -- investigate \
@@ -251,22 +271,33 @@ npm run firsttrace -- investigate \
   --ai
 ```
 
-The CLI should continue to gather deterministic evidence first. OpenAI should
-reason over that bounded evidence bundle, not crawl the repository blindly.
+The CLI continues to gather deterministic evidence first. OpenAI reasons over
+that bounded evidence bundle, not the repository directly.
 
-The AI-assisted result should include:
+Current capability:
 
-- likely files and components
-- confidence
-- owner and implementer hints from ownership rules and git history
-- short explanation grounded in citations
-- missing-information questions when evidence is weak
+- opt-in `--ai` flag for local CLI investigations
+- provider interface for AI reasoning so later Claude, Google AI, or local model
+  providers can be added without changing the core engine
+- OpenAI provider using structured output
+- `.env.local` support for local credentials
+- AI result section with likely files/components, confidence, owner and
+  implementer hints, explanation, missing-information questions, warnings, and
+  citations
 
 Local configuration:
 
 - `OPENAI_API_KEY` from `.env.local` or the shell
 - `OPENAI_MODEL_CHAT` from `.env.local` or the shell
-- explicit opt-in through `--ai` or a config flag
+- `FIRSTTRACE_AI_PROVIDER=openai` by default
+- explicit opt-in through `--ai`
+
+Limitations:
+
+- no eval runner
+- no worker
+- no message delivery adapter
+- no Slack, Teams, Docker, npm publishing, or work-item creation
 
 ### Phase 3: Eval Runner
 
@@ -482,16 +513,16 @@ features.
 
 ## Immediate Next Steps
 
-1. Implement OpenAI reasoner for the local CLI.
-2. Add the eval runner and eval case format.
-3. Add local worker runtime.
-4. Add local message delivery adapter.
-5. Only then add Slack.
+1. Add the eval runner and eval case format.
+2. Add local worker runtime.
+3. Add local message delivery adapter.
+4. Add Slack as the first chat provider.
+5. Add GitHub, Vercel/Supabase, OCI, and work-item providers only through the
+   generic provider interfaces.
 
 ## Open Questions
 
 - Should the CLI be the same binary/process as the worker?
-- How much source text should be sent to the LLM by default?
 - What is the minimum useful ownership file format?
 - Should the first issue provider be Jira, GitHub Issues, or fixtures only?
 - What result format should become the stable external contract?

@@ -33,4 +33,53 @@ describe("renderInvestigation", () => {
     expect(rendered).toContain("@docs");
     expect(rendered).toContain("No related commits found.");
   });
+
+  it("renders AI reasoning when present", () => {
+    const result: InvestigationResult = {
+      ai: {
+        confidence: 0.74,
+        explanation: "The renderer evidence is the strongest match.",
+        implementerHints: [
+          {
+            citations: ["commit abc123"],
+            commit: "abc123",
+            email: null,
+            name: "Dev Owner",
+            reason: "Recent related commit touched the renderer.",
+          },
+        ],
+        likelyComponent: "src",
+        likelyFiles: [
+          {
+            citations: ["src/render.ts:12"],
+            confidence: 0.82,
+            path: "src/render.ts",
+            reason: "The file citation mentions renderer citation handling.",
+            repo: "repo",
+          },
+        ],
+        likelyOwners: ["@core"],
+        missingInfoQuestions: ["What exact command reproduced the crash?"],
+        provider: "openai",
+        warnings: ["Evidence is limited."],
+      },
+      classification: "bug",
+      likelyComponent: "src",
+      likelyOwners: ["@core"],
+      relatedCommits: [],
+      relatedDocs: [],
+      report: "renderer crashes",
+      searchTerms: ["renderer", "crashes"],
+      suggestedNextSteps: [],
+      suspiciousFiles: [],
+      warnings: [],
+    };
+
+    const rendered = renderInvestigation(result);
+    expect(rendered).toContain("## AI Reasoning");
+    expect(rendered).toContain("Provider: `openai`");
+    expect(rendered).toContain("src/render.ts:12");
+    expect(rendered).toContain("What exact command reproduced the crash?");
+    expect(rendered).toContain("Evidence is limited.");
+  });
 });

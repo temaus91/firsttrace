@@ -1,16 +1,7 @@
-import type { EvidenceItem, InvestigationResult } from "./types.js";
+import { citationListText } from "./citations.js";
+import type { AiInvestigationResult, EvidenceItem, InvestigationResult } from "./types.js";
 
 const empty = "_None found._";
-
-const citationText = (item: EvidenceItem) =>
-  item.citations
-    .map((citation) => {
-      if (citation.commit) return `commit ${citation.commit}`;
-      if (citation.path && citation.line) return `${citation.path}:${citation.line}`;
-      if (citation.path) return citation.path;
-      return citation.label;
-    })
-    .join(", ");
 
 const evidenceList = (items: EvidenceItem[]) =>
   items.length
@@ -24,6 +15,51 @@ const evidenceList = (items: EvidenceItem[]) =>
 
 const section = (title: string, content: string) => [`## ${title}`, content].join("\n");
 
+const citationText = (item: EvidenceItem) => citationListText(item.citations);
+
+const aiList = (items: string[]) =>
+  items.length ? items.map((item, index) => `${index + 1}. ${item}`).join("\n") : empty;
+
+const renderAiReasoning = (ai: AiInvestigationResult) =>
+  section(
+    "AI Reasoning",
+    [
+      `Provider: \`${ai.provider}\``,
+      `Confidence: \`${ai.confidence.toFixed(2)}\``,
+      `Likely component: \`${ai.likelyComponent}\``,
+      `Likely owners: ${
+        ai.likelyOwners.length ? ai.likelyOwners.map((owner) => `\`${owner}\``).join(", ") : empty
+      }`,
+      section(
+        "AI Likely Files",
+        ai.likelyFiles.length
+          ? ai.likelyFiles
+              .map(
+                (file, index) =>
+                  `${index + 1}. \`${file.path}\` in \`${file.repo}\` - confidence ${file.confidence.toFixed(2)}\n   ${file.reason}\n   Evidence: ${file.citations.join(", ") || empty}`,
+              )
+              .join("\n")
+          : empty,
+      ),
+      section(
+        "AI Implementer Hints",
+        ai.implementerHints.length
+          ? ai.implementerHints
+              .map((hint, index) => {
+                const name = hint.name ?? hint.email ?? hint.commit ?? "unknown";
+                return `${index + 1}. \`${name}\`${hint.commit ? ` - commit ${hint.commit}` : ""}\n   ${hint.reason}\n   Evidence: ${hint.citations.join(", ") || empty}`;
+              })
+              .join("\n")
+          : empty,
+      ),
+      section("AI Explanation", ai.explanation || empty),
+      section("AI Missing Information Questions", aiList(ai.missingInfoQuestions)),
+      ai.warnings.length ? section("AI Warnings", ai.warnings.map((warning) => `- ${warning}`).join("\n")) : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+  );
+
 export const renderInvestigation = (result: InvestigationResult) =>
   [
     "# FirstTrace Investigation",
@@ -35,6 +71,7 @@ export const renderInvestigation = (result: InvestigationResult) =>
     `Likely owners: ${
       result.likelyOwners.length ? result.likelyOwners.map((owner) => `\`${owner}\``).join(", ") : empty
     }`,
+    result.ai ? renderAiReasoning(result.ai) : "",
     section("Suspicious Files", evidenceList(result.suspiciousFiles)),
     section("Related Commits", evidenceList(result.relatedCommits)),
     section("Related Docs And Issue Exports", evidenceList(result.relatedDocs)),

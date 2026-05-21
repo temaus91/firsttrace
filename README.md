@@ -2,9 +2,10 @@
 
 Self-hosted bug localization for teams with private, internal, or public git repos.
 
-FirstTrace turns a messy bug report from chat into the first useful evidence trail:
-likely component, suspicious files, likely owner, related Jira issues, and suggested
-next steps. It is meant to reduce the first hour of debugging, not replace engineers.
+FirstTrace turns a messy bug report from chat, CLI, or another source into the
+first useful evidence trail: likely component, suspicious files, likely owner,
+related issues, and suggested next steps. It is meant to reduce the first hour
+of debugging, not replace engineers.
 
 ## Why
 
@@ -66,15 +67,15 @@ Suggested next steps:
 
 ```mermaid
 flowchart TD
-  Chat["Chat: Slack first, other chat systems later"] --> Receiver["FirstTrace Receiver"]
-  Receiver --> Queue["Queue Adapter"]
+  Chat["Input Provider<br/>CLI, Slack, Teams, API"] --> Receiver["FirstTrace Receiver"]
+  Receiver --> Queue["Queue Adapter<br/>local, Redis, Supabase, OCI"]
   Queue --> Worker["FirstTrace Worker"]
 
   Worker --> Agent["Investigation Engine"]
   Agent --> Git["Git Provider<br/>local/internal repos or GitHub"]
-  Agent --> Jira["Jira Provider<br/>MCP or REST API"]
+  Agent --> Issues["Issue Provider<br/>GitHub Issues, Jira, OCI, fixtures"]
   Agent --> Owners["Ownership Provider<br/>CODEOWNERS or YAML"]
-  Agent --> OpenAI["OpenAI API<br/>bring your own key"]
+  Agent --> AI["AI Provider<br/>OpenAI now, Claude/Google/local later"]
 
   Agent --> Evidence["Ranked Evidence + Citations"]
   Evidence --> Worker
@@ -82,17 +83,22 @@ flowchart TD
 ```
 
 The product is intentionally runtime-portable. The core investigation engine should
-not care whether jobs come from Slack, Teams, Discord, a CLI, or a test fixture.
+not care whether jobs come from Slack, Teams, Discord, a CLI, or a test fixture,
+and it should not care whether AI reasoning comes from OpenAI, Claude, Google AI,
+or a local model.
 
 ## Product Plan
 
 See [docs/PRODUCT_PLAN.md](docs/PRODUCT_PLAN.md) for the working build plan,
 core architecture, eval strategy, runtime adapter strategy, and open questions.
+See [implement.md](implement.md) for implementation guidance meant for future
+engineering sessions.
 
 ## Local CLI
 
-Phase 1 is a deterministic local CLI. It requires an explicit YAML config file
-and does not call OpenAI, Slack, a queue, or any write-capable provider.
+Phase 2 is a local CLI with optional AI reasoning. The CLI always gathers local
+deterministic evidence first. OpenAI is only called when `--ai` is passed, and it
+reasons over that bounded evidence bundle rather than crawling the repository.
 
 ```bash
 npm install
@@ -101,17 +107,28 @@ npm run firsttrace -- investigate \
   --report "README deployment plan is unclear"
 ```
 
+Optional AI-assisted run:
+
+```bash
+cp .env.example .env.local
+# Fill in OPENAI_API_KEY in .env.local.
+npm run firsttrace -- investigate \
+  --config firsttrace.config.yaml \
+  --report "README deployment plan is unclear" \
+  --ai
+```
+
 ## MVP Scope
 
 FirstTrace v0 should stay small:
 
-- Slack app trigger: `@FirstTrace investigate`
+- chat provider trigger, with Slack first and Teams or other providers later
 - one or more configured git repositories
 - local/internal git support, not only github.com
 - optional GitHub provider for public or private GitHub repos
-- Jira search via MCP or REST API
+- issue/work-item provider support for GitHub Issues, Jira, OCI, or fixtures
 - ownership lookup via `CODEOWNERS` or `firsttrace.owners.yaml`
-- OpenAI API for ranking and summarization
+- AI provider support, with OpenAI first
 - thread reply with citations
 - eval runner for historical bugs
 
@@ -183,7 +200,7 @@ from git history and ownership metadata, chat integration will not save it.
 
 ## Status
 
-Phase 1 local CLI is implemented. The current command is:
+Phase 2 local CLI is implemented. The deterministic command is:
 
 ```bash
 npm run firsttrace -- investigate \
@@ -191,13 +208,21 @@ npm run firsttrace -- investigate \
   --report "README deployment plan is unclear"
 ```
 
+The AI-assisted command is:
+
+```bash
+npm run firsttrace -- investigate \
+  --config firsttrace.config.yaml \
+  --report "README deployment plan is unclear" \
+  --ai
+```
+
 Next planned work:
 
-1. Add OpenAI-backed reasoning for the local CLI.
-2. Add an eval runner and eval case format.
-3. Add a local worker runtime.
-4. Add a local message delivery adapter.
-5. Only then wire the first chat adapter.
+1. Add an eval runner and eval case format.
+2. Add a local worker runtime.
+3. Add a local message delivery adapter.
+4. Wire Slack as the first chat provider.
 
 ## License
 

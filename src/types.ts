@@ -23,6 +23,7 @@ export type EvidenceItem = {
 };
 
 export type InvestigationResult = {
+  ai?: AiInvestigationResult;
   classification: Classification;
   likelyComponent: string;
   likelyOwners: string[];
@@ -33,6 +34,65 @@ export type InvestigationResult = {
   suggestedNextSteps: string[];
   suspiciousFiles: EvidenceItem[];
   warnings: string[];
+};
+
+export type AiEvidenceKind = "suspicious_file" | "related_commit" | "related_doc" | "warning";
+
+export type AiEvidenceItem = {
+  citations: string[];
+  id: string;
+  kind: AiEvidenceKind;
+  metadata?: Record<string, string | number | boolean | null>;
+  owner?: string;
+  path?: string;
+  repo?: string;
+  score?: number;
+  summary: string;
+  title: string;
+  type?: EvidenceType;
+};
+
+export type AiReasonerRequest = {
+  classification: Classification;
+  evidence: AiEvidenceItem[];
+  likelyComponent: string;
+  likelyOwners: string[];
+  report: string;
+  searchTerms: string[];
+  warnings: string[];
+};
+
+export type AiFileFinding = {
+  citations: string[];
+  confidence: number;
+  path: string;
+  reason: string;
+  repo: string;
+};
+
+export type AiImplementerHint = {
+  citations: string[];
+  commit: string | null;
+  email: string | null;
+  name: string | null;
+  reason: string;
+};
+
+export type AiInvestigationResult = {
+  confidence: number;
+  explanation: string;
+  implementerHints: AiImplementerHint[];
+  likelyComponent: string;
+  likelyFiles: AiFileFinding[];
+  likelyOwners: string[];
+  missingInfoQuestions: string[];
+  provider: string;
+  warnings: string[];
+};
+
+export type AiProvider = {
+  name: string;
+  reason(request: AiReasonerRequest): Promise<AiInvestigationResult>;
 };
 
 export type RepoConfig = {

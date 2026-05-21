@@ -1,9 +1,13 @@
 import path from "node:path";
+import { buildAiReasonerRequest } from "./ai/evidence.js";
+import { createAiProviderFromEnv } from "./ai/provider-factory.js";
 import { loadConfig } from "./config.js";
+import { loadLocalEnv } from "./env.js";
 import { investigate } from "./investigate.js";
 import { renderInvestigation } from "./render.js";
 
 type ParsedArgs = {
+  ai: boolean;
   command?: string;
   configPath: string;
   help: boolean;
@@ -12,8 +16,10 @@ type ParsedArgs = {
 
 const usage = () => `Usage:
   npm run firsttrace -- investigate --config firsttrace.config.yaml --report "bug text"
+  npm run firsttrace -- investigate --config firsttrace.config.yaml --report "bug text" --ai
 
 Options:
+  --ai              Add AI reasoning over the deterministic evidence bundle.
   --config <path>   Path to a FirstTrace YAML config. Defaults to firsttrace.config.yaml.
   --report <text>   Bug report or feedback text to investigate.
   --help            Show this message.`;
@@ -21,12 +27,14 @@ Options:
 const parseArgs = (argv: string[]): ParsedArgs => {
   if (argv[0] === "--help" || argv[0] === "-h") {
     return {
+      ai: false,
       configPath: path.resolve("firsttrace.config.yaml"),
       help: true,
     };
   }
 
   const parsed: ParsedArgs = {
+    ai: false,
     command: argv[0],
     configPath: path.resolve("firsttrace.config.yaml"),
     help: false,
@@ -36,6 +44,10 @@ const parseArgs = (argv: string[]): ParsedArgs => {
     const arg = argv[index];
     if (arg === "--help" || arg === "-h") {
       parsed.help = true;
+      continue;
+    }
+    if (arg === "--ai") {
+      parsed.ai = true;
       continue;
     }
     if (arg === "--config") {
@@ -58,7 +70,8 @@ const parseArgs = (argv: string[]): ParsedArgs => {
   return parsed;
 };
 
-const main = () => {
+const main = async () => {
+  loadLocalEnv();
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     console.log(usage());
@@ -73,11 +86,23 @@ const main = () => {
 
   const config = loadConfig(args.configPath);
   const result = investigate(args.report, config);
+
+  if (args.ai) {
+    const aiProvider = createAiProviderFromEnv();
+    try {
+      result.ai = await aiProvider.reason(buildAiReasonerRequest(result));
+    } catch (error) {
+      result.warnings.push(
+        `AI reasoning failed with provider ${aiProvider.name}: ${(error as Error).message}`,
+      );
+    }
+  }
+
   console.log(renderInvestigation(result));
 };
 
 try {
-  main();
+  await main();
 } catch (error) {
   console.error((error as Error).message);
   console.error("");
