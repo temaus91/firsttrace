@@ -76,6 +76,11 @@ flowchart TD
 The product is intentionally runtime-portable. The core investigation engine should
 not care whether jobs come from Slack, Teams, Discord, a CLI, or a test fixture.
 
+## Product Plan
+
+See [docs/PRODUCT_PLAN.md](docs/PRODUCT_PLAN.md) for the working build plan,
+core architecture, eval strategy, runtime adapter strategy, and open questions.
+
 ## MVP Scope
 
 FirstTrace v0 should stay small:
