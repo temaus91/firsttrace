@@ -1,9 +1,10 @@
 import { loadConfig } from "../../config.js";
-import type { Awaitable, FirstTraceConfig, JobQueue, SlackChannelConfig } from "../../types.js";
+import type { Awaitable, FirstTraceConfig, InvestigationJob, JobQueue, SlackChannelConfig } from "../../types.js";
 import type { SlackClient } from "./client.js";
 import { verifySlackRequestSignature } from "./signature.js";
 
 type SlackEventReceiverOptions = {
+  afterEnqueue?: (job: InvestigationJob) => void;
   config: FirstTraceConfig | (() => Awaitable<FirstTraceConfig>);
   nowSeconds?: number;
   queue: JobQueue | (() => Awaitable<JobQueue>);
@@ -251,6 +252,11 @@ export const handleSlackEventsRequest = async (
         userId: normalized.userId,
       },
     });
+    try {
+      options.afterEnqueue?.(job);
+    } catch (error) {
+      console.error(`Slack after-enqueue hook failed for job ${job.id}: ${(error as Error).message}`);
+    }
 
     return jsonResponse(200, {
       jobId: job.id,

@@ -414,10 +414,13 @@ Current capability:
 - provider-neutral Vercel-compatible endpoints:
   - `POST /api/investigations`
   - `GET /api/jobs?id=<job-id>`
+  - `GET|POST /api/worker/run-once`
 - required bearer auth through `FIRSTTRACE_RECEIVER_TOKEN`, unless
   `FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=true` is explicitly set for local
   development
 - worker reuse of the same investigation engine as the local CLI
+- Vercel background worker execution from Slack events plus a protected
+  `run-once` endpoint for manual runs or cron-capable deployments
 
 Vercel and Supabase should be adapters, not assumptions in the core
 investigation logic. A future Docker, OCI, Kubernetes, Redis, or Postgres
@@ -425,9 +428,10 @@ deployment should be able to reuse the same core worker.
 
 Limitations:
 
-- no GitHub-hosted repository provider
-- no Slack, Teams, or webhook provider
-- hosted jobs still require a worker with access to configured local repo paths
+- no Teams or non-Slack webhook provider
+- worker execution is one-job-at-a-time and should be hardened before larger
+  customer traffic
+- local readiness can pass while optional live checks remain blocked
 
 ### Phase 7: GitHub Provider for Private/Public Repositories - Complete
 
@@ -601,12 +605,28 @@ Initial write behavior should be explicit-trigger only. The provider interface
 should support OCI work items, Jira, GitHub Issues, Linear, or another work item
 system without changing the investigation engine.
 
-### Later: Packaging and Deployment
+### Packaging and Deployment Direction
 
-Packaging comes after the tool is useful locally:
+The preferred customer installation path should become an npm package that can
+be embedded into an existing Vercel/Next.js application:
 
-- npm publishing once the CLI is useful to external users
-- Docker image once there is a real receiver/worker to run
+```bash
+npm install firsttrace
+```
+
+The host app should import stable FirstTrace route helpers for Slack events,
+generic investigation submission, job status, and worker execution. That lets a
+team reuse its existing Vercel project, domains, auth posture, and operational
+habits while keeping FirstTrace provider logic reusable.
+
+Standalone deployment remains the fastest current dogfood path. The npm package
+direction should be validated next by embedding FirstTrace into the Wallspace
+app after the hosted Slack dogfood proves the workflow.
+
+Later packaging options:
+
+- Docker image once there is enough receiver/worker usage to justify an
+  always-on deployment artifact
 - GitHub Container Registry first: `ghcr.io/temaus91/firsttrace`
 - Docker Hub later if external adoption needs it
 
@@ -877,7 +897,9 @@ features.
 1. Run Phase 9B live hosted dogfood with real Slack, GitHub App, Supabase, and AI.
 2. Verify the hosted end-to-end workflow from configured Slack channel to AI
    analysis reply.
-3. Add GitHub Issues, Vercel/Supabase, OCI, and work-item providers only through the
+3. Package FirstTrace for npm embedding and prove it inside the existing
+   Wallspace Vercel project after standalone dogfood succeeds.
+4. Add GitHub Issues, Vercel/Supabase, OCI, and work-item providers only through the
    generic provider interfaces.
 
 ## Open Questions

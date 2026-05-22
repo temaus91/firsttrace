@@ -289,11 +289,18 @@ Use this sequence to connect the full hosted path:
    local dogfood `GITHUB_TOKEN`.
 7. Run `hosted verify` locally with `--queue supabase`; add
    `--live-slack-post` after Slack env is present.
-8. Deploy the API to a public HTTPS host, then set Slack Event Subscriptions to
+8. Deploy the API to a public HTTPS host. On Vercel, the Slack endpoint can use
+   background processing to run one worker pass after Slack has been
+   acknowledged. Keep the protected worker endpoint,
+   `GET|POST /api/worker/run-once`, available for manual dogfood repair runs or
+   cron on plans that support the desired frequency.
+9. Set Slack Event Subscriptions to
    `https://<host>/api/slack/events`.
 
 Vercel is not required for local end-to-end verification. It is needed only when
-Slack itself must call the public `/api/slack/events` endpoint.
+Slack itself must call the public `/api/slack/events` endpoint. Vercel worker
+runs use `/tmp/firsttrace/github` by default for GitHub materialization because
+the deployed function directory is read-only.
 
 ## MVP Scope
 

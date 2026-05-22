@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { x as extractTar } from "tar";
 import { runCommand, type CommandResult } from "../shell.js";
 import type { GitHubRepoConfig, SearchableRepoConfig } from "../types.js";
 import {
@@ -113,6 +114,62 @@ export class GitHubAppRepoMaterializer implements GitHubRepoMaterializer {
 
     return {
       defaultBranch: branch,
+      name: repo.name,
+      owner: repo.owner,
+      path: repoPath,
+      provider: "local",
+      remoteRepo: repo.repo,
+      sourceProvider: "github",
+    };
+  }
+
+  private repoCachePath(repo: GitHubRepoConfig) {
+    return path.join(this.cacheRoot, safeCacheSegment(repo.owner), safeCacheSegment(repo.repo));
+  }
+}
+
+export class GitHubArchiveRepoMaterializer implements GitHubRepoMaterializer {
+  private readonly cacheRoot: string;
+  private readonly tokenProvider: GitHubInstallationTokenProvider;
+
+  constructor({
+    cacheRoot = path.resolve(".firsttrace", "github-archives"),
+    tokenProvider = createGitHubTokenProviderFromEnv(),
+  }: {
+    cacheRoot?: string;
+    tokenProvider?: GitHubInstallationTokenProvider;
+  } = {}) {
+    this.cacheRoot = cacheRoot;
+    this.tokenProvider = tokenProvider;
+  }
+
+  async materialize(repo: GitHubRepoConfig): Promise<SearchableRepoConfig> {
+    const token = await this.tokenProvider.getInstallationToken(repo.repo);
+    const repoPath = this.repoCachePath(repo);
+    const archivePath = path.join(this.cacheRoot, `${safeCacheSegment(repo.owner)}-${safeCacheSegment(repo.repo)}.tar.gz`);
+    const response = await fetch(
+      `https://api.github.com/repos/${repo.owner}/${repo.repo}/tarball/${encodeURIComponent(repo.defaultBranch)}`,
+      {
+        headers: {
+          accept: "application/vnd.github+json",
+          authorization: `Bearer ${token}`,
+          "user-agent": "firsttrace",
+        },
+      },
+    );
+    if (!response.ok) {
+      throw new Error(`GitHub archive download failed for ${repo.owner}/${repo.repo}: ${response.status} ${response.statusText}`);
+    }
+
+    mkdirSync(this.cacheRoot, { recursive: true });
+    rmSync(repoPath, { force: true, recursive: true });
+    mkdirSync(repoPath, { recursive: true });
+    writeFileSync(archivePath, Buffer.from(await response.arrayBuffer()));
+    await extractTar({ cwd: repoPath, file: archivePath, strip: 1 });
+    rmSync(archivePath, { force: true });
+
+    return {
+      defaultBranch: repo.defaultBranch,
       name: repo.name,
       owner: repo.owner,
       path: repoPath,

@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { countTermHits } from "./terms.js";
 import { resolveOwners, toPosixPath } from "./owners.js";
@@ -40,6 +40,8 @@ const SEARCHABLE_EXTENSIONS = new Set([
   ".yml",
 ]);
 
+const EXCLUDE_DIRS = new Set([".git", "node_modules", "dist", "build", "coverage"]);
+
 type Match = {
   line: number;
   path: string;
@@ -80,33 +82,78 @@ const parseRipgrepJson = (stdout: string): Match[] =>
 const rgSearch = (repoPath: string, terms: string[], targets: string[], maxEvidence: number) => {
   if (!terms.length) return [];
   const searchTargets = targets.length ? targets : ["."];
-  const result = runCommand(
-    repoPath,
-    "rg",
-    [
-      "--json",
-      "--ignore-case",
-      "--fixed-strings",
-      "--max-count",
-      String(maxEvidence),
-      "--max-filesize",
-      "500K",
-      ...rgGlobArgs(),
-      ...terms.flatMap((term) => ["-e", term]),
-      ...searchTargets,
-    ],
-    { allowExitCodes: [1] },
-  );
+  try {
+    const result = runCommand(
+      repoPath,
+      "rg",
+      [
+        "--json",
+        "--ignore-case",
+        "--fixed-strings",
+        "--max-count",
+        String(maxEvidence),
+        "--max-filesize",
+        "500K",
+        ...rgGlobArgs(),
+        ...terms.flatMap((term) => ["-e", term]),
+        ...searchTargets,
+      ],
+      { allowExitCodes: [1] },
+    );
 
-  return result.stdout ? parseRipgrepJson(result.stdout) : [];
+    return result.stdout ? parseRipgrepJson(result.stdout) : [];
+  } catch (error) {
+    if (!(error as Error).message.includes("spawnSync rg ENOENT")) throw error;
+    return nodeSearch(repoPath, terms, searchTargets, maxEvidence);
+  }
 };
 
-const listFiles = (repoPath: string) =>
-  runCommand(repoPath, "rg", ["--files", ...rgGlobArgs()], { allowExitCodes: [1] }).stdout
-    .split("\n")
-    .filter(Boolean)
-    .map(toPosixPath)
-    .filter(isSearchableFile);
+const walkFiles = (rootPath: string, currentPath = rootPath): string[] => {
+  if (!existsSync(currentPath)) return [];
+  return readdirSync(currentPath).flatMap((entry) => {
+    if (EXCLUDE_DIRS.has(entry)) return [];
+    const fullPath = path.join(currentPath, entry);
+    const stat = statSync(fullPath);
+    if (stat.isDirectory()) return walkFiles(rootPath, fullPath);
+    if (!stat.isFile() || stat.size > 500 * 1024) return [];
+    return [toPosixPath(path.relative(rootPath, fullPath))];
+  });
+};
+
+const listFilesWithNode = (repoPath: string) => walkFiles(repoPath).filter(isSearchableFile);
+
+const nodeSearch = (repoPath: string, terms: string[], targets: string[], maxEvidence: number): Match[] => {
+  const lowerTerms = terms.map((term) => term.toLowerCase());
+  const files = listFilesWithNode(repoPath).filter((filePath) =>
+    targets.some((target) => target === "." || filePath === toPosixPath(target) || filePath.startsWith(`${toPosixPath(target)}/`)),
+  );
+
+  return files.flatMap((filePath) => {
+    const fullPath = path.join(repoPath, filePath);
+    const text = readFileSync(fullPath, "utf8");
+    let matches = 0;
+    return text.split("\n").flatMap((line, index) => {
+      if (matches >= maxEvidence) return [];
+      const lowerLine = line.toLowerCase();
+      if (!lowerTerms.some((term) => lowerLine.includes(term))) return [];
+      matches += 1;
+      return [{ line: index + 1, path: filePath, text: line }];
+    });
+  });
+};
+
+const listFiles = (repoPath: string) => {
+  try {
+    return runCommand(repoPath, "rg", ["--files", ...rgGlobArgs()], { allowExitCodes: [1] }).stdout
+      .split("\n")
+      .filter(Boolean)
+      .map(toPosixPath)
+      .filter(isSearchableFile);
+  } catch (error) {
+    if (!(error as Error).message.includes("spawnSync rg ENOENT")) throw error;
+    return listFilesWithNode(repoPath);
+  }
+};
 
 const itemFromPath = (
   repo: SearchableRepoConfig,
@@ -224,18 +271,24 @@ export const searchCommits = (
 ) => {
   if (!terms.length) return [];
 
-  const result = runCommand(
-    repo.path,
-    "git",
-    [
-      "log",
-      "--all",
-      "--date=short",
-      "--max-count=250",
-      "--pretty=format:%h%x09%ad%x09%an%x09%s",
-    ],
-    { allowExitCodes: [128] },
-  );
+  let result;
+  try {
+    result = runCommand(
+      repo.path,
+      "git",
+      [
+        "log",
+        "--all",
+        "--date=short",
+        "--max-count=250",
+        "--pretty=format:%h%x09%ad%x09%an%x09%s",
+      ],
+      { allowExitCodes: [128] },
+    );
+  } catch (error) {
+    if ((error as Error).message.includes("spawnSync git ENOENT")) return [];
+    throw error;
+  }
   if (result.status === 128 || !result.stdout) return [];
 
   return result.stdout

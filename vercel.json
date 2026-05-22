@@ -1,0 +1,12 @@
+{
+  "functions": {
+    "api/slack/events.ts": {
+      "includeFiles": "firsttrace.wallspace.config.yaml",
+      "maxDuration": 60
+    },
+    "api/worker/run-once.ts": {
+      "includeFiles": "firsttrace.wallspace.config.yaml",
+      "maxDuration": 60
+    }
+  }
+}

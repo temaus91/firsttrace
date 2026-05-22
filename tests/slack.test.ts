@@ -199,6 +199,7 @@ describe("Slack event receiver", () => {
 
   it("enqueues configured app mentions as investigation jobs", async () => {
     const queue = new FakeQueue();
+    const acceptedJobs: InvestigationJob[] = [];
     const response = await handleSlackEventsRequest(
       signedSlackRequest({
         event: {
@@ -213,6 +214,7 @@ describe("Slack event receiver", () => {
       }),
       {
         config: loadConfig(tempConfigPath()),
+        afterEnqueue: (job) => acceptedJobs.push(job),
         nowSeconds,
         queue,
         signingSecret,
@@ -234,6 +236,7 @@ describe("Slack event receiver", () => {
         userId: "U0123456789",
       },
     });
+    expect(acceptedJobs.map((job) => job.id)).toEqual(["job-1"]);
   });
 
   it("dedupes repeated Slack app mention, message, and reaction events", async () => {

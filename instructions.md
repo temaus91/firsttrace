@@ -175,6 +175,8 @@ FIRSTTRACE_CONFIG_PATH=
 FIRSTTRACE_QUEUE_PROVIDER=supabase
 FIRSTTRACE_RECEIVER_TOKEN=
 FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false
+CRON_SECRET=
+FIRSTTRACE_GITHUB_CACHE_ROOT=
 FIRSTTRACE_AI_PROVIDER=openai
 OPENAI_API_KEY=
 OPENAI_MODEL_CHAT=
@@ -196,6 +198,21 @@ The receiver should validate incoming Slack events, check whether the channel is
 configured, dedupe Slack retries before creating duplicate jobs, create a
 Supabase-backed job, and return quickly. The worker should process the job
 asynchronously and post the result back through the chat provider.
+
+For standalone Vercel deployments, the Slack endpoint can schedule one hosted
+worker pass with Vercel background processing after the event has been
+acknowledged. Keep a protected worker endpoint available for manual repair runs
+or for cron on plans that support the desired frequency:
+
+```text
+GET|POST /api/worker/run-once
+```
+
+Manual dogfood runs can call the same endpoint with either `CRON_SECRET` or
+`FIRSTTRACE_RECEIVER_TOKEN` as a bearer token. On Vercel,
+`FIRSTTRACE_GITHUB_CACHE_ROOT` should point at `/tmp/firsttrace/github` or be
+left unset so the worker uses `/tmp` instead of the read-only deployment
+directory for GitHub clones.
 
 Before the full Slack app is wired, test the generic hosted receiver directly:
 

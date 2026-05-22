@@ -7,18 +7,22 @@
   "scripts": {
     "firsttrace": "tsx src/cli.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "vercel-build": "npm run typecheck"
   },
   "dependencies": {
     "@octokit/auth-app": "^8.2.0",
     "@supabase/supabase-js": "^2.106.1",
+    "@vercel/functions": "^3.6.0",
     "dotenv": "^17.4.2",
     "openai": "^6.39.0",
+    "tar": "^7.5.15",
     "yaml": "^2.8.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
+    "@types/tar": "^6.1.13",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^4.0.14"

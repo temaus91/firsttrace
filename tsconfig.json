@@ -14,5 +14,6 @@
     "strict": true,
     "target": "ES2022"
   },
-  "include": ["api/**/*.ts", "src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
+  "include": ["api/**/*.ts", "src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"],
+  "exclude": ["node_modules/**", "dist/**", ".firsttrace/**", ".vercel/**"]
 }

@@ -1,0 +1,47 @@
+repos:
+  - name: wallspace
+    provider: github
+    owner: temaus91
+    repo: v0-artist-venue-app
+    default_branch: main
+docs:
+  - README.md
+  - plans.md
+  - docs
+issue_exports: []
+owners:
+  - path: README.md
+    owner: "@project-docs"
+  - path: plans.md
+    owner: "@product"
+  - path: docs/**
+    owner: "@docs"
+  - path: app/**
+    owner: "@app-platform"
+  - path: components/**
+    owner: "@frontend"
+  - path: lib/server/**
+    owner: "@backend"
+  - path: lib/domain/**
+    owner: "@domain"
+  - path: supabase/**
+    owner: "@data"
+  - path: e2e/**
+    owner: "@qa"
+chat:
+  provider: slack
+  channels:
+    - id: C0B5KPU15TK
+      name: ai-triage
+      triggers:
+        - message
+        - app_mention
+        - reaction
+      response: thread
+      ai_enabled: true
+      repositories:
+        - wallspace
+search:
+  max_files: 10
+  max_commits: 8
+  max_evidence_per_file: 3
