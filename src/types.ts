@@ -137,6 +137,46 @@ export type EvalRunResult = {
   };
 };
 
+export type InvestigationJobStatus = "queued" | "running" | "succeeded" | "failed";
+
+export type InvestigationJob = {
+  aiEnabled: boolean;
+  attempts: number;
+  configPath: string;
+  createdAt: string;
+  error?: string;
+  finishedAt?: string;
+  id: string;
+  maxAttempts: number;
+  report: string;
+  result?: InvestigationResult;
+  startedAt?: string;
+  status: InvestigationJobStatus;
+  updatedAt: string;
+};
+
+export type EnqueueInvestigationJobInput = {
+  aiEnabled: boolean;
+  configPath: string;
+  maxAttempts?: number;
+  report: string;
+};
+
+export type JobQueue = {
+  claimNext(): InvestigationJob | undefined;
+  complete(id: string, result: InvestigationResult): InvestigationJob;
+  enqueue(input: EnqueueInvestigationJobInput): InvestigationJob;
+  fail(id: string, error: string): InvestigationJob;
+  get(id: string): InvestigationJob | undefined;
+  list(): InvestigationJob[];
+};
+
+export type WorkerRunResult = {
+  job?: InvestigationJob;
+  message: string;
+  status: "idle" | "processed";
+};
+
 export type RepoConfig = {
   name: string;
   path: string;

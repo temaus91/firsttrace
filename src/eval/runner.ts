@@ -1,5 +1,4 @@
-import { buildAiReasonerRequest } from "../ai/evidence.js";
-import { investigate } from "../investigate.js";
+import { executeInvestigation } from "../investigation-runner.js";
 import type { AiProvider, EvalCase, EvalCaseResult, EvalRunResult, FirstTraceConfig } from "../types.js";
 import { scoreEvalResult } from "./scoring.js";
 
@@ -13,17 +12,11 @@ export const runEval = async ({ aiProvider, cases, config }: RunEvalOptions): Pr
   const caseResults: EvalCaseResult[] = [];
 
   for (const evalCase of cases) {
-    const deterministicResult = investigate(evalCase.report, config);
-    if (aiProvider) {
-      try {
-        deterministicResult.ai = await aiProvider.reason(buildAiReasonerRequest(deterministicResult));
-      } catch (error) {
-        deterministicResult.warnings.push(
-          `AI reasoning failed with provider ${aiProvider.name}: ${(error as Error).message}`,
-        );
-      }
-    }
-
+    const deterministicResult = await executeInvestigation({
+      aiProvider,
+      config,
+      report: evalCase.report,
+    });
     const deterministicScore = scoreEvalResult(evalCase, deterministicResult);
     const aiScore = deterministicResult.ai
       ? scoreEvalResult(evalCase, deterministicResult, deterministicResult.ai)

@@ -126,6 +126,16 @@ npm run firsttrace -- eval \
   --cases evals/example.yaml
 ```
 
+Local worker run:
+
+```bash
+npm run firsttrace -- worker enqueue \
+  --config firsttrace.config.yaml \
+  --report "README deployment plan is unclear"
+
+npm run firsttrace -- worker run --once
+```
+
 ## MVP Scope
 
 FirstTrace v0 should stay small:
@@ -208,7 +218,8 @@ from git history and ownership metadata, chat integration will not save it.
 
 ## Status
 
-Phase 3 local CLI and eval runner are implemented. The deterministic command is:
+Phase 4 local CLI, eval runner, and worker runtime are implemented. The
+deterministic command is:
 
 ```bash
 npm run firsttrace -- investigate \
@@ -233,11 +244,22 @@ npm run firsttrace -- eval \
   --cases evals/example.yaml
 ```
 
+The worker command sequence is:
+
+```bash
+npm run firsttrace -- worker enqueue \
+  --config firsttrace.config.yaml \
+  --report "README deployment plan is unclear"
+
+npm run firsttrace -- worker run --once
+
+npm run firsttrace -- worker status --job <job-id>
+```
+
 Next planned work:
 
-1. Add a local worker runtime.
-2. Add a local message delivery adapter.
-3. Wire Slack as the first chat provider.
+1. Add a local message delivery adapter.
+2. Wire Slack as the first chat provider.
 
 ## License
 

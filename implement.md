@@ -78,23 +78,32 @@ Completed:
 1. Phase 1: deterministic local CLI.
 2. Phase 2: optional OpenAI AI provider for local CLI.
 3. Phase 3: eval runner.
+4. Phase 4: local worker runtime.
 
 Next:
 
-1. Phase 4: local worker runtime.
-   - Add queued/running/succeeded/failed job model.
-   - Start with local filesystem or in-memory queue.
-   - Reuse the same investigation engine and AI provider path as the CLI.
-2. Phase 5: local message delivery adapter.
+1. Phase 5: local message delivery adapter.
    - Add `submit` CLI command or local HTTP endpoint.
    - Submit a report to the worker and fetch/store the result.
-3. Later: Slack as the first chat provider.
+2. Later: Slack as the first chat provider.
    - Preserve a generic `ChatProvider` boundary so Teams or other systems can
      use the same worker and investigation core.
-4. Later: provider expansion.
+3. Later: provider expansion.
    - GitHub provider for repo/issues.
    - Vercel/Supabase runtime or queue provider for dogfood deployment.
    - OCI runtime/queue/work-item provider for enterprise deployment.
+
+Worker runtime details:
+
+- The Phase 4 queue provider is filesystem-backed and stores jobs under
+  `.firsttrace/jobs`.
+- `.firsttrace/` is ignored and must not be committed.
+- Worker commands are low-level local runtime commands, not the Phase 5
+  user-facing message delivery adapter.
+- Worker execution must keep using the shared investigation path so CLI, eval,
+  and worker behavior stay consistent.
+- Future Redis, Supabase, Vercel, and OCI queues should implement the same queue
+  provider boundary instead of changing investigation logic.
 
 Eval runner details:
 

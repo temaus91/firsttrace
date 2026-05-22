@@ -338,31 +338,38 @@ Limitations:
 - no message delivery adapter
 - no Slack, Teams, Docker, npm publishing, or work-item creation
 
-### Phase 4: Local Worker Runtime
+### Phase 4: Local Worker Runtime - Complete
 
-Add a local asynchronous runtime that reuses the same investigation engine as the
-CLI:
+The implemented Phase 4 flow adds a local asynchronous runtime that reuses the
+same investigation engine as the CLI:
 
-```text
-submit report -> queued job -> worker -> investigation result
+```bash
+npm run firsttrace -- worker enqueue \
+  --config firsttrace.config.yaml \
+  --report "README deployment plan is unclear"
+
+npm run firsttrace -- worker run --once
+
+npm run firsttrace -- worker status --job <job-id>
 ```
 
-Job states:
+Current capability:
 
-- queued
-- running
-- succeeded
-- failed
+- filesystem-backed queue under `.firsttrace/jobs`
+- generic `JobQueue` interface with a filesystem provider
+- one JSON file per investigation job
+- queued, running, succeeded, and failed job states
+- persisted timestamps, attempts, config path, report, AI flag, result, and
+  error details
+- deterministic worker processing using the shared investigation path
+- optional AI worker processing using the same AI provider path as
+  `investigate --ai`
 
-Start with a filesystem or in-memory queue. Do not add Redis, Supabase, OCI, or
-Temporal until the local worker path is useful.
+Limitations:
 
-The worker should:
-
-- accept jobs containing report text and config path
-- run deterministic collection and optional OpenAI reasoning
-- persist status, timestamps, result, and failure details
-- make retries explicit and bounded
+- no message delivery adapter
+- no Slack, Teams, Docker, npm publishing, Redis, Supabase, OCI, or work-item
+  creation
 
 ### Phase 5: Message Input Adapter
 
@@ -529,10 +536,9 @@ features.
 
 ## Immediate Next Steps
 
-1. Add local worker runtime.
-2. Add local message delivery adapter.
-3. Add Slack as the first chat provider.
-4. Add GitHub, Vercel/Supabase, OCI, and work-item providers only through the
+1. Add local message delivery adapter.
+2. Add Slack as the first chat provider.
+3. Add GitHub, Vercel/Supabase, OCI, and work-item providers only through the
    generic provider interfaces.
 
 ## Open Questions
