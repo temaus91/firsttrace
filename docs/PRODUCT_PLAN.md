@@ -395,27 +395,37 @@ Limitations:
 - no local HTTP endpoint
 - no Slack, Teams, hosted receiver, or webhook handling
 
-### Phase 6: Hosted Vercel/Supabase Runtime
+### Phase 6: Hosted Vercel/Supabase Runtime - Complete
 
-Add a hosted backend path for teams that want FirstTrace to run as a dedicated
-service:
+The implemented Phase 6 flow adds a hosted backend path for teams that want
+FirstTrace to run as a dedicated service:
 
 ```text
 Vercel Receiver -> Supabase Queue/Database -> Worker Process -> Result Store
 ```
 
-The hosted runtime should:
+Current capability:
 
-- expose provider-neutral HTTP endpoints for submitted investigations
-- store jobs, status, attempts, and results in Supabase
-- keep secrets in Vercel/Supabase environment variables, not repo config
-- reuse the same worker and investigation engine as the local CLI
-- preserve the generic `JobQueue` and runtime provider boundaries
-- support local development with the same request and result contracts
+- async `JobQueue` boundary shared by filesystem and Supabase queues
+- Supabase-backed job storage in `firsttrace_jobs`
+- atomic Supabase job claiming through `firsttrace_claim_next_job()`
+- queue selection with `--queue filesystem|supabase` or
+  `FIRSTTRACE_QUEUE_PROVIDER`
+- provider-neutral Vercel-compatible endpoints:
+  - `POST /api/investigations`
+  - `GET /api/jobs?id=<job-id>`
+- optional bearer auth through `FIRSTTRACE_RECEIVER_TOKEN`
+- worker reuse of the same investigation engine as the local CLI
 
 Vercel and Supabase should be adapters, not assumptions in the core
 investigation logic. A future Docker, OCI, Kubernetes, Redis, or Postgres
 deployment should be able to reuse the same core worker.
+
+Limitations:
+
+- no GitHub-hosted repository provider
+- no Slack, Teams, or webhook provider
+- hosted jobs still require a worker with access to configured local repo paths
 
 ### Phase 7: GitHub Provider for Private/Public Repositories
 
@@ -612,12 +622,11 @@ features.
 
 ## Immediate Next Steps
 
-1. Add hosted Vercel/Supabase runtime support.
-2. Add GitHub App provider for private and public repositories.
-3. Add Slack chat provider and channel configuration.
-4. Verify the hosted end-to-end workflow from configured Slack channel to AI
+1. Add GitHub App provider for private and public repositories.
+2. Add Slack chat provider and channel configuration.
+3. Verify the hosted end-to-end workflow from configured Slack channel to AI
    analysis reply.
-5. Add GitHub, Vercel/Supabase, OCI, and work-item providers only through the
+4. Add GitHub, Vercel/Supabase, OCI, and work-item providers only through the
    generic provider interfaces.
 
 ## Open Questions

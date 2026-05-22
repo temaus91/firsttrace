@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { FileSystemJobQueue } from "../src/worker/fs-queue.js";
 import { renderJobStatus } from "../src/worker/render.js";
 import { runWorkerOnce } from "../src/worker/runner.js";
-import type { AiProvider, AiReasonerRequest } from "../src/types.js";
+import type { AiProvider, AiReasonerRequest, InvestigationJob, JobQueue } from "../src/types.js";
 
 const tempQueuePath = (name: string) => {
   const dir = path.join(tmpdir(), `firsttrace-${name}-${Date.now()}-${Math.random().toString(16).slice(2)}`);
@@ -56,29 +56,78 @@ const failingAiProvider: AiProvider = {
   },
 };
 
+class AsyncFakeQueue implements JobQueue {
+  job?: InvestigationJob;
+
+  constructor(configPath = "firsttrace.config.yaml") {
+    this.job = {
+      aiEnabled: false,
+      attempts: 0,
+      configPath,
+      createdAt: "2026-05-22T00:00:00.000Z",
+      id: "async-fake-job",
+      maxAttempts: 1,
+      report: "README deployment plan is unclear",
+      status: "queued",
+      updatedAt: "2026-05-22T00:00:00.000Z",
+    };
+  }
+
+  async claimNext() {
+    if (!this.job || this.job.status !== "queued") return undefined;
+    this.job = { ...this.job, attempts: 1, status: "running", updatedAt: "2026-05-22T00:00:01.000Z" };
+    return this.job;
+  }
+
+  async complete(id: string, result: InvestigationJob["result"]) {
+    if (!this.job || this.job.id !== id || !result) throw new Error("missing job");
+    this.job = { ...this.job, result, status: "succeeded", updatedAt: "2026-05-22T00:00:02.000Z" };
+    return this.job;
+  }
+
+  async enqueue() {
+    if (!this.job) throw new Error("missing job");
+    return this.job;
+  }
+
+  async fail(id: string, error: string) {
+    if (!this.job || this.job.id !== id) throw new Error("missing job");
+    this.job = { ...this.job, error, status: "failed", updatedAt: "2026-05-22T00:00:02.000Z" };
+    return this.job;
+  }
+
+  async get() {
+    return this.job;
+  }
+
+  async list() {
+    return this.job ? [this.job] : [];
+  }
+}
+
 describe("worker queue", () => {
-  it("enqueues, reads, lists, claims, completes, and fails jobs", () => {
+  it("enqueues, reads, lists, claims, completes, and fails jobs", async () => {
     const queue = new FileSystemJobQueue(tempQueuePath("queue"));
-    const first = queue.enqueue({
+    const first = await queue.enqueue({
       aiEnabled: false,
       configPath: "firsttrace.config.yaml",
       report: "README deployment plan is unclear",
     });
-    const second = queue.enqueue({
+    const second = await queue.enqueue({
       aiEnabled: true,
       configPath: "firsttrace.config.yaml",
       report: "README deployment plan is unclear",
     });
 
-    expect(queue.get(first.id)?.status).toBe("queued");
-    expect(queue.list().map((job) => job.id)).toEqual([first.id, second.id]);
+    expect((await queue.get(first.id))?.status).toBe("queued");
+    expect((await queue.list()).map((job) => job.id)).toEqual([first.id, second.id]);
 
-    const claimed = queue.claimNext();
+    const claimed = await queue.claimNext();
     expect(claimed?.id).toBe(first.id);
     expect(claimed?.status).toBe("running");
     expect(claimed?.attempts).toBe(1);
 
-    const completed = queue.complete(first.id, {
+    const completed = await queue.complete(first.id, {
       classification: "unknown",
       likelyComponent: "README.md",
       likelyOwners: ["@project-docs"],
@@ -93,16 +142,16 @@ describe("worker queue", () => {
     expect(completed.status).toBe("succeeded");
     expect(completed.result?.likelyComponent).toBe("README.md");
 
-    const failedClaim = queue.claimNext();
+    const failedClaim = await queue.claimNext();
     expect(failedClaim?.id).toBe(second.id);
-    const failed = queue.fail(second.id, "provider unavailable");
+    const failed = await queue.fail(second.id, "provider unavailable");
     expect(failed.status).toBe("failed");
     expect(failed.error).toBe("provider unavailable");
   });
 
   it("processes a deterministic job to succeeded", async () => {
     const queue = new FileSystemJobQueue(tempQueuePath("deterministic"));
-    const job = queue.enqueue({
+    const job = await queue.enqueue({
       aiEnabled: false,
       configPath: "firsttrace.config.yaml",
       report: "README deployment plan is unclear",
@@ -116,9 +165,19 @@ describe("worker queue", () => {
     expect(result.job?.result?.likelyComponent).toBe("README.md");
   });
 
+  it("processes jobs through an async queue implementation", async () => {
+    const queue = new AsyncFakeQueue();
+
+    const result = await runWorkerOnce({ queue });
+
+    expect(result.job?.id).toBe("async-fake-job");
+    expect(result.job?.status).toBe("succeeded");
+    expect(result.job?.result?.likelyComponent).toBe("README.md");
+  });
+
   it("processes an AI-enabled job through a provider", async () => {
     const queue = new FileSystemJobQueue(tempQueuePath("ai"));
-    const job = queue.enqueue({
+    const job = await queue.enqueue({
       aiEnabled: true,
       configPath: "firsttrace.config.yaml",
       report: "README deployment plan is unclear",
@@ -137,7 +196,7 @@ describe("worker queue", () => {
 
   it("records failed jobs with errors and attempt counts", async () => {
     const queue = new FileSystemJobQueue(tempQueuePath("failed"));
-    const job = queue.enqueue({
+    const job = await queue.enqueue({
       aiEnabled: false,
       configPath: "missing-config.yaml",
       report: "README deployment plan is unclear",
@@ -153,7 +212,7 @@ describe("worker queue", () => {
 
   it("fails AI-enabled jobs when the provider fails", async () => {
     const queue = new FileSystemJobQueue(tempQueuePath("ai-failed"));
-    const job = queue.enqueue({
+    const job = await queue.enqueue({
       aiEnabled: true,
       configPath: "firsttrace.config.yaml",
       report: "README deployment plan is unclear",
@@ -170,10 +229,10 @@ describe("worker queue", () => {
     expect(result.job?.error).toContain("AI reasoning failed with provider failing-ai");
   });
 
-  it("rejects invalid job ids before building a path", () => {
+  it("rejects invalid job ids before building a path", async () => {
     const queue = new FileSystemJobQueue(tempQueuePath("invalid-id"));
 
-    expect(() => queue.get("../outside")).toThrow("Invalid job id");
+    await expect(queue.get("../outside")).rejects.toThrow("Invalid job id");
   });
 
   it("returns a clean idle result when no queued jobs exist", async () => {

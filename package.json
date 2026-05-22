@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.106.1",
     "dotenv": "^17.4.2",
     "openai": "^6.39.0",
     "yaml": "^2.8.1",

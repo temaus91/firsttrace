@@ -9,7 +9,7 @@ import { executeInvestigation } from "./investigation-runner.js";
 import { LocalMessageDeliveryAdapter } from "./message/local-submit.js";
 import { renderMessageSubmitResult } from "./message/render.js";
 import { renderInvestigation } from "./render.js";
-import { FileSystemJobQueue } from "./worker/fs-queue.js";
+import { createJobQueue } from "./worker/queue-factory.js";
 import { renderEnqueuedJob, renderJobStatus, renderWorkerRun } from "./worker/render.js";
 import { runWorkerOnce } from "./worker/runner.js";
 
@@ -21,6 +21,7 @@ type ParsedArgs = {
   help: boolean;
   jobId?: string;
   once: boolean;
+  queueProvider?: string;
   report?: string;
   workerAction?: string;
 };
@@ -30,11 +31,11 @@ const usage = () => `Usage:
   npm run firsttrace -- investigate --config firsttrace.config.yaml --report "bug text" --ai
   npm run firsttrace -- eval --config firsttrace.config.yaml --cases evals/example.yaml
   npm run firsttrace -- eval --config firsttrace.config.yaml --cases evals/example.yaml --ai
-  npm run firsttrace -- submit --config firsttrace.config.yaml --report "bug text"
-  npm run firsttrace -- submit --config firsttrace.config.yaml --report "bug text" --ai
-  npm run firsttrace -- worker enqueue --config firsttrace.config.yaml --report "bug text"
-  npm run firsttrace -- worker run --once
-  npm run firsttrace -- worker status --job <job-id>
+  npm run firsttrace -- submit --queue filesystem --config firsttrace.config.yaml --report "bug text"
+  npm run firsttrace -- submit --queue supabase --config firsttrace.config.yaml --report "bug text" --ai
+  npm run firsttrace -- worker enqueue --queue filesystem --config firsttrace.config.yaml --report "bug text"
+  npm run firsttrace -- worker run --once --queue filesystem
+  npm run firsttrace -- worker status --queue filesystem --job <job-id>
 
 Options:
   --ai              Add AI reasoning over the deterministic evidence bundle.
@@ -42,6 +43,7 @@ Options:
   --config <path>   Path to a FirstTrace YAML config. Defaults to firsttrace.config.yaml.
   --job <id>        Worker job id for status lookup.
   --once            Process at most one queued job.
+  --queue <name>    Queue provider: filesystem or supabase. Defaults to FIRSTTRACE_QUEUE_PROVIDER or filesystem.
   --report <text>   Bug report or feedback text to investigate.
   --help            Show this message.`;
 
@@ -99,6 +101,13 @@ const parseArgs = (argv: string[]): ParsedArgs => {
       index += 1;
       continue;
     }
+    if (arg === "--queue") {
+      const value = argv[index + 1];
+      if (!value) throw new Error("--queue requires a provider name.");
+      parsed.queueProvider = value;
+      index += 1;
+      continue;
+    }
     if (arg === "--report") {
       const value = argv[index + 1];
       if (!value) throw new Error("--report requires text.");
@@ -124,29 +133,29 @@ const main = async () => {
   }
 
   if (args.command === "submit") {
-    const queue = new FileSystemJobQueue();
+    const { describeJobLocation, provider, queue } = createJobQueue(args.queueProvider);
     const adapter = new LocalMessageDeliveryAdapter(queue);
-    const result = adapter.submit({
+    const result = await adapter.submit({
       aiEnabled: args.ai,
       configPath: args.configPath,
       report: args.report ?? "",
     });
-    console.log(renderMessageSubmitResult(result, queue.jobPath(result.job.id)));
+    console.log(renderMessageSubmitResult(result, describeJobLocation(result.job), provider));
     return;
   }
 
   if (args.command === "worker") {
-    const queue = new FileSystemJobQueue();
+    const { describeJobLocation, queue } = createJobQueue(args.queueProvider);
     if (args.workerAction === "enqueue") {
       if (!args.report?.trim()) {
         throw new Error("Missing required --report.");
       }
-      const job = queue.enqueue({
+      const job = await queue.enqueue({
         aiEnabled: args.ai,
         configPath: args.configPath,
         report: args.report,
       });
-      console.log(renderEnqueuedJob(job, queue.jobPath(job.id)));
+      console.log(renderEnqueuedJob(job, describeJobLocation(job)));
       return;
     }
 
@@ -163,7 +172,7 @@ const main = async () => {
       if (!args.jobId?.trim()) {
         throw new Error("Missing required --job.");
       }
-      const job = queue.get(args.jobId);
+      const job = await queue.get(args.jobId);
       if (!job) {
         throw new Error(`Job not found: ${args.jobId}`);
       }

@@ -139,6 +139,8 @@ export type EvalRunResult = {
 
 export type InvestigationJobStatus = "queued" | "running" | "succeeded" | "failed";
 
+export type Awaitable<T> = T | Promise<T>;
+
 export type InvestigationJobSource = {
   channelId?: string;
   channelName?: string;
@@ -174,12 +176,12 @@ export type EnqueueInvestigationJobInput = {
 };
 
 export type JobQueue = {
-  claimNext(): InvestigationJob | undefined;
-  complete(id: string, result: InvestigationResult): InvestigationJob;
-  enqueue(input: EnqueueInvestigationJobInput): InvestigationJob;
-  fail(id: string, error: string): InvestigationJob;
-  get(id: string): InvestigationJob | undefined;
-  list(): InvestigationJob[];
+  claimNext(): Awaitable<InvestigationJob | undefined>;
+  complete(id: string, result: InvestigationResult): Awaitable<InvestigationJob>;
+  enqueue(input: EnqueueInvestigationJobInput): Awaitable<InvestigationJob>;
+  fail(id: string, error: string): Awaitable<InvestigationJob>;
+  get(id: string): Awaitable<InvestigationJob | undefined>;
+  list(): Awaitable<InvestigationJob[]>;
 };
 
 export type WorkerRunResult = {

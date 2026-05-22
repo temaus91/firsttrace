@@ -4,9 +4,10 @@ This guide describes the target hosted setup for a company that wants FirstTrace
 connected to a private GitHub repository and a Slack triage channel.
 
 Current implementation status: the local CLI, AI-assisted local investigation,
-eval runner, local worker runtime, and local `submit` message adapter exist. The
-hosted Vercel/Supabase runtime, GitHub App provider, and Slack provider are
-planned next phases. Exact commands may change as those phases are implemented.
+eval runner, local worker runtime, local `submit` message adapter, hosted
+Vercel-compatible receiver/status handlers, and Supabase-backed queue exist. The
+GitHub App provider and Slack provider are planned next phases. Exact commands
+may change as those phases are implemented.
 
 ## Target Workflow
 
@@ -69,6 +70,14 @@ Configure Slack event subscriptions to the deployed receiver URL:
 https://your-firsttrace-service.example.com/api/slack/events
 ```
 
+Slack event handling is planned for a later phase. The Phase 6 hosted receiver
+available today is:
+
+```text
+POST https://your-firsttrace-service.example.com/api/investigations
+GET  https://your-firsttrace-service.example.com/api/jobs?id=<job-id>
+```
+
 Recommended initial event subscriptions:
 
 - `app_mention`
@@ -116,6 +125,16 @@ variable store. Do not commit it into the repository.
 
 Use Supabase to store investigation jobs, job status, attempts, and results.
 
+Apply the FirstTrace schema from:
+
+```text
+supabase/migrations/0001_firsttrace_jobs.sql
+```
+
+This creates `firsttrace_jobs`, enables row level security, and adds the
+`firsttrace_claim_next_job()` RPC used by workers to claim queued work
+atomically.
+
 Store these values as backend secrets:
 
 ```text
@@ -133,6 +152,8 @@ variables for the selected providers:
 
 ```text
 FIRSTTRACE_CONFIG_PATH=
+FIRSTTRACE_QUEUE_PROVIDER=supabase
+FIRSTTRACE_RECEIVER_TOKEN=
 FIRSTTRACE_AI_PROVIDER=openai
 OPENAI_API_KEY=
 OPENAI_MODEL_CHAT=
@@ -149,6 +170,15 @@ The receiver should validate incoming Slack events, check whether the channel is
 configured, create a Supabase-backed job, and return quickly. The worker should
 process the job asynchronously and post the result back through the chat
 provider.
+
+Before Slack is implemented, test the hosted receiver directly:
+
+```bash
+curl -X POST "$FIRSTTRACE_BASE_URL/api/investigations" \
+  -H "authorization: Bearer $FIRSTTRACE_RECEIVER_TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"report":"README deployment plan is unclear","aiEnabled":false}'
+```
 
 ## 6. Configure FirstTrace
 

@@ -12,7 +12,7 @@ export const runWorkerOnce = async ({
   aiProviderFactory = createAiProviderFromEnv,
   queue,
 }: RunWorkerOnceOptions): Promise<WorkerRunResult> => {
-  const job = queue.claimNext();
+  const job = await queue.claimNext();
   if (!job) {
     return {
       message: "No queued jobs found.",
@@ -28,14 +28,14 @@ export const runWorkerOnce = async ({
       config,
       report: job.report,
     });
-    const completed = queue.complete(job.id, result);
+    const completed = await queue.complete(job.id, result);
     return {
       job: completed,
       message: `Processed job ${job.id}.`,
       status: "processed",
     };
   } catch (error) {
-    const failed = queue.fail(job.id, (error as Error).message);
+    const failed = await queue.fail(job.id, (error as Error).message);
     return {
       job: failed,
       message: `Job ${job.id} failed: ${(error as Error).message}`,

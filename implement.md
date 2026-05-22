@@ -80,28 +80,24 @@ Completed:
 3. Phase 3: eval runner.
 4. Phase 4: local worker runtime.
 5. Phase 5: local message delivery adapter.
+6. Phase 6: hosted Vercel/Supabase runtime.
 
 Next:
 
-1. Phase 6: hosted Vercel/Supabase runtime.
-   - Add a provider-neutral HTTP receiver.
-   - Store jobs, status, attempts, and results in Supabase through the queue
-     provider boundary.
-   - Run the same worker path used by local jobs.
-2. Phase 7: GitHub App provider.
+1. Phase 7: GitHub App provider.
    - Support private and public GitHub repositories without requiring a local
      checkout.
    - Keep GitHub App credentials in environment secrets and repo routing in
      config.
-3. Phase 8: Slack chat provider and channel configuration.
+2. Phase 8: Slack chat provider and channel configuration.
    - Verify Slack signatures, acknowledge quickly, fetch thread context, enqueue
      jobs, and post cited replies.
    - Keep channel ids, channel names, triggers, and repo routing in config.
-4. Phase 9: hosted setup and end-to-end dogfood.
+3. Phase 9: hosted setup and end-to-end dogfood.
    - Verify a configured Slack channel can submit a bug, the hosted backend can
      queue it, the worker can inspect a configured private repository, AI can
      reason over cited evidence, and Slack receives the result.
-5. Later: provider expansion.
+4. Later: provider expansion.
    - Additional git providers, chat providers, queue providers, runtime
      providers, and work-item providers.
 
@@ -116,6 +112,12 @@ Worker runtime details:
   and worker behavior stay consistent.
 - Future Redis, Supabase, Vercel, and OCI queues should implement the same queue
   provider boundary instead of changing investigation logic.
+- The Phase 6 Supabase queue stores jobs in `firsttrace_jobs` and claims work
+  through the `firsttrace_claim_next_job()` RPC.
+- CLI queue selection uses `--queue filesystem|supabase`, with
+  `FIRSTTRACE_QUEUE_PROVIDER` as the env fallback.
+- Vercel-compatible API handlers live at `/api/investigations` and `/api/jobs`
+  and must stay thin receiver/status layers over the queue interface.
 
 Message delivery details:
 

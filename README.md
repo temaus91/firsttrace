@@ -101,8 +101,9 @@ triage channel.
 
 ## Local CLI
 
-The current local CLI supports deterministic investigation, optional AI
-reasoning, evals, a local worker runtime, and a local `submit` message adapter.
+The current CLI supports deterministic investigation, optional AI reasoning,
+evals, a local worker runtime, a local `submit` message adapter, and hosted
+queue selection for Supabase-backed jobs.
 The CLI always gathers deterministic evidence first. OpenAI is only called when
 `--ai` is passed, and it reasons over that bounded evidence bundle rather than
 crawling the repository.
@@ -137,16 +138,34 @@ Local submit and worker run:
 
 ```bash
 npm run firsttrace -- submit \
+  --queue filesystem \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear"
 
-npm run firsttrace -- worker run --once
+npm run firsttrace -- worker run --once --queue filesystem
 
-npm run firsttrace -- worker status --job <job-id>
+npm run firsttrace -- worker status --queue filesystem --job <job-id>
 ```
 
 `worker enqueue` is the lower-level queue command. `submit` is the local
 message-delivery path that future chat and HTTP adapters should mirror.
+
+Supabase-backed queue run:
+
+```bash
+npm run firsttrace -- submit \
+  --queue supabase \
+  --config firsttrace.config.yaml \
+  --report "README deployment plan is unclear"
+
+npm run firsttrace -- worker run --once --queue supabase
+
+npm run firsttrace -- worker status --queue supabase --job <job-id>
+```
+
+Supabase requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. The hosted
+receiver defaults to the Supabase queue and exposes `POST /api/investigations`
+plus `GET /api/jobs?id=<job-id>`.
 
 ## MVP Scope
 
@@ -231,7 +250,8 @@ from git history and ownership metadata, chat integration will not save it.
 
 ## Status
 
-Phase 5 local CLI, eval runner, worker runtime, and local submit adapter are
+Phase 6 local CLI, eval runner, worker runtime, local submit adapter,
+Supabase-backed queue, and Vercel-compatible receiver/status handlers are
 implemented. The
 deterministic command is:
 
@@ -262,19 +282,19 @@ The local submit and worker command sequence is:
 
 ```bash
 npm run firsttrace -- submit \
+  --queue filesystem \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear"
 
-npm run firsttrace -- worker run --once
+npm run firsttrace -- worker run --once --queue filesystem
 
-npm run firsttrace -- worker status --job <job-id>
+npm run firsttrace -- worker status --queue filesystem --job <job-id>
 ```
 
 Next planned work:
 
-1. Add hosted Vercel/Supabase runtime support.
-2. Add GitHub App provider for private/public repos.
-3. Wire Slack as the first chat provider.
+1. Add GitHub App provider for private/public repos.
+2. Wire Slack as the first chat provider.
 
 ## License
 

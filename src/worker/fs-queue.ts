@@ -37,8 +37,8 @@ export class FileSystemJobQueue implements JobQueue {
     this.rootPath = path.resolve(rootPath);
   }
 
-  claimNext(): InvestigationJob | undefined {
-    const job = this.list()
+  async claimNext(): Promise<InvestigationJob | undefined> {
+    const job = (await this.list())
       .filter((item) => item.status === "queued" && item.attempts < item.maxAttempts)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
     if (!job) return undefined;
@@ -55,7 +55,7 @@ export class FileSystemJobQueue implements JobQueue {
     return updated;
   }
 
-  complete(id: string, result: InvestigationResult): InvestigationJob {
+  async complete(id: string, result: InvestigationResult): Promise<InvestigationJob> {
     const job = this.requireJob(id);
     const updated = {
       ...job,
@@ -69,7 +69,7 @@ export class FileSystemJobQueue implements JobQueue {
     return updated;
   }
 
-  enqueue(input: EnqueueInvestigationJobInput): InvestigationJob {
+  async enqueue(input: EnqueueInvestigationJobInput): Promise<InvestigationJob> {
     const timestamp = now();
     const job: InvestigationJob = {
       aiEnabled: input.aiEnabled,
@@ -87,7 +87,7 @@ export class FileSystemJobQueue implements JobQueue {
     return job;
   }
 
-  fail(id: string, error: string): InvestigationJob {
+  async fail(id: string, error: string): Promise<InvestigationJob> {
     const job = this.requireJob(id);
     const updated = {
       ...job,
@@ -100,7 +100,7 @@ export class FileSystemJobQueue implements JobQueue {
     return updated;
   }
 
-  get(id: string): InvestigationJob | undefined {
+  async get(id: string): Promise<InvestigationJob | undefined> {
     const filePath = this.jobPath(id);
     if (!existsSync(filePath)) return undefined;
     return parseJob(readFileSync(filePath, "utf8"), filePath);
@@ -113,7 +113,7 @@ export class FileSystemJobQueue implements JobQueue {
     return path.join(this.rootPath, `${id}.json`);
   }
 
-  list(): InvestigationJob[] {
+  async list(): Promise<InvestigationJob[]> {
     if (!existsSync(this.rootPath)) return [];
     return readdirSync(this.rootPath)
       .filter((fileName) => fileName.endsWith(".json"))
@@ -134,7 +134,8 @@ export class FileSystemJobQueue implements JobQueue {
   }
 
   private requireJob(id: string) {
-    const job = this.get(id);
+    const filePath = this.jobPath(id);
+    const job = existsSync(filePath) ? parseJob(readFileSync(filePath, "utf8"), filePath) : undefined;
     if (!job) throw new Error(`Job not found: ${id}`);
     return job;
   }

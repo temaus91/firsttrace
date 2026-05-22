@@ -13,27 +13,27 @@ const tempQueuePath = (name: string) => {
 };
 
 describe("local message delivery adapter", () => {
-  it("submits a local message as a queued investigation job", () => {
+  it("submits a local message as a queued investigation job", async () => {
     const queue = new FileSystemJobQueue(tempQueuePath("submit"));
     const adapter = new LocalMessageDeliveryAdapter(queue);
 
-    const result = adapter.submit({
+    const result = await adapter.submit({
       aiEnabled: false,
       configPath: "firsttrace.config.yaml",
       report: "  README deployment plan is unclear  ",
     });
 
-    const stored = queue.get(result.job.id);
+    const stored = await queue.get(result.job.id);
     expect(stored?.status).toBe("queued");
     expect(stored?.report).toBe("README deployment plan is unclear");
     expect(stored?.source).toEqual({ provider: "local-cli" });
   });
 
-  it("preserves explicit source metadata for future chat adapters", () => {
+  it("preserves explicit source metadata for future chat adapters", async () => {
     const queue = new FileSystemJobQueue(tempQueuePath("source"));
     const adapter = new LocalMessageDeliveryAdapter(queue);
 
-    const result = adapter.submit({
+    const result = await adapter.submit({
       aiEnabled: true,
       configPath: "firsttrace.config.yaml",
       report: "checkout fails after retry",
@@ -47,17 +47,17 @@ describe("local message delivery adapter", () => {
       },
     });
 
-    expect(queue.get(result.job.id)?.source).toMatchObject({
+    expect((await queue.get(result.job.id))?.source).toMatchObject({
       channelId: "C0123456789",
       channelName: "company-ai-triage",
       provider: "test-chat",
     });
   });
 
-  it("renders submitted job status and next commands", () => {
+  it("renders submitted job status and next commands", async () => {
     const queue = new FileSystemJobQueue(tempQueuePath("render"));
     const adapter = new LocalMessageDeliveryAdapter(queue);
-    const result = adapter.submit({
+    const result = await adapter.submit({
       aiEnabled: false,
       configPath: "firsttrace.config.yaml",
       report: "README deployment plan is unclear",
@@ -72,17 +72,17 @@ describe("local message delivery adapter", () => {
     expect(rendered).toContain("Check status:");
   });
 
-  it("rejects empty reports before enqueueing", () => {
+  it("rejects empty reports before enqueueing", async () => {
     const queue = new FileSystemJobQueue(tempQueuePath("empty"));
     const adapter = new LocalMessageDeliveryAdapter(queue);
 
-    expect(() =>
+    await expect(
       adapter.submit({
         aiEnabled: false,
         configPath: "firsttrace.config.yaml",
         report: "   ",
       }),
-    ).toThrow("Missing required --report.");
-    expect(queue.list()).toEqual([]);
+    ).rejects.toThrow("Missing required --report.");
+    expect(await queue.list()).toEqual([]);
   });
 });

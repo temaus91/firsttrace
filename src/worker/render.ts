@@ -30,8 +30,10 @@ export const renderJobSummary = (job: InvestigationJob) =>
     .filter(Boolean)
     .join("\n");
 
-export const renderEnqueuedJob = (job: InvestigationJob, filePath: string) =>
-  ["# FirstTrace Worker Job Enqueued", renderJobSummary(job), `Path: \`${filePath}\``].join("\n\n");
+export const renderEnqueuedJob = (job: InvestigationJob, location?: string) =>
+  ["# FirstTrace Worker Job Enqueued", renderJobSummary(job), location ? `Storage: \`${location}\`` : ""]
+    .filter(Boolean)
+    .join("\n\n");
 
 export const renderJobStatus = (job: InvestigationJob | undefined) =>
   job ? ["# FirstTrace Worker Job Status", renderJobSummary(job)].join("\n\n") : empty;
