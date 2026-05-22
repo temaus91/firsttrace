@@ -3,7 +3,7 @@ import path from "node:path";
 import { runCommand, type CommandResult } from "../shell.js";
 import type { GitHubRepoConfig, SearchableRepoConfig } from "../types.js";
 import {
-  GitHubAppInstallationTokenProvider,
+  createGitHubTokenProviderFromEnv,
   type GitHubInstallationTokenProvider,
 } from "./github-auth.js";
 
@@ -37,14 +37,19 @@ export const githubRepositoryUrl = (repo: GitHubRepoConfig) => {
   return `https://github.com/${repo.owner}/${repo.repo}.git`;
 };
 
+export const githubGitAuthHeader = (token: string) =>
+  `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`;
+
 export const withGitHubAuthHeader = (token: string, args: string[]) => [
   "-c",
-  `http.extraHeader=Authorization: Bearer ${token}`,
+  `http.extraHeader=${githubGitAuthHeader(token)}`,
   ...args,
 ];
 
 export const redactGitHubTokenArgs = (token: string, args: string[]) =>
-  args.map((arg) => arg.replaceAll(token, "<redacted>"));
+  args.map((arg) =>
+    arg.replaceAll(githubGitAuthHeader(token), "Authorization: Basic <redacted>").replaceAll(token, "<redacted>"),
+  );
 
 export class GitHubAppRepoMaterializer implements GitHubRepoMaterializer {
   private readonly cacheRoot: string;
@@ -54,7 +59,7 @@ export class GitHubAppRepoMaterializer implements GitHubRepoMaterializer {
   constructor({
     cacheRoot = path.resolve(".firsttrace", "github"),
     runner = (cwd, args, options) => runCommand(cwd, "git", args, options),
-    tokenProvider = new GitHubAppInstallationTokenProvider(),
+    tokenProvider = createGitHubTokenProviderFromEnv(),
   }: {
     cacheRoot?: string;
     runner?: GitRunner;
@@ -102,7 +107,7 @@ export class GitHubAppRepoMaterializer implements GitHubRepoMaterializer {
       }
     } catch (error) {
       throw new Error(
-        `Failed to materialize GitHub repo ${repo.owner}/${repo.repo}. Verify the GitHub App installation and read-only Contents access: ${(error as Error).message}`,
+        `Failed to materialize GitHub repo ${repo.owner}/${repo.repo}. Verify the GitHub App installation or GITHUB_TOKEN and read-only Contents access: ${(error as Error).message}`,
       );
     }
 

@@ -173,7 +173,7 @@ describe("hosted verification runner", () => {
     );
     expect(result.checks).toContainEqual(
       expect.objectContaining({
-        name: "GitHub App live environment",
+        name: "GitHub repository environment",
         status: "blocked",
         required: false,
       }),

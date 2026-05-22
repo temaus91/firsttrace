@@ -199,8 +199,8 @@ search:
   max_evidence_per_file: 3
 ```
 
-GitHub repos require a read-only GitHub App installation with these environment
-variables:
+GitHub repos should use a read-only GitHub App installation for hosted or shared
+dogfood environments:
 
 ```bash
 GITHUB_APP_ID=
@@ -208,9 +208,18 @@ GITHUB_APP_INSTALLATION_ID=
 GITHUB_APP_PRIVATE_KEY=
 ```
 
-FirstTrace creates a short-lived installation token at runtime, clones or
-fetches with a one-command HTTP auth header, and stores the working cache under
-ignored `.firsttrace/github/`.
+For a local dogfood run, `GITHUB_TOKEN` can be used instead of a GitHub App. A
+token from `gh auth token` works if that account has read access to the target
+repository. Prefer the GitHub App path for hosted deployments because it can be
+installed only on the repositories FirstTrace is allowed to inspect.
+
+```bash
+GITHUB_TOKEN=
+```
+
+FirstTrace creates or reads a runtime token, clones or fetches with a
+one-command HTTP auth header, and stores the working cache under ignored
+`.firsttrace/github/`. Tokens are not embedded in the remote URL or git config.
 
 Slack channel config:
 
@@ -259,6 +268,32 @@ npm run firsttrace -- hosted verify \
 The command uses a synthetic signed Slack event and a fake Slack notifier by
 default. Add `--live-slack-post` only when a real `SLACK_BOT_TOKEN` and
 configured Slack channel are available.
+
+## Hosted Dogfood Setup
+
+Use this sequence to connect the full hosted path:
+
+1. Create or choose a Slack triage channel and note the channel id.
+2. Create a Slack app with `chat:write`, `channels:read`, `channels:history`,
+   `app_mentions:read`, and `reactions:read`; use `groups:read` and
+   `groups:history` too if the channel is private.
+3. Install the Slack app, copy `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET`,
+   and invite the bot to the triage channel.
+4. Create a Supabase project and apply every file in `supabase/migrations/` in
+   order, including the dedupe migration.
+5. Store `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+   `FIRSTTRACE_QUEUE_PROVIDER=supabase`, `FIRSTTRACE_RECEIVER_TOKEN`, and
+   `FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false`.
+6. Configure repositories with either a read-only GitHub App
+   (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`) or
+   local dogfood `GITHUB_TOKEN`.
+7. Run `hosted verify` locally with `--queue supabase`; add
+   `--live-slack-post` after Slack env is present.
+8. Deploy the API to a public HTTPS host, then set Slack Event Subscriptions to
+   `https://<host>/api/slack/events`.
+
+Vercel is not required for local end-to-end verification. It is needed only when
+Slack itself must call the public `/api/slack/events` endpoint.
 
 ## MVP Scope
 

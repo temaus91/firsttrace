@@ -6,14 +6,17 @@ import { runEval } from "../src/eval/runner.js";
 import { executeInvestigation } from "../src/investigation-runner.js";
 import {
   GitHubAppRepoMaterializer,
+  githubGitAuthHeader,
   githubRepositoryUrl,
   redactGitHubTokenArgs,
   withGitHubAuthHeader,
   type GitHubRepoMaterializer,
 } from "../src/repositories/github-materializer.js";
 import {
+  createGitHubTokenProviderFromEnv,
   normalizeGitHubPrivateKey,
   readGitHubAppCredentialsFromEnv,
+  readGitHubTokenFromEnv,
 } from "../src/repositories/github-auth.js";
 import { FileSystemJobQueue } from "../src/worker/fs-queue.js";
 import { runWorkerOnce } from "../src/worker/runner.js";
@@ -80,17 +83,26 @@ describe("GitHub repository provider", () => {
     );
   });
 
+  it("uses a static GitHub token when configured for local dogfood", async () => {
+    expect(readGitHubTokenFromEnv({ GITHUB_TOKEN: "  dogfood-token  " })).toBe("dogfood-token");
+
+    const tokenProvider = createGitHubTokenProviderFromEnv({ GITHUB_TOKEN: "dogfood-token" });
+    await expect(tokenProvider.getInstallationToken("web-app")).resolves.toBe("dogfood-token");
+  });
+
   it("builds token-safe git command arguments", () => {
     const repo = githubConfig().repos[0] as GitHubRepoConfig;
     const remoteUrl = githubRepositoryUrl(repo);
     const args = withGitHubAuthHeader("secret-token", ["clone", remoteUrl, "/tmp/cache"]);
     const redactedArgs = redactGitHubTokenArgs("secret-token", args);
+    const authHeader = githubGitAuthHeader("secret-token");
 
-    expect(args).toContain("http.extraHeader=Authorization: Bearer secret-token");
+    expect(args).toContain(`http.extraHeader=${authHeader}`);
     expect(remoteUrl).toBe("https://github.com/exampleco/web-app.git");
     expect(remoteUrl).not.toContain("secret-token");
     expect(redactedArgs.join(" ")).not.toContain("secret-token");
-    expect(redactedArgs).toContain("http.extraHeader=Authorization: Bearer <redacted>");
+    expect(redactedArgs.join(" ")).not.toContain(authHeader);
+    expect(redactedArgs).toContain("http.extraHeader=Authorization: Basic <redacted>");
   });
 
   it("materializes with a one-command auth header without embedding tokens in the remote URL", async () => {
@@ -111,9 +123,10 @@ describe("GitHub repository provider", () => {
     await materializer.materialize(githubConfig().repos[0] as GitHubRepoConfig, { fetchDepth: 80 });
 
     expect(commands).toHaveLength(1);
-    expect(commands[0]?.args).toContain("http.extraHeader=Authorization: Bearer secret-token");
+    expect(commands[0]?.args).toContain(`http.extraHeader=${githubGitAuthHeader("secret-token")}`);
     expect(commands[0]?.args).toContain("https://github.com/exampleco/web-app.git");
     expect(commands[0]?.displayArgs?.join(" ")).not.toContain("secret-token");
+    expect(commands[0]?.displayArgs?.join(" ")).not.toContain(githubGitAuthHeader("secret-token"));
     expect(commands[0]?.args.find((arg) => arg.startsWith("https://github.com/"))).not.toContain("secret-token");
   });
 

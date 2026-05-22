@@ -444,9 +444,11 @@ Current capability:
 - local `path` repository configs remain valid and default to `provider: local`
 - `provider: github` repository configs support owner, repo, and default branch
 - GitHub App credentials are read from environment secrets
+- local dogfood can use `GITHUB_TOKEN` when a user-scoped token already has read
+  access to the target repository
 - escaped private-key newlines are normalized for hosted env stores
 - short-lived installation tokens are created at runtime
-- clone/fetch uses `git -c http.extraHeader="Authorization: Bearer <token>"`
+- clone/fetch uses `git -c http.extraHeader="Authorization: Basic <redacted>"`
   so tokens are not stored in remote URLs or git config
 - GitHub repos are cached under ignored `.firsttrace/github/`
 - after materialization, the existing file search, doc search, commit search,
@@ -458,6 +460,12 @@ Required environment variables:
 GITHUB_APP_ID
 GITHUB_APP_INSTALLATION_ID
 GITHUB_APP_PRIVATE_KEY
+```
+
+Local-only fallback:
+
+```text
+GITHUB_TOKEN
 ```
 
 Limitations:
@@ -676,12 +684,13 @@ Current status:
 - latest hosted verification with `--queue supabase` reached Supabase but failed
   during insert for the same missing `public.firsttrace_jobs` table
 - live Supabase queue processing still needs a dedicated FirstTrace Supabase
-  project or database with the FirstTrace migration applied
+  project or database with all FirstTrace migrations applied in order
 
 Prerequisites:
 
 - a dedicated Supabase project or database for FirstTrace runtime state
-- `supabase/migrations/0001_firsttrace_jobs.sql` applied
+- all migrations in `supabase/migrations/` applied in order, including
+  `0001_firsttrace_jobs.sql` and `0002_firsttrace_job_dedupe.sql`
 - `.env.local` values:
   - `SUPABASE_URL`
   - `SUPABASE_SERVICE_ROLE_KEY`
@@ -730,6 +739,7 @@ Prerequisites:
   - `GITHUB_APP_ID`
   - `GITHUB_APP_INSTALLATION_ID`
   - `GITHUB_APP_PRIVATE_KEY`
+  - or local-only `GITHUB_TOKEN`
 - ignored local config such as `firsttrace.github.local.yaml`:
 
 ```yaml

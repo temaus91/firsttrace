@@ -195,6 +195,8 @@ const externalReadinessChecks = (
 ): HostedVerifyCheck[] => {
   const slackMissing = missingEnv(env, ["SLACK_SIGNING_SECRET", "SLACK_BOT_TOKEN"]);
   const githubMissing = missingEnv(env, ["GITHUB_APP_ID", "GITHUB_APP_INSTALLATION_ID", "GITHUB_APP_PRIVATE_KEY"]);
+  const hasGitHubApp = githubMissing.length === 0;
+  const hasGitHubToken = Boolean(env.GITHUB_TOKEN?.trim() || env.GH_TOKEN?.trim());
   const supabaseMissing = missingEnv(env, ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]);
 
   return [
@@ -206,9 +208,14 @@ const externalReadinessChecks = (
           liveSlackPost,
         )
       : check("passed", "Slack live environment", "Slack live environment variables are present.", false),
-    githubMissing.length
-      ? check("blocked", "GitHub App live environment", `Missing ${githubMissing.join(", ")}.`, false)
-      : check("passed", "GitHub App live environment", "GitHub App environment variables are present.", false),
+    !hasGitHubApp && !hasGitHubToken
+      ? check("blocked", "GitHub repository environment", `Missing ${githubMissing.join(", ")} or GITHUB_TOKEN.`, false)
+      : check(
+          "passed",
+          "GitHub repository environment",
+          hasGitHubApp ? "GitHub App environment variables are present." : "GITHUB_TOKEN is present.",
+          false,
+        ),
     queueProvider === "supabase"
       ? supabaseMissing.length
         ? check("failed", "Supabase live environment", `Missing ${supabaseMissing.join(", ")}.`)

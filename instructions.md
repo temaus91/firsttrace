@@ -71,6 +71,10 @@ Configure Slack event subscriptions to the deployed receiver URL:
 https://your-firsttrace-service.example.com/api/slack/events
 ```
 
+Slack requires a public HTTPS receiver for real workspace events. Local
+verification can still exercise the same receiver code with a synthetic signed
+Slack event before Vercel or another host is connected.
+
 FirstTrace also exposes the generic hosted receiver:
 
 ```text
@@ -126,19 +130,30 @@ variable store. Do not commit it into the repository.
 If the private key is stored as a single-line environment variable, escaped
 newlines such as `\n` are supported.
 
+For local dogfood only, a personal GitHub token can be used instead:
+
+```text
+GITHUB_TOKEN=
+```
+
+The token must have read access to the configured repository. Prefer the GitHub
+App path for hosted deployments because it can be limited to only the
+repositories FirstTrace should inspect.
+
 ## 4. Create the Supabase Project
 
 Use Supabase to store investigation jobs, job status, attempts, and results.
 
-Apply the FirstTrace schema from:
+Apply all FirstTrace migrations in order from:
 
 ```text
-supabase/migrations/0001_firsttrace_jobs.sql
+supabase/migrations/
 ```
 
 This creates `firsttrace_jobs`, enables row level security, and adds the
 `firsttrace_claim_next_job()` RPC used by workers to claim queued work
-atomically.
+atomically. The later dedupe migration adds `dedupe_key` so Slack retries return
+the existing queued job instead of creating duplicate investigations.
 
 Store these values as backend secrets:
 
@@ -168,6 +183,7 @@ SLACK_SIGNING_SECRET=
 GITHUB_APP_ID=
 GITHUB_APP_INSTALLATION_ID=
 GITHUB_APP_PRIVATE_KEY=
+GITHUB_TOKEN=
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
