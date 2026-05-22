@@ -105,7 +105,10 @@ triage channel.
 The current CLI supports deterministic investigation, optional AI reasoning,
 evals, a local worker runtime, a local `submit` message adapter, hosted queue
 selection for Supabase-backed jobs, and GitHub App-backed repository
-materialization.
+materialization. The hosted API also includes a Slack Events receiver that can
+verify Slack signatures, gate events by configured channel and trigger, enqueue
+jobs, and post worker results back to Slack threads when `SLACK_BOT_TOKEN` is
+configured.
 The CLI always gathers deterministic evidence first. OpenAI is only called when
 `--ai` is passed, and it reasons over that bounded evidence bundle rather than
 crawling the repository.
@@ -204,6 +207,37 @@ FirstTrace creates a short-lived installation token at runtime, clones or
 fetches with a one-command HTTP auth header, and stores the working cache under
 ignored `.firsttrace/github/`.
 
+Slack channel config:
+
+```yaml
+chat:
+  provider: slack
+  channels:
+    - id: C0123456789
+      name: company-ai-triage
+      triggers:
+        - message
+        - app_mention
+        - reaction
+      response: thread
+      ai_enabled: true
+      repositories:
+        - example-app
+```
+
+The Slack endpoint is:
+
+```text
+POST /api/slack/events
+```
+
+Slack requires these environment variables:
+
+```bash
+SLACK_BOT_TOKEN=
+SLACK_SIGNING_SECRET=
+```
+
 ## MVP Scope
 
 FirstTrace v0 should stay small:
@@ -287,9 +321,10 @@ from git history and ownership metadata, chat integration will not save it.
 
 ## Status
 
-Phase 7 local CLI, eval runner, worker runtime, local submit adapter,
+Phase 8 local CLI, eval runner, worker runtime, local submit adapter,
 Supabase-backed queue, Vercel-compatible receiver/status handlers, and GitHub
-App-backed repository materialization are implemented. The
+App-backed repository materialization, Slack event intake, and Slack result
+notification are implemented. The
 deterministic command is:
 
 ```bash
@@ -330,8 +365,8 @@ npm run firsttrace -- worker status --queue filesystem --job <job-id>
 
 Next planned work:
 
-1. Wire Slack as the first chat provider.
-2. Verify the hosted end-to-end flow from configured channel to cited reply.
+1. Verify the hosted end-to-end flow from configured Slack channel to cited reply.
+2. Add GitHub Issues or another issue provider through the generic provider boundary.
 
 ## License
 

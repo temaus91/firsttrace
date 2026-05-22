@@ -43,6 +43,7 @@ export const renderWorkerRun = (result: WorkerRunResult) =>
     "# FirstTrace Worker Run",
     `Status: \`${result.status}\``,
     result.message,
+    result.notifications?.length ? `Notifications: ${result.notifications.join("; ")}` : "",
     result.job ? renderJobSummary(result.job) : "",
   ]
     .filter(Boolean)

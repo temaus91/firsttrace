@@ -187,6 +187,7 @@ export type JobQueue = {
 export type WorkerRunResult = {
   job?: InvestigationJob;
   message: string;
+  notifications?: string[];
   status: "idle" | "processed";
 };
 
@@ -203,6 +204,10 @@ export type MessageSubmitResult = {
 
 export type MessageDeliveryAdapter = {
   submit(input: MessageSubmitInput): MessageSubmitResult | Promise<MessageSubmitResult>;
+};
+
+export type JobResultNotifier = {
+  notify(job: InvestigationJob): Promise<void>;
 };
 
 export type LocalRepoConfig = {
@@ -242,7 +247,24 @@ export type SearchConfig = {
   maxFiles: number;
 };
 
+export type ChatTrigger = "app_mention" | "message" | "reaction";
+
+export type SlackChannelConfig = {
+  aiEnabled: boolean;
+  id: string;
+  name?: string;
+  repositories: string[];
+  response: "thread" | "channel";
+  triggers: ChatTrigger[];
+};
+
+export type ChatConfig = {
+  provider: "slack";
+  channels: SlackChannelConfig[];
+};
+
 export type FirstTraceConfig = {
+  chat?: ChatConfig;
   configPath: string;
   docs: string[];
   issueExports: string[];

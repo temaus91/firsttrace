@@ -1,9 +1,10 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { parse } from "yaml";
-import type { FirstTraceConfig, OwnerRule, RepoConfig, SearchConfig } from "./types.js";
+import type { ChatConfig, ChatTrigger, FirstTraceConfig, OwnerRule, RepoConfig, SearchConfig } from "./types.js";
 
 type RawConfig = {
+  chat?: unknown;
   docs?: unknown;
   issue_exports?: unknown;
   owners?: unknown;
@@ -28,6 +29,14 @@ const stringArray = (value: unknown, label: string, fallback: string[] = []) => 
   if (value === undefined) return fallback;
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
     throw new Error(`${label} must be an array of strings.`);
+  }
+  return value;
+};
+
+const optionalString = (value: unknown, label: string) => {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`${label} must be a non-empty string when provided.`);
   }
   return value;
 };
@@ -119,6 +128,55 @@ const searchFrom = (value: unknown): SearchConfig => {
   };
 };
 
+const CHAT_TRIGGERS = new Set<ChatTrigger>(["app_mention", "message", "reaction"]);
+
+const chatTriggersFrom = (value: unknown, label: string): ChatTrigger[] => {
+  const triggers = stringArray(value, label, ["app_mention"]);
+  const invalid = triggers.find((trigger) => !CHAT_TRIGGERS.has(trigger as ChatTrigger));
+  if (invalid) {
+    throw new Error(`${label} contains unsupported trigger: ${invalid}.`);
+  }
+  return triggers as ChatTrigger[];
+};
+
+const chatFrom = (value: unknown): ChatConfig | undefined => {
+  if (value === undefined) return undefined;
+  const item = asObject(value, "chat");
+  const provider = item.provider ?? "slack";
+  if (provider !== "slack") {
+    throw new Error("chat.provider must be slack.");
+  }
+  if (!Array.isArray(item.channels)) {
+    throw new Error("chat.channels must be an array.");
+  }
+
+  return {
+    provider: "slack",
+    channels: item.channels.map((channel, index) => {
+      const channelItem = asObject(channel, `chat.channels[${index}]`);
+      if (typeof channelItem.id !== "string" || !channelItem.id.trim()) {
+        throw new Error(`chat.channels[${index}].id must be a non-empty string.`);
+      }
+      const response = channelItem.response ?? "thread";
+      if (response !== "thread" && response !== "channel") {
+        throw new Error(`chat.channels[${index}].response must be "thread" or "channel".`);
+      }
+      if (channelItem.ai_enabled !== undefined && typeof channelItem.ai_enabled !== "boolean") {
+        throw new Error(`chat.channels[${index}].ai_enabled must be a boolean when provided.`);
+      }
+
+      return {
+        aiEnabled: channelItem.ai_enabled ?? false,
+        id: channelItem.id,
+        name: optionalString(channelItem.name, `chat.channels[${index}].name`),
+        repositories: stringArray(channelItem.repositories, `chat.channels[${index}].repositories`),
+        response,
+        triggers: chatTriggersFrom(channelItem.triggers, `chat.channels[${index}].triggers`),
+      };
+    }),
+  };
+};
+
 export const loadConfig = (configPath: string): FirstTraceConfig => {
   const resolvedConfigPath = path.resolve(configPath);
   if (!existsSync(resolvedConfigPath)) {
@@ -130,6 +188,7 @@ export const loadConfig = (configPath: string): FirstTraceConfig => {
   const root = asObject(raw, "config");
 
   return {
+    chat: chatFrom(root.chat),
     configPath: resolvedConfigPath,
     docs: stringArray(root.docs, "docs"),
     issueExports: stringArray(root.issue_exports, "issue_exports"),

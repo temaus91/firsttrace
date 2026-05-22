@@ -1,5 +1,6 @@
 import path from "node:path";
 import { createAiProviderFromEnv } from "./ai/provider-factory.js";
+import { createJobResultNotifierFromEnv } from "./chat/slack/notifier.js";
 import { loadConfig } from "./config.js";
 import { loadLocalEnv } from "./env.js";
 import { loadEvalCases } from "./eval/cases.js";
@@ -163,7 +164,7 @@ const main = async () => {
       if (!args.once) {
         throw new Error("worker run currently requires --once.");
       }
-      const result = await runWorkerOnce({ queue });
+      const result = await runWorkerOnce({ queue, resultNotifier: createJobResultNotifierFromEnv() });
       console.log(renderWorkerRun(result));
       return;
     }

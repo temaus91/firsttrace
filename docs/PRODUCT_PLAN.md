@@ -469,25 +469,46 @@ Limitations:
 Local git should remain a first-class provider. GitHub is the first hosted git
 provider, not the only git provider.
 
-### Phase 8: Slack Chat Provider and Channel Config
+### Phase 8: Slack Chat Provider and Channel Config - Complete
 
-Slack can be the first chat adapter, but the core product should stay generic:
+The implemented Phase 8 flow adds Slack as the first chat adapter while keeping
+the core product generic:
 
 ```text
 Slack message -> Receiver -> Queue -> Worker -> Slack thread reply
 ```
 
-The first chat adapter should:
+Current capability:
 
 - verify incoming requests
-- acknowledge quickly
-- fetch thread context
-- enqueue an investigation request
-- post a concise cited result back to Slack
-- restrict automatic handling to configured channel ids
-- support configured triggers such as top-level messages, app mentions, and
-  emoji reactions
-- keep channel names, channel ids, trigger behavior, and repo routing in config
+- handle Slack URL verification challenges
+- acknowledge events quickly after enqueueing or ignoring them
+- restrict automatic handling to configured Slack channel ids
+- support configured triggers for top-level messages, app mentions, and emoji
+  reactions
+- fetch reacted message text before enqueueing reaction-triggered jobs
+- fetch thread message text for app mentions in threads when a Slack client is
+  configured
+- enqueue normalized investigation jobs through the generic `JobQueue`
+- post concise cited worker results back to Slack threads when `SLACK_BOT_TOKEN`
+  is configured
+- keep channel names, channel ids, trigger behavior, AI opt-in, and repo routing
+  in config
+
+Required environment variables for hosted Slack:
+
+```text
+SLACK_SIGNING_SECRET
+SLACK_BOT_TOKEN
+```
+
+Limitations:
+
+- no live Slack workspace smoke test has run yet
+- no Slack command shortcut or modal flow
+- no Slack retry/deduplication table beyond the existing queue/job records
+- channel repository routing is parsed and preserved, but repository subset
+  filtering is deferred until multi-repo hosted dogfood needs it
 
 The investigation engine should remain chat-agnostic so Teams, Discord, Linear,
 or other sources can be added later.
@@ -597,6 +618,160 @@ Useful metrics:
 - write-action precision for bug/work-item creation evals
 - result length
 
+## External Integration Test Backlog
+
+Some provider paths require live credentials or a dedicated external project, so
+they should stay tracked explicitly until they are tested end to end. These
+checks should use local ignored config files and environment secrets only.
+
+### Supabase Queue Live Test - Not Yet Complete
+
+Current status:
+
+- unit tests cover Supabase row mapping, RPC claim behavior, status lookup, and
+  receiver behavior through fakes
+- filesystem queue smoke tests pass
+- latest live read check reached Supabase but failed because `firsttrace_jobs`
+  was not present in the schema cache
+- live Supabase queue processing still needs a dedicated FirstTrace Supabase
+  project or database with the FirstTrace migration applied
+
+Prerequisites:
+
+- a dedicated Supabase project or database for FirstTrace runtime state
+- `supabase/migrations/0001_firsttrace_jobs.sql` applied
+- `.env.local` values:
+  - `SUPABASE_URL`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `FIRSTTRACE_QUEUE_PROVIDER=supabase`
+  - `FIRSTTRACE_CONFIG_PATH=firsttrace.config.yaml`
+
+Smoke test:
+
+```bash
+npm run firsttrace -- submit \
+  --queue supabase \
+  --config firsttrace.config.yaml \
+  --report "README deployment plan is unclear"
+
+npm run firsttrace -- worker run --once --queue supabase
+
+npm run firsttrace -- worker status --queue supabase --job <job-id>
+```
+
+Expected result:
+
+- job is inserted into `firsttrace_jobs`
+- worker claims the queued job through `firsttrace_claim_next_job()`
+- job moves from `queued` to `running` to `succeeded`
+- stored result includes deterministic investigation evidence
+- no service-role key or source snippets appear in logs or committed files
+
+### GitHub App Repository Live Test - Not Yet Complete
+
+Current status:
+
+- unit tests cover config parsing, private-key newline normalization, missing
+  env errors, token-safe git command construction, fake materialization, eval,
+  and worker paths
+- local repo smoke tests still pass
+- live GitHub clone/fetch still needs a read-only GitHub App installation and a
+  local ignored GitHub config
+
+Prerequisites:
+
+- GitHub App installed on a test repository with read-only Metadata and Contents
+  permissions
+- `.env.local` values:
+  - `GITHUB_APP_ID`
+  - `GITHUB_APP_INSTALLATION_ID`
+  - `GITHUB_APP_PRIVATE_KEY`
+- ignored local config such as `firsttrace.github.local.yaml`:
+
+```yaml
+repos:
+  - name: example-app
+    provider: github
+    owner: exampleco
+    repo: web-app
+    default_branch: main
+docs:
+  - README.md
+  - docs
+issue_exports: []
+owners:
+  - path: README.md
+    owner: "@project-docs"
+search:
+  max_files: 10
+  max_commits: 8
+  max_evidence_per_file: 3
+```
+
+Smoke test:
+
+```bash
+npm run firsttrace -- investigate \
+  --config firsttrace.github.local.yaml \
+  --report "README deployment plan is unclear"
+```
+
+Expected result:
+
+- repo materializes under ignored `.firsttrace/github/`
+- GitHub installation token is used only through `git -c http.extraHeader`
+- token is not stored in the remote URL, git config, job JSON, output, or logs
+- investigation returns file and commit evidence from the GitHub repo
+- owner rules from the config are applied to returned files
+
+### Slack Hosted Event Live Test - Not Yet Complete
+
+Current status:
+
+- unit tests cover Slack signature verification, URL verification, bad
+  signatures, configured channel gating, app mention enqueueing, top-level
+  message behavior, reaction message fetch, and Slack thread reply rendering
+- worker tests cover posting a completed investigation through a fake Slack
+  client
+- live Slack Events API delivery and `chat.postMessage` still need a real Slack
+  app installed in a configured channel
+
+Prerequisites:
+
+- Slack app installed in a test workspace and invited to the configured channel
+- Slack Event Subscriptions pointed at `/api/slack/events`
+- `.env.local` or hosted env values:
+  - `SLACK_SIGNING_SECRET`
+  - `SLACK_BOT_TOKEN`
+  - `FIRSTTRACE_QUEUE_PROVIDER=supabase` for hosted testing or `filesystem` for
+    local receiver testing
+  - `FIRSTTRACE_CONFIG_PATH=<config path>`
+- config with:
+  - `chat.provider: slack`
+  - configured channel id
+  - trigger list containing the trigger being tested
+  - `ai_enabled` set explicitly for the channel
+
+Smoke test:
+
+```text
+1. Send Slack URL verification to /api/slack/events.
+2. Post a top-level bug report in the configured Slack channel.
+3. Confirm the receiver enqueues a job and returns quickly.
+4. Run the worker against the same queue.
+5. Confirm the worker posts a cited FirstTrace reply in the Slack thread.
+6. Post from an unconfigured channel and confirm it is ignored or safely declined.
+```
+
+Expected result:
+
+- invalid signatures are rejected before parsing or enqueueing
+- configured events create queued jobs with `source.provider=slack`
+- unconfigured channels do not create jobs
+- worker result is stored and posted back to the correct channel/thread
+- no Slack tokens, signing secrets, or private source snippets appear in logs or
+  committed files
+
 ## Security and Privacy
 
 FirstTrace is intended for private codebases, so security has to be part of the
@@ -643,10 +818,9 @@ features.
 
 ## Immediate Next Steps
 
-1. Add Slack chat provider and channel configuration.
-2. Verify the hosted end-to-end workflow from configured Slack channel to AI
+1. Verify the hosted end-to-end workflow from configured Slack channel to AI
    analysis reply.
-3. Add GitHub Issues, Vercel/Supabase, OCI, and work-item providers only through the
+2. Add GitHub Issues, Vercel/Supabase, OCI, and work-item providers only through the
    generic provider interfaces.
 
 ## Open Questions

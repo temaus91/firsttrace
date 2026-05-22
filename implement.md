@@ -83,18 +83,15 @@ Completed:
 5. Phase 5: local message delivery adapter.
 6. Phase 6: hosted Vercel/Supabase runtime.
 7. Phase 7: GitHub App repository provider.
+8. Phase 8: Slack chat provider and channel configuration.
 
 Next:
 
-1. Phase 8: Slack chat provider and channel configuration.
-   - Verify Slack signatures, acknowledge quickly, fetch thread context, enqueue
-     jobs, and post cited replies.
-   - Keep channel ids, channel names, triggers, and repo routing in config.
-2. Phase 9: hosted setup and end-to-end dogfood.
+1. Phase 9: hosted setup and end-to-end dogfood.
    - Verify a configured Slack channel can submit a bug, the hosted backend can
      queue it, the worker can inspect a configured private repository, AI can
      reason over cited evidence, and Slack receives the result.
-3. Later: provider expansion.
+2. Later: provider expansion.
    - Additional git providers, chat providers, queue providers, runtime
      providers, and work-item providers.
 
@@ -142,6 +139,25 @@ Message delivery details:
   job input instead of bypassing the queue.
 - Message adapters should validate provider-specific input at the edge, then
   pass normalized reports into the worker path.
+
+Slack provider details:
+
+- The Slack Events API handler lives at `/api/slack/events`.
+- Verify `x-slack-signature` and `x-slack-request-timestamp` using
+  `SLACK_SIGNING_SECRET` before parsing the payload.
+- Support URL verification challenges.
+- Keep Slack channel ids, names, triggers, response behavior, AI opt-in, and
+  repo routing in config under `chat.provider: slack`.
+- Configured triggers are `message`, `app_mention`, and `reaction`.
+- Top-level messages enqueue directly. Threaded replies are ignored for the
+  broad `message` trigger.
+- App mentions strip bot mentions; if a thread timestamp is present and the
+  Slack client is configured, fetch thread message text as context.
+- Reaction triggers fetch the reacted message text before enqueueing.
+- Worker result notification is a separate `JobResultNotifier` adapter and posts
+  concise cited replies when `SLACK_BOT_TOKEN` is available.
+- Slack-specific code must stay under the chat provider boundary and must not
+  leak into evidence ranking, AI reasoning, eval scoring, or queue providers.
 
 Hosted workflow details:
 

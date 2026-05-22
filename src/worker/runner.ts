@@ -2,16 +2,18 @@ import { createAiProviderFromEnv } from "../ai/provider-factory.js";
 import { loadConfig } from "../config.js";
 import { executeInvestigation } from "../investigation-runner.js";
 import type { RepoPreparationOptions } from "../repositories/prepare.js";
-import type { AiProvider, JobQueue, WorkerRunResult } from "../types.js";
+import type { AiProvider, JobQueue, JobResultNotifier, WorkerRunResult } from "../types.js";
 
 export type RunWorkerOnceOptions = {
   aiProviderFactory?: () => AiProvider;
+  resultNotifier?: JobResultNotifier;
   queue: JobQueue;
   repoPreparation?: RepoPreparationOptions;
 };
 
 export const runWorkerOnce = async ({
   aiProviderFactory = createAiProviderFromEnv,
+  resultNotifier,
   queue,
   repoPreparation,
 }: RunWorkerOnceOptions): Promise<WorkerRunResult> => {
@@ -33,9 +35,19 @@ export const runWorkerOnce = async ({
       repoPreparation,
     });
     const completed = await queue.complete(job.id, result);
+    const notifications: string[] = [];
+    if (resultNotifier) {
+      try {
+        await resultNotifier.notify(completed);
+        notifications.push(`Result notification processed for job ${job.id}.`);
+      } catch (notificationError) {
+        notifications.push(`Result notification failed for job ${job.id}: ${(notificationError as Error).message}`);
+      }
+    }
     return {
       job: completed,
       message: `Processed job ${job.id}.`,
+      notifications,
       status: "processed",
     };
   } catch (error) {

@@ -68,4 +68,47 @@ describe("config loading", () => {
 
     expect(() => loadConfig(configPath)).toThrow("repos[0].repo must be a non-empty string for github repos.");
   });
+
+  it("loads Slack channel configuration when present", () => {
+    const dir = tempConfigDir("slack");
+    const repoDir = path.join(dir, "repo");
+    mkdirSync(repoDir, { recursive: true });
+    const configPath = path.join(dir, "firsttrace.config.yaml");
+    writeFileSync(
+      configPath,
+      [
+        "repos:",
+        "  - name: local-repo",
+        "    path: repo",
+        "docs: []",
+        "issue_exports: []",
+        "chat:",
+        "  provider: slack",
+        "  channels:",
+        "    - id: C0123456789",
+        "      name: company-ai-triage",
+        "      triggers:",
+        "        - message",
+        "        - app_mention",
+        "      response: thread",
+        "      ai_enabled: true",
+        "      repositories:",
+        "        - local-repo",
+      ].join("\n"),
+    );
+
+    expect(loadConfig(configPath).chat).toEqual({
+      channels: [
+        {
+          aiEnabled: true,
+          id: "C0123456789",
+          name: "company-ai-triage",
+          repositories: ["local-repo"],
+          response: "thread",
+          triggers: ["message", "app_mention"],
+        },
+      ],
+      provider: "slack",
+    });
+  });
 });

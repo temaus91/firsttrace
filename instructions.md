@@ -6,8 +6,9 @@ connected to a private GitHub repository and a Slack triage channel.
 Current implementation status: the local CLI, AI-assisted local investigation,
 eval runner, local worker runtime, local `submit` message adapter, hosted
 Vercel-compatible receiver/status handlers, Supabase-backed queue, and GitHub
-App repository provider exist. The Slack provider is the next planned phase.
-Exact Slack commands may change as that phase is implemented.
+App repository provider, and Slack Events provider exist. Full live hosted
+dogfood still requires a configured Slack app, Supabase project, GitHub App, and
+worker environment.
 
 ## Target Workflow
 
@@ -70,8 +71,7 @@ Configure Slack event subscriptions to the deployed receiver URL:
 https://your-firsttrace-service.example.com/api/slack/events
 ```
 
-Slack event handling is planned for a later phase. The Phase 6 hosted receiver
-available today is:
+FirstTrace also exposes the generic hosted receiver:
 
 ```text
 POST https://your-firsttrace-service.example.com/api/investigations
@@ -176,7 +176,7 @@ configured, create a Supabase-backed job, and return quickly. The worker should
 process the job asynchronously and post the result back through the chat
 provider.
 
-Before Slack is implemented, test the hosted receiver directly:
+Before the full Slack app is wired, test the generic hosted receiver directly:
 
 ```bash
 curl -X POST "$FIRSTTRACE_BASE_URL/api/investigations" \
@@ -214,19 +214,22 @@ chat:
       triggers:
         - message
         - app_mention
+        - reaction
       repositories:
         - primary-app
       response: thread
+      ai_enabled: true
 
-repositories:
+repos:
   - name: primary-app
     provider: github
     owner: exampleco
     repo: web-app
     default_branch: main
-    docs:
-      - README.md
-      - docs
+
+docs:
+  - README.md
+  - docs
 
 owners:
   - path: app/**
