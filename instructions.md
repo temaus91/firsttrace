@@ -6,9 +6,9 @@ connected to a private GitHub repository and a Slack triage channel.
 Current implementation status: the local CLI, AI-assisted local investigation,
 eval runner, local worker runtime, local `submit` message adapter, hosted
 Vercel-compatible receiver/status handlers, Supabase-backed queue, and GitHub
-App repository provider, and Slack Events provider exist. Full live hosted
-dogfood still requires a configured Slack app, Supabase project, GitHub App, and
-worker environment.
+App repository provider, Slack Events provider, and hosted readiness verifier
+exist. Full live hosted dogfood still requires a configured Slack app, Supabase
+project, GitHub App, and worker environment.
 
 ## Target Workflow
 
@@ -185,6 +185,20 @@ curl -X POST "$FIRSTTRACE_BASE_URL/api/investigations" \
   -d '{"report":"README deployment plan is unclear","aiEnabled":false}'
 ```
 
+Before live external services are ready, test the hosted orchestration path
+locally:
+
+```bash
+npm run firsttrace -- hosted verify \
+  --config examples/hosted.local.config.yaml \
+  --queue filesystem \
+  --report "README deployment plan is unclear"
+```
+
+This sends a synthetic signed Slack event through the receiver, enqueues a job,
+runs the worker once, and captures the Slack reply with a fake notifier. It does
+not prove live Slack, GitHub App, or Supabase connectivity.
+
 ## 6. Configure FirstTrace
 
 Use a config file to connect providers, repositories, channels, triggers, and
@@ -262,6 +276,7 @@ report is underspecified.
 
 ## Verification Checklist
 
+- `hosted verify --queue filesystem` passes with the generic local example.
 - Slack event URL is verified successfully.
 - The FirstTrace app is installed in the configured channel.
 - A test bug report in the configured channel creates a queued job.

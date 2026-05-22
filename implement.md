@@ -84,10 +84,11 @@ Completed:
 6. Phase 6: hosted Vercel/Supabase runtime.
 7. Phase 7: GitHub App repository provider.
 8. Phase 8: Slack chat provider and channel configuration.
+9. Phase 9A: hosted dogfood readiness runner.
 
 Next:
 
-1. Phase 9: hosted setup and end-to-end dogfood.
+1. Phase 9B: live hosted dogfood.
    - Verify a configured Slack channel can submit a bug, the hosted backend can
      queue it, the worker can inspect a configured private repository, AI can
      reason over cited evidence, and Slack receives the result.
@@ -171,6 +172,15 @@ Hosted workflow details:
   into evidence ranking, AI reasoning, scoring, or result rendering.
 - A complete hosted setup should work for any company by changing config and
   secrets only.
+- The Phase 9A hosted verifier command is `hosted verify`.
+- Hosted verification must use the real Slack receiver, selected queue, worker,
+  and notifier path; do not add a parallel investigation path.
+- Filesystem hosted verification uses isolated local runtime state under
+  `.firsttrace/hosted-verify/jobs`.
+- By default hosted verification uses a fake Slack notifier. `--live-slack-post`
+  is the only mode that should call Slack Web API.
+- Phase 9A can pass with blocked optional live checks. Phase 9B is the first
+  phase that can mark real Slack/GitHub/Supabase dogfood complete.
 
 Eval runner details:
 

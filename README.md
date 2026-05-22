@@ -108,7 +108,9 @@ selection for Supabase-backed jobs, and GitHub App-backed repository
 materialization. The hosted API also includes a Slack Events receiver that can
 verify Slack signatures, gate events by configured channel and trigger, enqueue
 jobs, and post worker results back to Slack threads when `SLACK_BOT_TOKEN` is
-configured.
+configured. The hosted verification runner can exercise that receiver -> queue
+-> worker -> notifier path locally before real Slack, GitHub, and Supabase
+credentials are ready.
 The CLI always gathers deterministic evidence first. OpenAI is only called when
 `--ai` is passed, and it reasons over that bounded evidence bundle rather than
 crawling the repository.
@@ -238,6 +240,19 @@ SLACK_BOT_TOKEN=
 SLACK_SIGNING_SECRET=
 ```
 
+Hosted readiness verification:
+
+```bash
+npm run firsttrace -- hosted verify \
+  --config examples/hosted.local.config.yaml \
+  --queue filesystem \
+  --report "README deployment plan is unclear"
+```
+
+The command uses a synthetic signed Slack event and a fake Slack notifier by
+default. Add `--live-slack-post` only when a real `SLACK_BOT_TOKEN` and
+configured Slack channel are available.
+
 ## MVP Scope
 
 FirstTrace v0 should stay small:
@@ -321,10 +336,10 @@ from git history and ownership metadata, chat integration will not save it.
 
 ## Status
 
-Phase 8 local CLI, eval runner, worker runtime, local submit adapter,
+Phase 9A local CLI, eval runner, worker runtime, local submit adapter,
 Supabase-backed queue, Vercel-compatible receiver/status handlers, and GitHub
 App-backed repository materialization, Slack event intake, and Slack result
-notification are implemented. The
+notification, plus hosted readiness verification are implemented. The
 deterministic command is:
 
 ```bash
@@ -363,9 +378,18 @@ npm run firsttrace -- worker run --once --queue filesystem
 npm run firsttrace -- worker status --queue filesystem --job <job-id>
 ```
 
+The hosted readiness command is:
+
+```bash
+npm run firsttrace -- hosted verify \
+  --config examples/hosted.local.config.yaml \
+  --queue filesystem \
+  --report "README deployment plan is unclear"
+```
+
 Next planned work:
 
-1. Verify the hosted end-to-end flow from configured Slack channel to cited reply.
+1. Run the live hosted dogfood flow with real Slack, GitHub App, Supabase, and AI.
 2. Add GitHub Issues or another issue provider through the generic provider boundary.
 
 ## License

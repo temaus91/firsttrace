@@ -6,21 +6,26 @@ import { loadLocalEnv } from "./env.js";
 import { loadEvalCases } from "./eval/cases.js";
 import { renderEvalRun } from "./eval/render.js";
 import { runEval } from "./eval/runner.js";
+import { renderHostedVerify } from "./hosted/render.js";
+import { createHostedVerifyQueue, runHostedVerify } from "./hosted/verify.js";
 import { executeInvestigation } from "./investigation-runner.js";
 import { LocalMessageDeliveryAdapter } from "./message/local-submit.js";
 import { renderMessageSubmitResult } from "./message/render.js";
 import { renderInvestigation } from "./render.js";
-import { createJobQueue } from "./worker/queue-factory.js";
+import { createJobQueue, queueProviderFrom } from "./worker/queue-factory.js";
 import { renderEnqueuedJob, renderJobStatus, renderWorkerRun } from "./worker/render.js";
 import { runWorkerOnce } from "./worker/runner.js";
 
 type ParsedArgs = {
   ai: boolean;
   casesPath?: string;
+  channelId?: string;
   command?: string;
   configPath: string;
   help: boolean;
+  hostedAction?: string;
   jobId?: string;
+  liveSlackPost: boolean;
   once: boolean;
   queueProvider?: string;
   report?: string;
@@ -34,6 +39,7 @@ const usage = () => `Usage:
   npm run firsttrace -- eval --config firsttrace.config.yaml --cases evals/example.yaml --ai
   npm run firsttrace -- submit --queue filesystem --config firsttrace.config.yaml --report "bug text"
   npm run firsttrace -- submit --queue supabase --config firsttrace.config.yaml --report "bug text" --ai
+  npm run firsttrace -- hosted verify --config examples/hosted.local.config.yaml --queue filesystem --report "bug text"
   npm run firsttrace -- worker enqueue --queue filesystem --config firsttrace.config.yaml --report "bug text"
   npm run firsttrace -- worker run --once --queue filesystem
   npm run firsttrace -- worker status --queue filesystem --job <job-id>
@@ -41,8 +47,10 @@ const usage = () => `Usage:
 Options:
   --ai              Add AI reasoning over the deterministic evidence bundle.
   --cases <path>    Path to a FirstTrace eval cases YAML file.
+  --channel <id>    Configured Slack channel id for hosted verification.
   --config <path>   Path to a FirstTrace YAML config. Defaults to firsttrace.config.yaml.
   --job <id>        Worker job id for status lookup.
+  --live-slack-post Post hosted verification results to Slack instead of using the fake notifier.
   --once            Process at most one queued job.
   --queue <name>    Queue provider: filesystem or supabase. Defaults to FIRSTTRACE_QUEUE_PROVIDER or filesystem.
   --report <text>   Bug report or feedback text to investigate.
@@ -54,20 +62,24 @@ const parseArgs = (argv: string[]): ParsedArgs => {
       ai: false,
       configPath: path.resolve("firsttrace.config.yaml"),
       help: true,
+      liveSlackPost: false,
       once: false,
     };
   }
 
+  const command = argv[0];
   const parsed: ParsedArgs = {
     ai: false,
-    command: argv[0],
+    command,
     configPath: path.resolve("firsttrace.config.yaml"),
     help: false,
+    hostedAction: command === "hosted" ? argv[1] : undefined,
+    liveSlackPost: false,
     once: false,
-    workerAction: argv[0] === "worker" ? argv[1] : undefined,
+    workerAction: command === "worker" ? argv[1] : undefined,
   };
 
-  for (let index = parsed.command === "worker" ? 2 : 1; index < argv.length; index += 1) {
+  for (let index = parsed.command === "worker" || parsed.command === "hosted" ? 2 : 1; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--help" || arg === "-h") {
       parsed.help = true;
@@ -75,6 +87,10 @@ const parseArgs = (argv: string[]): ParsedArgs => {
     }
     if (arg === "--ai") {
       parsed.ai = true;
+      continue;
+    }
+    if (arg === "--live-slack-post") {
+      parsed.liveSlackPost = true;
       continue;
     }
     if (arg === "--once") {
@@ -92,6 +108,13 @@ const parseArgs = (argv: string[]): ParsedArgs => {
       const value = argv[index + 1];
       if (!value) throw new Error("--cases requires a path.");
       parsed.casesPath = value;
+      index += 1;
+      continue;
+    }
+    if (arg === "--channel") {
+      const value = argv[index + 1];
+      if (!value) throw new Error("--channel requires an id.");
+      parsed.channelId = value;
       index += 1;
       continue;
     }
@@ -129,7 +152,13 @@ const main = async () => {
     console.log(usage());
     return;
   }
-  if (args.command !== "investigate" && args.command !== "eval" && args.command !== "submit" && args.command !== "worker") {
+  if (
+    args.command !== "investigate" &&
+    args.command !== "eval" &&
+    args.command !== "hosted" &&
+    args.command !== "submit" &&
+    args.command !== "worker"
+  ) {
     throw new Error(`Unknown or missing command: ${args.command ?? "<none>"}`);
   }
 
@@ -185,6 +214,28 @@ const main = async () => {
   }
 
   const config = loadConfig(args.configPath);
+
+  if (args.command === "hosted") {
+    if (args.hostedAction !== "verify") {
+      throw new Error(`Unknown or missing hosted action: ${args.hostedAction ?? "<none>"}`);
+    }
+    if (!args.report?.trim()) {
+      throw new Error("Missing required --report.");
+    }
+    const provider = queueProviderFrom(args.queueProvider);
+    const result = await runHostedVerify({
+      aiEnabled: args.ai,
+      channelId: args.channelId,
+      config,
+      liveSlackPost: args.liveSlackPost,
+      queue: createHostedVerifyQueue(provider),
+      queueProvider: provider,
+      report: args.report,
+    });
+    console.log(renderHostedVerify(result));
+    if (!result.passed) process.exit(1);
+    return;
+  }
 
   if (args.command === "eval") {
     if (!args.casesPath?.trim()) {

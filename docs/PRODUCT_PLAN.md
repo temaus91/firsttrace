@@ -513,7 +513,42 @@ Limitations:
 The investigation engine should remain chat-agnostic so Teams, Discord, Linear,
 or other sources can be added later.
 
-### Phase 9: Hosted Setup Guide and End-to-End Dogfood
+### Phase 9A: Hosted Dogfood Readiness Runner - Complete
+
+The implemented Phase 9A flow proves the hosted orchestration path locally
+without pretending live external services have passed:
+
+```bash
+npm run firsttrace -- hosted verify \
+  --config examples/hosted.local.config.yaml \
+  --queue filesystem \
+  --report "README deployment plan is unclear"
+```
+
+Current capability:
+
+- creates a synthetic signed Slack event and sends it through the Slack Events
+  receiver
+- enqueues through the selected queue provider
+- runs the existing worker once against that queue
+- uses a fake Slack notifier by default so local verification does not post to
+  Slack
+- supports `--queue filesystem|supabase`, `--ai`, `--channel <id>`, and
+  `--live-slack-post`
+- renders a Markdown pass/fail report with job status, result component, owners,
+  captured Slack reply summary, and external readiness checks
+- keeps live Slack, GitHub App, and Supabase checks tracked as blocked or
+  skipped until credentials and infrastructure are available
+
+Limitations:
+
+- no live Slack workspace smoke test has run yet
+- no live GitHub App clone/fetch smoke test has run yet
+- live Supabase queue processing is still blocked until `firsttrace_jobs` is
+  applied in a dedicated Supabase project
+- local readiness can pass while optional live checks remain blocked
+
+### Phase 9B: Live Hosted Dogfood
 
 Prove the full hosted workflow for a generic company setup:
 
@@ -628,11 +663,14 @@ checks should use local ignored config files and environment secrets only.
 
 Current status:
 
+- hosted readiness runner passes with filesystem queue
 - unit tests cover Supabase row mapping, RPC claim behavior, status lookup, and
   receiver behavior through fakes
 - filesystem queue smoke tests pass
 - latest live read check reached Supabase but failed because `firsttrace_jobs`
   was not present in the schema cache
+- latest hosted verification with `--queue supabase` reached Supabase but failed
+  during insert for the same missing `public.firsttrace_jobs` table
 - live Supabase queue processing still needs a dedicated FirstTrace Supabase
   project or database with the FirstTrace migration applied
 
@@ -671,6 +709,8 @@ Expected result:
 
 Current status:
 
+- hosted readiness runner reports GitHub App env as blocked when credentials are
+  missing
 - unit tests cover config parsing, private-key newline normalization, missing
   env errors, token-safe git command construction, fake materialization, eval,
   and worker paths
@@ -728,6 +768,8 @@ Expected result:
 
 Current status:
 
+- hosted readiness runner verifies a synthetic signed Slack event and captures a
+  fake Slack reply locally
 - unit tests cover Slack signature verification, URL verification, bad
   signatures, configured channel gating, app mention enqueueing, top-level
   message behavior, reaction message fetch, and Slack thread reply rendering
@@ -818,9 +860,10 @@ features.
 
 ## Immediate Next Steps
 
-1. Verify the hosted end-to-end workflow from configured Slack channel to AI
+1. Run Phase 9B live hosted dogfood with real Slack, GitHub App, Supabase, and AI.
+2. Verify the hosted end-to-end workflow from configured Slack channel to AI
    analysis reply.
-2. Add GitHub Issues, Vercel/Supabase, OCI, and work-item providers only through the
+3. Add GitHub Issues, Vercel/Supabase, OCI, and work-item providers only through the
    generic provider interfaces.
 
 ## Open Questions

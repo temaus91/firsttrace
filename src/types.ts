@@ -191,6 +191,26 @@ export type WorkerRunResult = {
   status: "idle" | "processed";
 };
 
+export type HostedVerifyStatus = "passed" | "failed" | "blocked" | "skipped";
+
+export type HostedVerifyCheck = {
+  message: string;
+  name: string;
+  required: boolean;
+  status: HostedVerifyStatus;
+};
+
+export type HostedVerifyResult = {
+  channelId?: string;
+  channelName?: string;
+  checks: HostedVerifyCheck[];
+  configPath: string;
+  job?: InvestigationJob;
+  passed: boolean;
+  queueProvider: string;
+  slackReplyText?: string;
+};
+
 export type MessageSubmitInput = {
   aiEnabled: boolean;
   configPath: string;
