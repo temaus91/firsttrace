@@ -152,8 +152,9 @@ supabase/migrations/
 
 This creates `firsttrace_jobs`, enables row level security, and adds the
 `firsttrace_claim_next_job()` RPC used by workers to claim queued work
-atomically. The later dedupe migration adds `dedupe_key` so Slack retries return
-the existing queued job instead of creating duplicate investigations.
+atomically. Later migrations add `dedupe_key` so Slack retries return the
+existing queued job instead of creating duplicate investigations and make empty
+worker claims return no job cleanly.
 
 Store these values as backend secrets:
 

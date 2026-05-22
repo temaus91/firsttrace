@@ -46,7 +46,7 @@ const nextStepsFor = (
   return steps;
 };
 
-export const investigate = (report: string, config: PreparedFirstTraceConfig): InvestigationResult => {
+export const investigate = async (report: string, config: PreparedFirstTraceConfig): Promise<InvestigationResult> => {
   const searchTerms = extractTerms(report);
   const warnings: string[] = [];
 
@@ -66,7 +66,11 @@ export const investigate = (report: string, config: PreparedFirstTraceConfig): I
   ).slice(0, config.search.maxFiles);
 
   const relatedCommits = sortEvidenceItems(
-    config.repos.flatMap((repo) => searchCommits(repo, searchTerms, config)),
+    (
+      await Promise.all(
+        config.repos.map((repo) => searchCommits(repo, searchTerms, config, suspiciousFiles)),
+      )
+    ).flat(),
   ).slice(0, config.search.maxCommits);
 
   if (!suspiciousFiles.length && searchTerms.length) {

@@ -94,7 +94,7 @@ export class SupabaseRestJobStore implements SupabaseJobStore {
       SupabaseResponse<SupabaseJobRow>
     >;
     if (error) throw new Error(`Supabase claim failed: ${messageFor(error)}`);
-    return data ?? undefined;
+    return data?.id ? data : undefined;
   }
 
   async get(id: string): Promise<SupabaseJobRow | undefined> {

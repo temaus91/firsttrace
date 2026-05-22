@@ -710,7 +710,8 @@ Prerequisites:
 
 - a dedicated Supabase project or database for FirstTrace runtime state
 - all migrations in `supabase/migrations/` applied in order, including
-  `0001_firsttrace_jobs.sql` and `0002_firsttrace_job_dedupe.sql`
+  `0001_firsttrace_jobs.sql`, `0002_firsttrace_job_dedupe.sql`, and
+  `0003_firsttrace_claim_next_empty.sql`
 - `.env.local` values:
   - `SUPABASE_URL`
   - `SUPABASE_SERVICE_ROLE_KEY`

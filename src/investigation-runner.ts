@@ -19,7 +19,7 @@ export const executeInvestigation = async ({
   repoPreparation,
 }: ExecuteInvestigationOptions): Promise<InvestigationResult> => {
   const preparedConfig = await prepareConfigForInvestigation(config, repoPreparation);
-  const result = investigate(report, preparedConfig);
+  const result = await investigate(report, preparedConfig);
 
   if (aiProvider) {
     try {

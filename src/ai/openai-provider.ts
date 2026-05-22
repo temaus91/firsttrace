@@ -46,11 +46,18 @@ Rules:
 - Every likely file and implementer hint must cite evidence strings from the bundle.
 - If the evidence is weak, lower confidence and ask concise missing-information questions.
 - Prefer useful uncertainty over unsupported certainty.
+- Act like a senior engineer doing the first debugging pass, not a generic summarizer.
+- Pick the strongest fault-location hypothesis and explain why that code path fits the symptom.
+- Set likelyComponent to the most specific route, component, module, or file path supported by evidence.
+- Prefer exact file/line evidence, then recent commits or blame/history touching those files.
+- Use implementer hints for the person or commit most likely to know or have contributed to the suspect code.
+- For implementer hints, explain how the cited commit or author relates to the suspect code; do not only say it is recent.
+- Avoid generic next steps such as "inspect the repo"; make the output useful to the next engineer opening the code.
 - Keep provider-specific details out of the result.`;
 
 const userPrompt = (request: AiReasonerRequest) => `Investigate this bug report using only this JSON evidence bundle.
 
-Return likely bug location, owner/implementer hints, confidence, a short explanation, and missing-information questions.
+Return a debugging handoff: likely fault location, why it is suspicious, owner/implementer hints, any commit that may have contributed, confidence, and missing-information questions.
 
 ${JSON.stringify(request, null, 2)}`;
 

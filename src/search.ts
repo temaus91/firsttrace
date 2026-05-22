@@ -3,6 +3,10 @@ import path from "node:path";
 import { countTermHits } from "./terms.js";
 import { resolveOwners, toPosixPath } from "./owners.js";
 import { runCommand } from "./shell.js";
+import {
+  createGitHubTokenProviderFromEnv,
+  type GitHubInstallationTokenProvider,
+} from "./repositories/github-auth.js";
 import type { EvidenceItem, PreparedFirstTraceConfig, SearchableRepoConfig } from "./types.js";
 
 const EXCLUDE_GLOBS = [
@@ -48,6 +52,24 @@ type Match = {
   text: string;
 };
 
+type CommitSignalSource = "term" | "path_history" | "line_blame" | "github_term" | "github_path_history";
+
+type CommitSignal = {
+  author: string;
+  date: string;
+  hash: string;
+  line?: number;
+  path?: string;
+  score: number;
+  source: CommitSignalSource;
+  subject: string;
+};
+
+export type CommitSearchOptions = {
+  fetchImpl?: typeof fetch;
+  tokenProvider?: GitHubInstallationTokenProvider;
+};
+
 const lineSummary = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 220);
 
 const isSearchableFile = (filePath: string) =>
@@ -61,6 +83,324 @@ export const scoreTextLine = (line: string, terms: string[]) => 2 + countTermHit
 
 export const sortEvidenceItems = (items: EvidenceItem[]) =>
   [...items].sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+
+const shortHash = (hash: string) => hash.slice(0, 7);
+
+const dateFromUnixSeconds = (value: string | undefined) => {
+  if (!value) return "";
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds)) return "";
+  return new Date(seconds * 1000).toISOString().slice(0, 10);
+};
+
+const commitSignalSummary = (signal: CommitSignal) => {
+  if (signal.source === "line_blame" && signal.path && signal.line) {
+    return `Last change to ${signal.path}:${signal.line}: ${signal.subject}`;
+  }
+
+  if (signal.path) {
+    return `Recent change to ${signal.path}: ${signal.subject}`;
+  }
+
+  return signal.subject;
+};
+
+const commitSignalToEvidence = (repo: SearchableRepoConfig, signal: CommitSignal): EvidenceItem => ({
+  citations: [{ commit: shortHash(signal.hash), label: `${repo.name}:${shortHash(signal.hash)}`, repo: repo.name }],
+  metadata: {
+    author: signal.author,
+    date: signal.date,
+    line: signal.line ?? null,
+    path: signal.path ?? null,
+    source: signal.source,
+  },
+  repo: repo.name,
+  score: signal.score,
+  summary: commitSignalSummary(signal),
+  title: `${shortHash(signal.hash)} ${signal.subject}`,
+  type: "commit",
+});
+
+const parseGitLogRows = (
+  stdout: string,
+  scoreFor: (index: number, row: { author: string; date: string; hash: string; subject: string }) => number,
+  source: CommitSignalSource,
+  pathValue?: string,
+): CommitSignal[] =>
+  stdout
+    .split("\n")
+    .filter(Boolean)
+    .flatMap((row, index) => {
+      const [hash, date, author, ...subjectParts] = row.split("\t");
+      const subject = subjectParts.join("\t");
+      if (!hash || !date || !author || !subject) return [];
+      return [
+        {
+          author,
+          date,
+          hash,
+          path: pathValue,
+          score: scoreFor(index, { author, date, hash, subject }),
+          source,
+          subject,
+        },
+      ];
+    });
+
+const gitOutput = (repoPath: string, args: string[], maxBuffer?: number) => {
+  try {
+    const result = runCommand(repoPath, "git", args, { allowExitCodes: [128], maxBuffer });
+    if (result.status === 128) return undefined;
+    return result.stdout;
+  } catch (error) {
+    if ((error as Error).message.includes("spawnSync git ENOENT")) return undefined;
+    throw error;
+  }
+};
+
+const candidatePathsFrom = (items: EvidenceItem[]) => [
+  ...new Set(items.flatMap((item) => (item.path ? [item.path] : []))),
+];
+
+const candidateLineTargetsFrom = (items: EvidenceItem[]) =>
+  items.flatMap((item) =>
+    item.citations.flatMap((citation) =>
+      citation.path && citation.line ? [{ line: citation.line, path: citation.path }] : [],
+    ),
+  );
+
+const parseBlamePorcelain = (stdout: string) => {
+  const lines = stdout.split("\n");
+  const hash = lines[0]?.split(" ")[0];
+  if (!hash || /^0+$/.test(hash)) return undefined;
+  const field = (name: string) => lines.find((line) => line.startsWith(`${name} `))?.slice(name.length + 1);
+
+  return {
+    author: field("author") ?? "unknown",
+    date: dateFromUnixSeconds(field("author-time")),
+    hash,
+    subject: field("summary") ?? "Line change",
+  };
+};
+
+const gitBlameSignal = (
+  repo: SearchableRepoConfig,
+  pathValue: string,
+  line: number,
+  score: number,
+): CommitSignal | undefined => {
+  const stdout = gitOutput(
+    repo.path,
+    ["blame", "--line-porcelain", "-L", `${line},${line}`, "--", pathValue],
+    1024 * 1024,
+  );
+  if (stdout === undefined) return undefined;
+
+  const blame = parseBlamePorcelain(stdout);
+  if (!blame) return undefined;
+
+  const show = gitOutput(
+    repo.path,
+    ["show", "-s", "--date=short", "--pretty=format:%h%x09%ad%x09%an%x09%s", blame.hash],
+  );
+  const [shown] = show ? parseGitLogRows(show, () => score, "line_blame", pathValue) : [];
+
+  return {
+    author: shown?.author ?? blame.author,
+    date: shown?.date ?? blame.date,
+    hash: shown?.hash ?? blame.hash,
+    line,
+    path: pathValue,
+    score,
+    source: "line_blame",
+    subject: shown?.subject ?? blame.subject,
+  };
+};
+
+const gitCommitSignals = (
+  repo: SearchableRepoConfig,
+  terms: string[],
+  config: PreparedFirstTraceConfig,
+  suspiciousFiles: EvidenceItem[],
+) => {
+  const signals: CommitSignal[] = [];
+  let gitAvailable = false;
+
+  if (terms.length) {
+    const stdout = gitOutput(repo.path, [
+      "log",
+      "--all",
+      "--date=short",
+      "--max-count=250",
+      "--pretty=format:%h%x09%ad%x09%an%x09%s",
+    ]);
+    if (stdout !== undefined) {
+      gitAvailable = true;
+      signals.push(
+        ...parseGitLogRows(
+          stdout,
+          (_index, row) => countTermHits(`${row.subject} ${row.author}`, terms) * 3,
+          "term",
+        ).filter((signal) => signal.score > 0),
+      );
+    }
+  }
+
+  const candidatePaths = candidatePathsFrom(suspiciousFiles).slice(0, 3);
+  const perPathLimit = Math.max(2, Math.ceil(config.search.maxCommits / Math.max(candidatePaths.length, 1)));
+  candidatePaths.forEach((pathValue, pathIndex) => {
+    const stdout = gitOutput(repo.path, [
+      "log",
+      "--date=short",
+      "--max-count",
+      String(perPathLimit),
+      "--pretty=format:%h%x09%ad%x09%an%x09%s",
+      "--",
+      pathValue,
+    ]);
+    if (stdout !== undefined) {
+      gitAvailable = true;
+      signals.push(
+        ...parseGitLogRows(
+          stdout,
+          (index) => Math.max(1, 24 - pathIndex * 4 - index),
+          "path_history",
+          pathValue,
+        ),
+      );
+    }
+  });
+
+  candidateLineTargetsFrom(suspiciousFiles)
+    .slice(0, 3)
+    .forEach((target, index) => {
+      const signal = gitBlameSignal(repo, target.path, target.line, Math.max(1, 32 - index * 3));
+      if (signal) {
+        gitAvailable = true;
+        signals.push(signal);
+      }
+    });
+
+  return { gitAvailable, signals };
+};
+
+type GitHubCommitResponse = {
+  author?: { login?: string } | null;
+  commit?: {
+    author?: {
+      date?: string;
+      name?: string;
+    } | null;
+    message?: string;
+  };
+  sha?: string;
+};
+
+const githubCommitSignalFrom = (
+  commit: GitHubCommitResponse,
+  source: CommitSignalSource,
+  score: number,
+  pathValue?: string,
+): CommitSignal | undefined => {
+  const hash = commit.sha;
+  const subject = commit.commit?.message?.split("\n")[0]?.trim();
+  if (!hash || !subject) return undefined;
+
+  return {
+    author: commit.commit?.author?.name ?? commit.author?.login ?? "unknown",
+    date: commit.commit?.author?.date?.slice(0, 10) ?? "",
+    hash,
+    path: pathValue,
+    score,
+    source,
+    subject,
+  };
+};
+
+const fetchGitHubCommits = async (
+  repo: SearchableRepoConfig,
+  token: string,
+  fetchImpl: typeof fetch,
+  pathValue?: string,
+  perPage = 30,
+) => {
+  if (!repo.owner || !repo.remoteRepo) return [];
+  const url = new URL(`https://api.github.com/repos/${repo.owner}/${repo.remoteRepo}/commits`);
+  if (repo.defaultBranch) url.searchParams.set("sha", repo.defaultBranch);
+  if (pathValue) url.searchParams.set("path", pathValue);
+  url.searchParams.set("per_page", String(perPage));
+
+  const response = await fetchImpl(url, {
+    headers: {
+      accept: "application/vnd.github+json",
+      authorization: `Bearer ${token}`,
+      "user-agent": "firsttrace",
+    },
+  });
+
+  if (!response.ok) return [];
+  return (await response.json()) as GitHubCommitResponse[];
+};
+
+const githubCommitSignals = async (
+  repo: SearchableRepoConfig,
+  terms: string[],
+  config: PreparedFirstTraceConfig,
+  suspiciousFiles: EvidenceItem[],
+  options: CommitSearchOptions,
+) => {
+  if (repo.sourceProvider !== "github" || !repo.owner || !repo.remoteRepo) return [];
+
+  try {
+    const tokenProvider = options.tokenProvider ?? createGitHubTokenProviderFromEnv();
+    const fetchImpl = options.fetchImpl ?? fetch;
+    const token = await tokenProvider.getInstallationToken(repo.remoteRepo);
+    const signals: CommitSignal[] = [];
+
+    if (terms.length) {
+      const commits = await fetchGitHubCommits(repo, token, fetchImpl, undefined, 100);
+      signals.push(
+        ...commits.flatMap((commit) => {
+          const subject = commit.commit?.message?.split("\n")[0] ?? "";
+          const author = commit.commit?.author?.name ?? commit.author?.login ?? "";
+          const score = countTermHits(`${subject} ${author}`, terms) * 3;
+          const signal = githubCommitSignalFrom(commit, "github_term", score);
+          return signal && score > 0 ? [signal] : [];
+        }),
+      );
+    }
+
+    const candidatePaths = candidatePathsFrom(suspiciousFiles).slice(0, 3);
+    const perPathLimit = Math.max(2, Math.ceil(config.search.maxCommits / Math.max(candidatePaths.length, 1)));
+    for (const [pathIndex, pathValue] of candidatePaths.entries()) {
+      const commits = await fetchGitHubCommits(repo, token, fetchImpl, pathValue, perPathLimit);
+      signals.push(
+        ...commits.flatMap((commit, index) => {
+          const signal = githubCommitSignalFrom(
+            commit,
+            "github_path_history",
+            Math.max(1, 22 - pathIndex * 4 - index),
+            pathValue,
+          );
+          return signal ? [signal] : [];
+        }),
+      );
+    }
+
+    return signals;
+  } catch {
+    return [];
+  }
+};
+
+const dedupeCommitSignals = (signals: CommitSignal[]) => {
+  const byHash = new Map<string, CommitSignal>();
+  for (const signal of signals) {
+    const current = byHash.get(shortHash(signal.hash));
+    if (!current || signal.score > current.score) byHash.set(shortHash(signal.hash), signal);
+  }
+  return [...byHash.values()];
+};
 
 const parseRipgrepJson = (stdout: string): Match[] =>
   stdout
@@ -264,52 +604,22 @@ export const searchIssueExports = (
 ) =>
   searchConfiguredText(repo, terms, config, config.issueExports, "issue");
 
-export const searchCommits = (
+export const searchCommits = async (
   repo: SearchableRepoConfig,
   terms: string[],
   config: PreparedFirstTraceConfig,
+  suspiciousFiles: EvidenceItem[] = [],
+  options: CommitSearchOptions = {},
 ) => {
-  if (!terms.length) return [];
+  if (!terms.length && !suspiciousFiles.length) return [];
 
-  let result;
-  try {
-    result = runCommand(
-      repo.path,
-      "git",
-      [
-        "log",
-        "--all",
-        "--date=short",
-        "--max-count=250",
-        "--pretty=format:%h%x09%ad%x09%an%x09%s",
-      ],
-      { allowExitCodes: [128] },
-    );
-  } catch (error) {
-    if ((error as Error).message.includes("spawnSync git ENOENT")) return [];
-    throw error;
-  }
-  if (result.status === 128 || !result.stdout) return [];
+  const gitSignals = gitCommitSignals(repo, terms, config, suspiciousFiles);
+  const signals = gitSignals.gitAvailable
+    ? gitSignals.signals
+    : await githubCommitSignals(repo, terms, config, suspiciousFiles, options);
 
-  return result.stdout
-    .split("\n")
-    .flatMap((row) => {
-      const [hash, date, author, subject] = row.split("\t");
-      if (!hash || !date || !author || !subject) return [];
-      const score = countTermHits(`${subject} ${author}`, terms) * 3;
-      if (score <= 0) return [];
-      return [
-        {
-          citations: [{ commit: hash, label: `${repo.name}:${hash}`, repo: repo.name }],
-          repo: repo.name,
-          score,
-          summary: subject,
-          title: `${hash} ${subject}`,
-          type: "commit" as const,
-          metadata: { author, date },
-        },
-      ];
-    })
-    .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
-    .slice(0, config.search.maxCommits);
+  return sortEvidenceItems(dedupeCommitSignals(signals).map((signal) => commitSignalToEvidence(repo, signal))).slice(
+    0,
+    config.search.maxCommits,
+  );
 };

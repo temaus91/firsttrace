@@ -596,4 +596,53 @@ describe("Slack result notification", () => {
     expect(rendered).toContain("Likely owners: `@project-docs`");
     expect(rendered).toContain("Evidence: README.md:1");
   });
+
+  it("renders AI debugging leads and implementer hints in Slack replies", () => {
+    const rendered = renderSlackInvestigationReply({
+      ai: {
+        confidence: 0.82,
+        explanation: "The profile route is the strongest lead because its initial render can show empty state before data hydration completes.",
+        implementerHints: [
+          {
+            citations: ["commit abc123"],
+            commit: "abc123",
+            email: null,
+            name: "Dev Owner",
+            reason: "This recent commit changed the artist profile loading state.",
+          },
+        ],
+        likelyComponent: "app/artists/[artistId]/page.tsx",
+        likelyFiles: [
+          {
+            citations: ["app/artists/[artistId]/page.tsx:21"],
+            confidence: 0.86,
+            path: "app/artists/[artistId]/page.tsx",
+            reason: "The route owns the artist profile loading branch and matches the blank-profile symptom.",
+            repo: "wallspace",
+          },
+        ],
+        likelyOwners: ["@app-platform"],
+        missingInfoQuestions: ["Does the blank state appear after a hard refresh or only client navigation?"],
+        provider: "openai",
+        warnings: [],
+      },
+      classification: "bug",
+      likelyComponent: "app",
+      likelyOwners: ["@frontend"],
+      relatedCommits: [],
+      relatedDocs: [],
+      report: "Artist profile is empty for a few seconds after login",
+      searchTerms: ["artist", "profile", "empty"],
+      suggestedNextSteps: ["Open the artist profile route and check the loading branch."],
+      suspiciousFiles: [],
+      warnings: [],
+    });
+
+    expect(rendered).toContain("*Best fault-location lead*");
+    expect(rendered).toContain("The route owns the artist profile loading branch");
+    expect(rendered).toContain("*Why this is suspicious*");
+    expect(rendered).toContain("*Implementer / commit signals*");
+    expect(rendered).toContain("Dev Owner");
+    expect(rendered).toContain("Ask: Does the blank state appear");
+  });
 });

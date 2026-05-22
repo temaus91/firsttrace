@@ -198,6 +198,19 @@ describe("SupabaseRestJobStore", () => {
     expect(claimed?.id).toBe("11111111-1111-4111-8111-111111111111");
   });
 
+  it("treats a null composite claim row as no queued job", async () => {
+    const store = new SupabaseRestJobStore({
+      from() {
+        throw new Error("not used");
+      },
+      async rpc() {
+        return { data: { ...row(), id: null }, error: null };
+      },
+    } as never);
+
+    await expect(store.claimNext()).resolves.toBeUndefined();
+  });
+
   it("uses the configured jobs table for reads", async () => {
     const tables: string[] = [];
     const store = new SupabaseRestJobStore({
