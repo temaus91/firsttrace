@@ -367,13 +367,12 @@ Current capability:
 
 Limitations:
 
-- no message delivery adapter
 - no Slack, Teams, Docker, npm publishing, Redis, Supabase, OCI, or work-item
   creation
 
-### Phase 5: Message Input Adapter
+### Phase 5: Message Input Adapter - Complete
 
-Add the simplest way to deliver messages to the worker before adding Slack:
+The implemented Phase 5 flow adds a local message delivery adapter before Slack:
 
 ```bash
 npm run firsttrace -- submit \
@@ -381,21 +380,70 @@ npm run firsttrace -- submit \
   --report "checkout retry leaves the buyer stuck"
 ```
 
-or a local HTTP endpoint:
+Current capability:
+
+- `submit` validates local message input
+- creates a queued investigation job through the generic queue interface
+- records source metadata such as `local-cli`
+- prints the worker command and status command needed to process or fetch the
+  result
+- supports optional AI reasoning with `--ai`
+- keeps the path compatible with future chat adapters
+
+Limitations:
+
+- no local HTTP endpoint
+- no Slack, Teams, hosted receiver, or webhook handling
+
+### Phase 6: Hosted Vercel/Supabase Runtime
+
+Add a hosted backend path for teams that want FirstTrace to run as a dedicated
+service:
 
 ```text
-POST /investigations
+Vercel Receiver -> Supabase Queue/Database -> Worker Process -> Result Store
 ```
 
-The output should let a user submit a bug report, watch or fetch the result, and
-confirm that the worker path works end to end.
+The hosted runtime should:
 
-### Later: Chat Adapter and Triggers
+- expose provider-neutral HTTP endpoints for submitted investigations
+- store jobs, status, attempts, and results in Supabase
+- keep secrets in Vercel/Supabase environment variables, not repo config
+- reuse the same worker and investigation engine as the local CLI
+- preserve the generic `JobQueue` and runtime provider boundaries
+- support local development with the same request and result contracts
+
+Vercel and Supabase should be adapters, not assumptions in the core
+investigation logic. A future Docker, OCI, Kubernetes, Redis, or Postgres
+deployment should be able to reuse the same core worker.
+
+### Phase 7: GitHub Provider for Private/Public Repositories
+
+Add a GitHub repository provider so hosted FirstTrace can inspect configured
+GitHub repositories without relying on a local checkout:
+
+```text
+GitHub App -> GitHub Provider -> Evidence Collector
+```
+
+The provider should:
+
+- use a GitHub App with read-only repository permissions by default
+- support public and private repositories selected during app installation
+- read repo contents, paths, branches, commits, and ownership metadata
+- keep app id, installation id, and private key in environment secrets
+- keep repository owner/name, branch, docs, and ownership mapping in config
+- avoid hardcoded company, repository, or channel names
+
+Local git should remain a first-class provider. GitHub is the first hosted git
+provider, not the only git provider.
+
+### Phase 8: Slack Chat Provider and Channel Config
 
 Slack can be the first chat adapter, but the core product should stay generic:
 
 ```text
-Slack app mention -> Receiver -> Queue -> Worker -> Slack thread reply
+Slack message -> Receiver -> Queue -> Worker -> Slack thread reply
 ```
 
 The first chat adapter should:
@@ -404,12 +452,39 @@ The first chat adapter should:
 - acknowledge quickly
 - fetch thread context
 - enqueue an investigation request
-- post or return the result
-- support explicit triggers such as at-mentions and emoji reactions
-- optionally support automatic triage on top-level messages
+- post a concise cited result back to Slack
+- restrict automatic handling to configured channel ids
+- support configured triggers such as top-level messages, app mentions, and
+  emoji reactions
+- keep channel names, channel ids, trigger behavior, and repo routing in config
 
 The investigation engine should remain chat-agnostic so Teams, Discord, Linear,
 or other sources can be added later.
+
+### Phase 9: Hosted Setup Guide and End-to-End Dogfood
+
+Prove the full hosted workflow for a generic company setup:
+
+```text
+configured Slack channel
+  -> Vercel receiver
+  -> Supabase-backed job
+  -> worker
+  -> GitHub private repo evidence
+  -> AI reasoning
+  -> Slack thread reply
+```
+
+This phase should verify:
+
+- a configured Slack channel can submit a bug report without CLI access
+- an unconfigured channel is ignored or receives a safe denial
+- the backend validates Slack signatures before enqueueing work
+- the worker can read a private GitHub repository through the configured provider
+- AI reasoning uses gathered evidence and citations
+- the Slack reply names likely files, likely owner or implementer context,
+  confidence, citations, and missing-info questions
+- no company-specific names, repositories, or channels are hardcoded
 
 ### Later: Work Item Provider
 
@@ -443,17 +518,18 @@ Queue implementations should be adapters:
 ```text
 JobQueue
   InMemoryQueue      local tests
+  FileSystemQueue    local worker runtime
+  SupabaseQueue      Vercel/Supabase hosted path
   RedisQueue         generic Docker Compose
-  SupabaseQueue      Vercel/Supabase dogfood path
   VercelQueue        Vercel-native users
   OciQueue           OCI deployments
 ```
 
 Recommended progression:
 
-1. in-memory queue for local development
-2. Redis queue for generic open-source Docker Compose
-3. Supabase queue for Vercel/Supabase dogfood deployments
+1. filesystem or in-memory queue for local development
+2. Supabase queue for Vercel/Supabase hosted deployments
+3. Redis queue for generic open-source Docker Compose
 4. OCI queue for OCI deployments
 
 The worker should be a normal long-running process. It can run locally, in a
@@ -536,9 +612,12 @@ features.
 
 ## Immediate Next Steps
 
-1. Add local message delivery adapter.
-2. Add Slack as the first chat provider.
-3. Add GitHub, Vercel/Supabase, OCI, and work-item providers only through the
+1. Add hosted Vercel/Supabase runtime support.
+2. Add GitHub App provider for private and public repositories.
+3. Add Slack chat provider and channel configuration.
+4. Verify the hosted end-to-end workflow from configured Slack channel to AI
+   analysis reply.
+5. Add GitHub, Vercel/Supabase, OCI, and work-item providers only through the
    generic provider interfaces.
 
 ## Open Questions

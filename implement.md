@@ -79,19 +79,31 @@ Completed:
 2. Phase 2: optional OpenAI AI provider for local CLI.
 3. Phase 3: eval runner.
 4. Phase 4: local worker runtime.
+5. Phase 5: local message delivery adapter.
 
 Next:
 
-1. Phase 5: local message delivery adapter.
-   - Add `submit` CLI command or local HTTP endpoint.
-   - Submit a report to the worker and fetch/store the result.
-2. Later: Slack as the first chat provider.
-   - Preserve a generic `ChatProvider` boundary so Teams or other systems can
-     use the same worker and investigation core.
-3. Later: provider expansion.
-   - GitHub provider for repo/issues.
-   - Vercel/Supabase runtime or queue provider for dogfood deployment.
-   - OCI runtime/queue/work-item provider for enterprise deployment.
+1. Phase 6: hosted Vercel/Supabase runtime.
+   - Add a provider-neutral HTTP receiver.
+   - Store jobs, status, attempts, and results in Supabase through the queue
+     provider boundary.
+   - Run the same worker path used by local jobs.
+2. Phase 7: GitHub App provider.
+   - Support private and public GitHub repositories without requiring a local
+     checkout.
+   - Keep GitHub App credentials in environment secrets and repo routing in
+     config.
+3. Phase 8: Slack chat provider and channel configuration.
+   - Verify Slack signatures, acknowledge quickly, fetch thread context, enqueue
+     jobs, and post cited replies.
+   - Keep channel ids, channel names, triggers, and repo routing in config.
+4. Phase 9: hosted setup and end-to-end dogfood.
+   - Verify a configured Slack channel can submit a bug, the hosted backend can
+     queue it, the worker can inspect a configured private repository, AI can
+     reason over cited evidence, and Slack receives the result.
+5. Later: provider expansion.
+   - Additional git providers, chat providers, queue providers, runtime
+     providers, and work-item providers.
 
 Worker runtime details:
 
@@ -104,6 +116,30 @@ Worker runtime details:
   and worker behavior stay consistent.
 - Future Redis, Supabase, Vercel, and OCI queues should implement the same queue
   provider boundary instead of changing investigation logic.
+
+Message delivery details:
+
+- The Phase 5 `submit` command is the first user-facing message delivery
+  adapter.
+- `submit` enqueues a job with source metadata and prints the worker/status
+  commands needed to process and fetch it.
+- Future Slack, Teams, HTTP, and API adapters should create the same normalized
+  job input instead of bypassing the queue.
+- Message adapters should validate provider-specific input at the edge, then
+  pass normalized reports into the worker path.
+
+Hosted workflow details:
+
+- All company-specific values must live in config files or environment secrets.
+- Config drives chat provider selection, Slack channel ids, repo owner/name,
+  default branch, trigger policy, and ownership routing.
+- The GitHub provider should use a read-only GitHub App by default.
+- Slack provider code must verify request signatures before doing work and
+  acknowledge events quickly before long-running investigation.
+- Vercel and Supabase belong in runtime and queue adapters. They must not leak
+  into evidence ranking, AI reasoning, scoring, or result rendering.
+- A complete hosted setup should work for any company by changing config and
+  secrets only.
 
 Eval runner details:
 

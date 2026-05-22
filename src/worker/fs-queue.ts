@@ -79,6 +79,7 @@ export class FileSystemJobQueue implements JobQueue {
       id: randomUUID(),
       maxAttempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
       report: input.report,
+      source: input.source,
       status: "queued",
       updatedAt: timestamp,
     };

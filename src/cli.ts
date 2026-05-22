@@ -6,6 +6,8 @@ import { loadEvalCases } from "./eval/cases.js";
 import { renderEvalRun } from "./eval/render.js";
 import { runEval } from "./eval/runner.js";
 import { executeInvestigation } from "./investigation-runner.js";
+import { LocalMessageDeliveryAdapter } from "./message/local-submit.js";
+import { renderMessageSubmitResult } from "./message/render.js";
 import { renderInvestigation } from "./render.js";
 import { FileSystemJobQueue } from "./worker/fs-queue.js";
 import { renderEnqueuedJob, renderJobStatus, renderWorkerRun } from "./worker/render.js";
@@ -28,6 +30,8 @@ const usage = () => `Usage:
   npm run firsttrace -- investigate --config firsttrace.config.yaml --report "bug text" --ai
   npm run firsttrace -- eval --config firsttrace.config.yaml --cases evals/example.yaml
   npm run firsttrace -- eval --config firsttrace.config.yaml --cases evals/example.yaml --ai
+  npm run firsttrace -- submit --config firsttrace.config.yaml --report "bug text"
+  npm run firsttrace -- submit --config firsttrace.config.yaml --report "bug text" --ai
   npm run firsttrace -- worker enqueue --config firsttrace.config.yaml --report "bug text"
   npm run firsttrace -- worker run --once
   npm run firsttrace -- worker status --job <job-id>
@@ -115,8 +119,20 @@ const main = async () => {
     console.log(usage());
     return;
   }
-  if (args.command !== "investigate" && args.command !== "eval" && args.command !== "worker") {
+  if (args.command !== "investigate" && args.command !== "eval" && args.command !== "submit" && args.command !== "worker") {
     throw new Error(`Unknown or missing command: ${args.command ?? "<none>"}`);
+  }
+
+  if (args.command === "submit") {
+    const queue = new FileSystemJobQueue();
+    const adapter = new LocalMessageDeliveryAdapter(queue);
+    const result = adapter.submit({
+      aiEnabled: args.ai,
+      configPath: args.configPath,
+      report: args.report ?? "",
+    });
+    console.log(renderMessageSubmitResult(result, queue.jobPath(result.job.id)));
+    return;
   }
 
   if (args.command === "worker") {

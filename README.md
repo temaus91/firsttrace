@@ -19,13 +19,15 @@ help. FirstTrace automates that first pass and replies with cited evidence.
 
 ## What It Does
 
-The current Phase 1 version is local and read-only:
+The current local version is read-only:
 
 1. An engineer runs `firsttrace investigate` with a bug report and config file.
 2. FirstTrace searches configured local repositories, docs, issue exports, and
    recent git commits.
 3. It classifies the report, ranks likely evidence, maps owners, and prints a
    concise investigation starting point with citations.
+4. The same investigation path can run through local evals or the local worker
+   queue under `.firsttrace/jobs`.
 
 The later channel-agent version is chat-triggered:
 
@@ -93,12 +95,17 @@ See [docs/PRODUCT_PLAN.md](docs/PRODUCT_PLAN.md) for the working build plan,
 core architecture, eval strategy, runtime adapter strategy, and open questions.
 See [implement.md](implement.md) for implementation guidance meant for future
 engineering sessions.
+See [instructions.md](instructions.md) for the planned hosted setup workflow for
+companies that want FirstTrace connected to a private GitHub repo and a Slack
+triage channel.
 
 ## Local CLI
 
-Phase 2 is a local CLI with optional AI reasoning. The CLI always gathers local
-deterministic evidence first. OpenAI is only called when `--ai` is passed, and it
-reasons over that bounded evidence bundle rather than crawling the repository.
+The current local CLI supports deterministic investigation, optional AI
+reasoning, evals, a local worker runtime, and a local `submit` message adapter.
+The CLI always gathers deterministic evidence first. OpenAI is only called when
+`--ai` is passed, and it reasons over that bounded evidence bundle rather than
+crawling the repository.
 
 ```bash
 npm install
@@ -126,15 +133,20 @@ npm run firsttrace -- eval \
   --cases evals/example.yaml
 ```
 
-Local worker run:
+Local submit and worker run:
 
 ```bash
-npm run firsttrace -- worker enqueue \
+npm run firsttrace -- submit \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear"
 
 npm run firsttrace -- worker run --once
+
+npm run firsttrace -- worker status --job <job-id>
 ```
+
+`worker enqueue` is the lower-level queue command. `submit` is the local
+message-delivery path that future chat and HTTP adapters should mirror.
 
 ## MVP Scope
 
@@ -204,8 +216,9 @@ Queue and runtime should be adapters:
 ```text
 JobQueue
   InMemoryQueue
-  RedisQueue
+  FileSystemQueue
   SupabaseQueue
+  RedisQueue
   VercelQueue
   OciQueue
 ```
@@ -218,7 +231,8 @@ from git history and ownership metadata, chat integration will not save it.
 
 ## Status
 
-Phase 4 local CLI, eval runner, and worker runtime are implemented. The
+Phase 5 local CLI, eval runner, worker runtime, and local submit adapter are
+implemented. The
 deterministic command is:
 
 ```bash
@@ -244,10 +258,10 @@ npm run firsttrace -- eval \
   --cases evals/example.yaml
 ```
 
-The worker command sequence is:
+The local submit and worker command sequence is:
 
 ```bash
-npm run firsttrace -- worker enqueue \
+npm run firsttrace -- submit \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear"
 
@@ -258,8 +272,9 @@ npm run firsttrace -- worker status --job <job-id>
 
 Next planned work:
 
-1. Add a local message delivery adapter.
-2. Wire Slack as the first chat provider.
+1. Add hosted Vercel/Supabase runtime support.
+2. Add GitHub App provider for private/public repos.
+3. Wire Slack as the first chat provider.
 
 ## License
 

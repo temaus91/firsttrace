@@ -2,10 +2,14 @@ import type { InvestigationJob, WorkerRunResult } from "../types.js";
 
 const empty = "_None_";
 
-const jobSummary = (job: InvestigationJob) =>
+export const renderJobSummary = (job: InvestigationJob) =>
   [
     `Job: \`${job.id}\``,
     `Status: \`${job.status}\``,
+    job.source ? `Source: \`${job.source.provider}\`` : "",
+    job.source?.channelName ? `Channel: \`${job.source.channelName}\`` : "",
+    job.source?.channelId ? `Channel id: \`${job.source.channelId}\`` : "",
+    job.source?.threadId ? `Thread id: \`${job.source.threadId}\`` : "",
     `AI enabled: \`${job.aiEnabled}\``,
     `Attempts: \`${job.attempts}/${job.maxAttempts}\``,
     `Config: \`${job.configPath}\``,
@@ -27,17 +31,17 @@ const jobSummary = (job: InvestigationJob) =>
     .join("\n");
 
 export const renderEnqueuedJob = (job: InvestigationJob, filePath: string) =>
-  ["# FirstTrace Worker Job Enqueued", jobSummary(job), `Path: \`${filePath}\``].join("\n\n");
+  ["# FirstTrace Worker Job Enqueued", renderJobSummary(job), `Path: \`${filePath}\``].join("\n\n");
 
 export const renderJobStatus = (job: InvestigationJob | undefined) =>
-  job ? ["# FirstTrace Worker Job Status", jobSummary(job)].join("\n\n") : empty;
+  job ? ["# FirstTrace Worker Job Status", renderJobSummary(job)].join("\n\n") : empty;
 
 export const renderWorkerRun = (result: WorkerRunResult) =>
   [
     "# FirstTrace Worker Run",
     `Status: \`${result.status}\``,
     result.message,
-    result.job ? jobSummary(result.job) : "",
+    result.job ? renderJobSummary(result.job) : "",
   ]
     .filter(Boolean)
     .join("\n\n");

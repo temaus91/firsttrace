@@ -139,6 +139,15 @@ export type EvalRunResult = {
 
 export type InvestigationJobStatus = "queued" | "running" | "succeeded" | "failed";
 
+export type InvestigationJobSource = {
+  channelId?: string;
+  channelName?: string;
+  messageId?: string;
+  provider: string;
+  threadId?: string;
+  userId?: string;
+};
+
 export type InvestigationJob = {
   aiEnabled: boolean;
   attempts: number;
@@ -150,6 +159,7 @@ export type InvestigationJob = {
   maxAttempts: number;
   report: string;
   result?: InvestigationResult;
+  source?: InvestigationJobSource;
   startedAt?: string;
   status: InvestigationJobStatus;
   updatedAt: string;
@@ -160,6 +170,7 @@ export type EnqueueInvestigationJobInput = {
   configPath: string;
   maxAttempts?: number;
   report: string;
+  source?: InvestigationJobSource;
 };
 
 export type JobQueue = {
@@ -175,6 +186,21 @@ export type WorkerRunResult = {
   job?: InvestigationJob;
   message: string;
   status: "idle" | "processed";
+};
+
+export type MessageSubmitInput = {
+  aiEnabled: boolean;
+  configPath: string;
+  report: string;
+  source?: InvestigationJobSource;
+};
+
+export type MessageSubmitResult = {
+  job: InvestigationJob;
+};
+
+export type MessageDeliveryAdapter = {
+  submit(input: MessageSubmitInput): MessageSubmitResult | Promise<MessageSubmitResult>;
 };
 
 export type RepoConfig = {
