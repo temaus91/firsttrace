@@ -25,6 +25,7 @@ investigation path.
 - `openai` for the first AI provider
 - `zod` for structured AI output validation
 - `dotenv` for local `.env.local` development credentials
+- `@octokit/auth-app` for GitHub App installation tokens
 
 Current command:
 
@@ -81,25 +82,37 @@ Completed:
 4. Phase 4: local worker runtime.
 5. Phase 5: local message delivery adapter.
 6. Phase 6: hosted Vercel/Supabase runtime.
+7. Phase 7: GitHub App repository provider.
 
 Next:
 
-1. Phase 7: GitHub App provider.
-   - Support private and public GitHub repositories without requiring a local
-     checkout.
-   - Keep GitHub App credentials in environment secrets and repo routing in
-     config.
-2. Phase 8: Slack chat provider and channel configuration.
+1. Phase 8: Slack chat provider and channel configuration.
    - Verify Slack signatures, acknowledge quickly, fetch thread context, enqueue
      jobs, and post cited replies.
    - Keep channel ids, channel names, triggers, and repo routing in config.
-3. Phase 9: hosted setup and end-to-end dogfood.
+2. Phase 9: hosted setup and end-to-end dogfood.
    - Verify a configured Slack channel can submit a bug, the hosted backend can
      queue it, the worker can inspect a configured private repository, AI can
      reason over cited evidence, and Slack receives the result.
-4. Later: provider expansion.
+3. Later: provider expansion.
    - Additional git providers, chat providers, queue providers, runtime
      providers, and work-item providers.
+
+GitHub repository provider details:
+
+- Local `path` repos remain valid and default to `provider: local`.
+- GitHub repos use `provider: github`, `owner`, `repo`, and `default_branch` in
+  config.
+- GitHub App credentials come from `GITHUB_APP_ID`,
+  `GITHUB_APP_INSTALLATION_ID`, and `GITHUB_APP_PRIVATE_KEY`.
+- Normalize escaped private-key newlines because hosted env stores commonly
+  flatten multiline secrets.
+- Materialize GitHub repos under ignored `.firsttrace/github/`.
+- Use short-lived installation tokens only for the clone/fetch command.
+- Do not write tokens into remote URLs, git config, job records, eval output, or
+  logs.
+- After materialization, run the existing deterministic search, commit search,
+  owner matching, AI, eval, worker, and queue code paths unchanged.
 
 Worker runtime details:
 

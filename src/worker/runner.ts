@@ -1,16 +1,19 @@
 import { createAiProviderFromEnv } from "../ai/provider-factory.js";
 import { loadConfig } from "../config.js";
 import { executeInvestigation } from "../investigation-runner.js";
+import type { RepoPreparationOptions } from "../repositories/prepare.js";
 import type { AiProvider, JobQueue, WorkerRunResult } from "../types.js";
 
 export type RunWorkerOnceOptions = {
   aiProviderFactory?: () => AiProvider;
   queue: JobQueue;
+  repoPreparation?: RepoPreparationOptions;
 };
 
 export const runWorkerOnce = async ({
   aiProviderFactory = createAiProviderFromEnv,
   queue,
+  repoPreparation,
 }: RunWorkerOnceOptions): Promise<WorkerRunResult> => {
   const job = await queue.claimNext();
   if (!job) {
@@ -27,6 +30,7 @@ export const runWorkerOnce = async ({
       aiProvider: job.aiEnabled ? aiProviderFactory() : undefined,
       config,
       report: job.report,
+      repoPreparation,
     });
     const completed = await queue.complete(job.id, result);
     return {

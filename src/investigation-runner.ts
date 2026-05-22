@@ -1,5 +1,6 @@
 import { buildAiReasonerRequest } from "./ai/evidence.js";
 import { investigate } from "./investigate.js";
+import { prepareConfigForInvestigation, type RepoPreparationOptions } from "./repositories/prepare.js";
 import type { AiProvider, FirstTraceConfig, InvestigationResult } from "./types.js";
 
 export type ExecuteInvestigationOptions = {
@@ -7,6 +8,7 @@ export type ExecuteInvestigationOptions = {
   aiProvider?: AiProvider;
   config: FirstTraceConfig;
   report: string;
+  repoPreparation?: RepoPreparationOptions;
 };
 
 export const executeInvestigation = async ({
@@ -14,8 +16,10 @@ export const executeInvestigation = async ({
   aiProvider,
   config,
   report,
+  repoPreparation,
 }: ExecuteInvestigationOptions): Promise<InvestigationResult> => {
-  const result = investigate(report, config);
+  const preparedConfig = await prepareConfigForInvestigation(config, repoPreparation);
+  const result = investigate(report, preparedConfig);
 
   if (aiProvider) {
     try {

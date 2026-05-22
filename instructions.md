@@ -5,9 +5,9 @@ connected to a private GitHub repository and a Slack triage channel.
 
 Current implementation status: the local CLI, AI-assisted local investigation,
 eval runner, local worker runtime, local `submit` message adapter, hosted
-Vercel-compatible receiver/status handlers, and Supabase-backed queue exist. The
-GitHub App provider and Slack provider are planned next phases. Exact commands
-may change as those phases are implemented.
+Vercel-compatible receiver/status handlers, Supabase-backed queue, and GitHub
+App repository provider exist. The Slack provider is the next planned phase.
+Exact Slack commands may change as that phase is implemented.
 
 ## Target Workflow
 
@@ -101,7 +101,9 @@ the Slack request handler.
 ## 3. Create the GitHub App
 
 Create a GitHub App for FirstTrace and install it only on the repositories that
-FirstTrace is allowed to inspect.
+FirstTrace is allowed to inspect. FirstTrace uses the app installation to create
+short-lived read tokens at runtime and materialize configured repositories under
+ignored `.firsttrace/github/`.
 
 Recommended default permissions:
 
@@ -120,6 +122,9 @@ GITHUB_APP_PRIVATE_KEY=
 
 The private key should be stored in the host secret manager or environment
 variable store. Do not commit it into the repository.
+
+If the private key is stored as a single-line environment variable, escaped
+newlines such as `\n` are supported.
 
 ## 4. Create the Supabase Project
 

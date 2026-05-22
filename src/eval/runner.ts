@@ -1,4 +1,5 @@
 import { executeInvestigation } from "../investigation-runner.js";
+import type { RepoPreparationOptions } from "../repositories/prepare.js";
 import type { AiProvider, EvalCase, EvalCaseResult, EvalRunResult, FirstTraceConfig } from "../types.js";
 import { scoreEvalResult } from "./scoring.js";
 
@@ -6,9 +7,15 @@ export type RunEvalOptions = {
   aiProvider?: AiProvider;
   cases: EvalCase[];
   config: FirstTraceConfig;
+  repoPreparation?: RepoPreparationOptions;
 };
 
-export const runEval = async ({ aiProvider, cases, config }: RunEvalOptions): Promise<EvalRunResult> => {
+export const runEval = async ({
+  aiProvider,
+  cases,
+  config,
+  repoPreparation,
+}: RunEvalOptions): Promise<EvalRunResult> => {
   const caseResults: EvalCaseResult[] = [];
 
   for (const evalCase of cases) {
@@ -16,6 +23,7 @@ export const runEval = async ({ aiProvider, cases, config }: RunEvalOptions): Pr
       aiProvider,
       config,
       report: evalCase.report,
+      repoPreparation,
     });
     const deterministicScore = scoreEvalResult(evalCase, deterministicResult);
     const aiScore = deterministicResult.ai

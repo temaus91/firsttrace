@@ -50,16 +50,42 @@ const reposFrom = (value: unknown, configDir: string): RepoConfig[] => {
     if (typeof item.name !== "string" || !item.name.trim()) {
       throw new Error(`repos[${index}].name must be a non-empty string.`);
     }
-    if (typeof item.path !== "string" || !item.path.trim()) {
-      throw new Error(`repos[${index}].path must be a non-empty string.`);
+
+    const provider = typeof item.provider === "string" ? item.provider : item.path !== undefined ? "local" : undefined;
+    if (provider !== "local" && provider !== "github") {
+      throw new Error(`repos[${index}].provider must be "local" or "github".`);
     }
 
-    const repoPath = path.resolve(configDir, item.path);
-    if (!existsSync(repoPath) || !statSync(repoPath).isDirectory()) {
-      throw new Error(`repos[${index}].path does not exist or is not a directory: ${repoPath}`);
+    if (provider === "local") {
+      if (typeof item.path !== "string" || !item.path.trim()) {
+        throw new Error(`repos[${index}].path must be a non-empty string.`);
+      }
+
+      const repoPath = path.resolve(configDir, item.path);
+      if (!existsSync(repoPath) || !statSync(repoPath).isDirectory()) {
+        throw new Error(`repos[${index}].path does not exist or is not a directory: ${repoPath}`);
+      }
+
+      return { name: item.name, path: repoPath, provider: "local" };
     }
 
-    return { name: item.name, path: repoPath };
+    if (typeof item.owner !== "string" || !item.owner.trim()) {
+      throw new Error(`repos[${index}].owner must be a non-empty string for github repos.`);
+    }
+    if (typeof item.repo !== "string" || !item.repo.trim()) {
+      throw new Error(`repos[${index}].repo must be a non-empty string for github repos.`);
+    }
+    if (item.default_branch !== undefined && (typeof item.default_branch !== "string" || !item.default_branch.trim())) {
+      throw new Error(`repos[${index}].default_branch must be a non-empty string when provided.`);
+    }
+
+    return {
+      defaultBranch: item.default_branch ? item.default_branch : "main",
+      name: item.name,
+      owner: item.owner,
+      provider: "github",
+      repo: item.repo,
+    };
   });
 };
 

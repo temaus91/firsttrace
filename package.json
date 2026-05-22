@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@octokit/auth-app": "^8.2.0",
     "@supabase/supabase-js": "^2.106.1",
     "dotenv": "^17.4.2",
     "openai": "^6.39.0",

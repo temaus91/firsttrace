@@ -19,14 +19,15 @@ help. FirstTrace automates that first pass and replies with cited evidence.
 
 ## What It Does
 
-The current local version is read-only:
+The current version is read-only:
 
 1. An engineer runs `firsttrace investigate` with a bug report and config file.
-2. FirstTrace searches configured local repositories, docs, issue exports, and
-   recent git commits.
-3. It classifies the report, ranks likely evidence, maps owners, and prints a
+2. FirstTrace prepares configured repositories, including local checkouts or
+   read-only GitHub App materialized repositories.
+3. FirstTrace searches files, docs, issue exports, and recent git commits.
+4. It classifies the report, ranks likely evidence, maps owners, and prints a
    concise investigation starting point with citations.
-4. The same investigation path can run through local evals or the local worker
+5. The same investigation path can run through local evals or the local worker
    queue under `.firsttrace/jobs`.
 
 The later channel-agent version is chat-triggered:
@@ -102,8 +103,9 @@ triage channel.
 ## Local CLI
 
 The current CLI supports deterministic investigation, optional AI reasoning,
-evals, a local worker runtime, a local `submit` message adapter, and hosted
-queue selection for Supabase-backed jobs.
+evals, a local worker runtime, a local `submit` message adapter, hosted queue
+selection for Supabase-backed jobs, and GitHub App-backed repository
+materialization.
 The CLI always gathers deterministic evidence first. OpenAI is only called when
 `--ai` is passed, and it reasons over that bounded evidence bundle rather than
 crawling the repository.
@@ -166,6 +168,41 @@ npm run firsttrace -- worker status --queue supabase --job <job-id>
 Supabase requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. The hosted
 receiver defaults to the Supabase queue and exposes `POST /api/investigations`
 plus `GET /api/jobs?id=<job-id>`.
+
+GitHub App-backed repo config:
+
+```yaml
+repos:
+  - name: example-app
+    provider: github
+    owner: exampleco
+    repo: web-app
+    default_branch: main
+docs:
+  - README.md
+  - docs
+issue_exports: []
+owners:
+  - path: app/**
+    owner: "@frontend-platform"
+search:
+  max_files: 10
+  max_commits: 8
+  max_evidence_per_file: 3
+```
+
+GitHub repos require a read-only GitHub App installation with these environment
+variables:
+
+```bash
+GITHUB_APP_ID=
+GITHUB_APP_INSTALLATION_ID=
+GITHUB_APP_PRIVATE_KEY=
+```
+
+FirstTrace creates a short-lived installation token at runtime, clones or
+fetches with a one-command HTTP auth header, and stores the working cache under
+ignored `.firsttrace/github/`.
 
 ## MVP Scope
 
@@ -250,9 +287,9 @@ from git history and ownership metadata, chat integration will not save it.
 
 ## Status
 
-Phase 6 local CLI, eval runner, worker runtime, local submit adapter,
-Supabase-backed queue, and Vercel-compatible receiver/status handlers are
-implemented. The
+Phase 7 local CLI, eval runner, worker runtime, local submit adapter,
+Supabase-backed queue, Vercel-compatible receiver/status handlers, and GitHub
+App-backed repository materialization are implemented. The
 deterministic command is:
 
 ```bash
@@ -293,8 +330,8 @@ npm run firsttrace -- worker status --queue filesystem --job <job-id>
 
 Next planned work:
 
-1. Add GitHub App provider for private/public repos.
-2. Wire Slack as the first chat provider.
+1. Wire Slack as the first chat provider.
+2. Verify the hosted end-to-end flow from configured channel to cited reply.
 
 ## License
 

@@ -1,7 +1,7 @@
 import { classifyReport } from "./classify.js";
 import { extractTerms } from "./terms.js";
 import { searchCommits, searchDocs, searchFiles, searchIssueExports, sortEvidenceItems } from "./search.js";
-import type { EvidenceItem, FirstTraceConfig, InvestigationResult } from "./types.js";
+import type { EvidenceItem, InvestigationResult, PreparedFirstTraceConfig } from "./types.js";
 
 const likelyComponentFrom = (items: EvidenceItem[]) => {
   const topPath = items.find((item) => item.path)?.path;
@@ -46,7 +46,7 @@ const nextStepsFor = (
   return steps;
 };
 
-export const investigate = (report: string, config: FirstTraceConfig): InvestigationResult => {
+export const investigate = (report: string, config: PreparedFirstTraceConfig): InvestigationResult => {
   const searchTerms = extractTerms(report);
   const warnings: string[] = [];
 

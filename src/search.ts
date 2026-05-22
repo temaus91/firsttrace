@@ -3,7 +3,7 @@ import path from "node:path";
 import { countTermHits } from "./terms.js";
 import { resolveOwners, toPosixPath } from "./owners.js";
 import { runCommand } from "./shell.js";
-import type { EvidenceItem, FirstTraceConfig, RepoConfig } from "./types.js";
+import type { EvidenceItem, PreparedFirstTraceConfig, SearchableRepoConfig } from "./types.js";
 
 const EXCLUDE_GLOBS = [
   "!**/.git/**",
@@ -109,10 +109,10 @@ const listFiles = (repoPath: string) =>
     .filter(isSearchableFile);
 
 const itemFromPath = (
-  repo: RepoConfig,
+  repo: SearchableRepoConfig,
   filePath: string,
   score: number,
-  config: FirstTraceConfig,
+  config: PreparedFirstTraceConfig,
 ): EvidenceItem => {
   const owners = resolveOwners(filePath, config.owners);
   return {
@@ -127,7 +127,11 @@ const itemFromPath = (
   };
 };
 
-export const searchFiles = (repo: RepoConfig, terms: string[], config: FirstTraceConfig) => {
+export const searchFiles = (
+  repo: SearchableRepoConfig,
+  terms: string[],
+  config: PreparedFirstTraceConfig,
+) => {
   const byPath = new Map<string, EvidenceItem>();
 
   for (const filePath of listFiles(repo.path)) {
@@ -160,9 +164,9 @@ const existingTargets = (repoPath: string, targets: string[]) =>
   targets.filter((target) => existsSync(path.resolve(repoPath, target)));
 
 const searchConfiguredText = (
-  repo: RepoConfig,
+  repo: SearchableRepoConfig,
   terms: string[],
-  config: FirstTraceConfig,
+  config: PreparedFirstTraceConfig,
   targets: string[],
   type: "doc" | "issue",
 ) => {
@@ -199,13 +203,25 @@ const searchConfiguredText = (
   return sortEvidenceItems([...byPath.values()]).slice(0, config.search.maxFiles);
 };
 
-export const searchDocs = (repo: RepoConfig, terms: string[], config: FirstTraceConfig) =>
+export const searchDocs = (
+  repo: SearchableRepoConfig,
+  terms: string[],
+  config: PreparedFirstTraceConfig,
+) =>
   searchConfiguredText(repo, terms, config, config.docs, "doc");
 
-export const searchIssueExports = (repo: RepoConfig, terms: string[], config: FirstTraceConfig) =>
+export const searchIssueExports = (
+  repo: SearchableRepoConfig,
+  terms: string[],
+  config: PreparedFirstTraceConfig,
+) =>
   searchConfiguredText(repo, terms, config, config.issueExports, "issue");
 
-export const searchCommits = (repo: RepoConfig, terms: string[], config: FirstTraceConfig) => {
+export const searchCommits = (
+  repo: SearchableRepoConfig,
+  terms: string[],
+  config: PreparedFirstTraceConfig,
+) => {
   if (!terms.length) return [];
 
   const result = runCommand(

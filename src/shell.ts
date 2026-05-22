@@ -10,9 +10,10 @@ export const runCommand = (
   cwd: string,
   command: string,
   args: string[],
-  options: { allowExitCodes?: number[]; maxBuffer?: number } = {},
+  options: { allowExitCodes?: number[]; displayArgs?: string[]; maxBuffer?: number } = {},
 ): CommandResult => {
   const allowExitCodes = new Set([0, ...(options.allowExitCodes ?? [])]);
+  const displayArgs = options.displayArgs ?? args;
   const result = spawnSync(command, args, {
     cwd,
     encoding: "utf8",
@@ -20,12 +21,12 @@ export const runCommand = (
   });
 
   if (result.error) {
-    throw new Error(`${command} ${args.join(" ")} failed: ${result.error.message}`);
+    throw new Error(`${command} ${displayArgs.join(" ")} failed: ${result.error.message}`);
   }
 
   const status = result.status ?? 0;
   if (!allowExitCodes.has(status)) {
-    throw new Error(`${command} ${args.join(" ")} failed with exit ${status}: ${result.stderr}`);
+    throw new Error(`${command} ${displayArgs.join(" ")} failed with exit ${status}: ${result.stderr}`);
   }
 
   return {

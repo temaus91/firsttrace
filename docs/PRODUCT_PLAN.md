@@ -427,23 +427,44 @@ Limitations:
 - no Slack, Teams, or webhook provider
 - hosted jobs still require a worker with access to configured local repo paths
 
-### Phase 7: GitHub Provider for Private/Public Repositories
+### Phase 7: GitHub Provider for Private/Public Repositories - Complete
 
-Add a GitHub repository provider so hosted FirstTrace can inspect configured
-GitHub repositories without relying on a local checkout:
+The implemented Phase 7 flow adds a GitHub App-backed repository provider so
+hosted FirstTrace can inspect configured GitHub repositories without relying on
+a pre-existing local checkout:
 
 ```text
 GitHub App -> GitHub Provider -> Evidence Collector
 ```
 
-The provider should:
+Current capability:
 
-- use a GitHub App with read-only repository permissions by default
-- support public and private repositories selected during app installation
-- read repo contents, paths, branches, commits, and ownership metadata
-- keep app id, installation id, and private key in environment secrets
-- keep repository owner/name, branch, docs, and ownership mapping in config
-- avoid hardcoded company, repository, or channel names
+- local `path` repository configs remain valid and default to `provider: local`
+- `provider: github` repository configs support owner, repo, and default branch
+- GitHub App credentials are read from environment secrets
+- escaped private-key newlines are normalized for hosted env stores
+- short-lived installation tokens are created at runtime
+- clone/fetch uses `git -c http.extraHeader="Authorization: Bearer <token>"`
+  so tokens are not stored in remote URLs or git config
+- GitHub repos are cached under ignored `.firsttrace/github/`
+- after materialization, the existing file search, doc search, commit search,
+  owner matching, AI reasoning, eval, worker, and queue flows run unchanged
+
+Required environment variables:
+
+```text
+GITHUB_APP_ID
+GITHUB_APP_INSTALLATION_ID
+GITHUB_APP_PRIVATE_KEY
+```
+
+Limitations:
+
+- no Slack, Teams, or webhook provider
+- no GitHub Issues or pull request evidence provider
+- no ticket creation or repository write access
+- live private-repo testing requires a user-created GitHub App and local ignored
+  config
 
 Local git should remain a first-class provider. GitHub is the first hosted git
 provider, not the only git provider.
@@ -622,11 +643,10 @@ features.
 
 ## Immediate Next Steps
 
-1. Add GitHub App provider for private and public repositories.
-2. Add Slack chat provider and channel configuration.
-3. Verify the hosted end-to-end workflow from configured Slack channel to AI
+1. Add Slack chat provider and channel configuration.
+2. Verify the hosted end-to-end workflow from configured Slack channel to AI
    analysis reply.
-4. Add GitHub, Vercel/Supabase, OCI, and work-item providers only through the
+3. Add GitHub Issues, Vercel/Supabase, OCI, and work-item providers only through the
    generic provider interfaces.
 
 ## Open Questions

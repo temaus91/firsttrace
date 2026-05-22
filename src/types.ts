@@ -205,9 +205,30 @@ export type MessageDeliveryAdapter = {
   submit(input: MessageSubmitInput): MessageSubmitResult | Promise<MessageSubmitResult>;
 };
 
-export type RepoConfig = {
+export type LocalRepoConfig = {
   name: string;
   path: string;
+  provider?: "local";
+};
+
+export type GitHubRepoConfig = {
+  defaultBranch: string;
+  name: string;
+  owner: string;
+  provider: "github";
+  repo: string;
+};
+
+export type RepoConfig = LocalRepoConfig | GitHubRepoConfig;
+
+export type SearchableRepoConfig = {
+  defaultBranch?: string;
+  name: string;
+  owner?: string;
+  path: string;
+  provider: "local";
+  remoteRepo?: string;
+  sourceProvider: "local" | "github";
 };
 
 export type OwnerRule = {
@@ -228,4 +249,8 @@ export type FirstTraceConfig = {
   owners: OwnerRule[];
   repos: RepoConfig[];
   search: SearchConfig;
+};
+
+export type PreparedFirstTraceConfig = Omit<FirstTraceConfig, "repos"> & {
+  repos: SearchableRepoConfig[];
 };
