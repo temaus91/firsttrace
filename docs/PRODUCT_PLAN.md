@@ -414,7 +414,9 @@ Current capability:
 - provider-neutral Vercel-compatible endpoints:
   - `POST /api/investigations`
   - `GET /api/jobs?id=<job-id>`
-- optional bearer auth through `FIRSTTRACE_RECEIVER_TOKEN`
+- required bearer auth through `FIRSTTRACE_RECEIVER_TOKEN`, unless
+  `FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=true` is explicitly set for local
+  development
 - worker reuse of the same investigation engine as the local CLI
 
 Vercel and Supabase should be adapters, not assumptions in the core
@@ -483,6 +485,8 @@ Current capability:
 - verify incoming requests
 - handle Slack URL verification challenges
 - acknowledge events quickly after enqueueing or ignoring them
+- dedupe Slack retries by team, trigger, channel, source message timestamp, and
+  reaction name when applicable
 - restrict automatic handling to configured Slack channel ids
 - support configured triggers for top-level messages, app mentions, and emoji
   reactions

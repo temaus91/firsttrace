@@ -76,8 +76,8 @@ describe("HTTP receiver", () => {
         aiEnabled: true,
         report: "README deployment plan is unclear",
         source: { provider: "test-http", userId: "U0123456789" },
-      }),
-      { configPath: "firsttrace.config.yaml", queue },
+      }, "expected"),
+      { configPath: "firsttrace.config.yaml", queue, receiverToken: "expected" },
     );
     const body = await json(response);
 
@@ -90,14 +90,59 @@ describe("HTTP receiver", () => {
     });
   });
 
+  it("fails closed when receiver token is not configured", async () => {
+    const response = await handleInvestigationRequest(post({ report: "bug" }), {
+      configPath: "firsttrace.config.yaml",
+      queue: () => {
+        throw new Error("queue should not be created");
+      },
+    });
+
+    expect(response.status).toBe(500);
+    expect((await json(response)).error).toBe(
+      "FIRSTTRACE_RECEIVER_TOKEN is required unless FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=true.",
+    );
+  });
+
+  it("fails closed for job status when receiver token is not configured", async () => {
+    const response = await handleJobStatusRequest(
+      new Request("https://firsttrace.example.com/api/jobs?id=job-1", { method: "GET" }),
+      {
+        configPath: "firsttrace.config.yaml",
+        queue: () => {
+          throw new Error("queue should not be created");
+        },
+      },
+    );
+
+    expect(response.status).toBe(500);
+    expect((await json(response)).error).toBe(
+      "FIRSTTRACE_RECEIVER_TOKEN is required unless FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=true.",
+    );
+  });
+
+  it("allows unauthenticated requests only with the explicit dev escape hatch", async () => {
+    const queue = new FakeQueue();
+    const response = await handleInvestigationRequest(post({ report: "local dev bug" }), {
+      allowUnauthenticated: true,
+      configPath: "firsttrace.config.yaml",
+      queue,
+    });
+
+    expect(response.status).toBe(202);
+    expect(await queue.get("job-1")).toMatchObject({ report: "local dev bug" });
+  });
+
   it("rejects missing report and invalid JSON", async () => {
     const queue = new FakeQueue();
 
     const missingReport = await handleInvestigationRequest(post({ report: "" }), {
+      allowUnauthenticated: true,
       configPath: "firsttrace.config.yaml",
       queue,
     });
     const invalidJson = await handleInvestigationRequest(post("{bad"), {
+      allowUnauthenticated: true,
       configPath: "firsttrace.config.yaml",
       queue,
     });
@@ -121,6 +166,17 @@ describe("HTTP receiver", () => {
     expect((await json(response)).error).toBe("Unauthorized.");
   });
 
+  it("trims configured bearer tokens before comparing authorization", async () => {
+    const queue = new FakeQueue();
+    const response = await handleInvestigationRequest(post({ report: "bug" }, "expected"), {
+      configPath: "firsttrace.config.yaml",
+      queue,
+      receiverToken: " expected ",
+    });
+
+    expect(response.status).toBe(202);
+  });
+
   it("returns job status", async () => {
     const queue = new FakeQueue();
     const job = await queue.enqueue({
@@ -130,8 +186,11 @@ describe("HTTP receiver", () => {
     });
 
     const response = await handleJobStatusRequest(
-      new Request(`https://firsttrace.example.com/api/jobs?id=${job.id}`, { method: "GET" }),
-      { configPath: "firsttrace.config.yaml", queue },
+      new Request(`https://firsttrace.example.com/api/jobs?id=${job.id}`, {
+        headers: { authorization: "Bearer expected" },
+        method: "GET",
+      }),
+      { configPath: "firsttrace.config.yaml", queue, receiverToken: "expected" },
     );
     const body = await json(response);
 

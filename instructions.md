@@ -159,6 +159,7 @@ variables for the selected providers:
 FIRSTTRACE_CONFIG_PATH=
 FIRSTTRACE_QUEUE_PROVIDER=supabase
 FIRSTTRACE_RECEIVER_TOKEN=
+FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false
 FIRSTTRACE_AI_PROVIDER=openai
 OPENAI_API_KEY=
 OPENAI_MODEL_CHAT=
@@ -171,10 +172,14 @@ SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
 
+The generic hosted HTTP receiver fails closed unless `FIRSTTRACE_RECEIVER_TOKEN`
+is configured. Set `FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=true` only for
+local development when bearer auth is intentionally disabled.
+
 The receiver should validate incoming Slack events, check whether the channel is
-configured, create a Supabase-backed job, and return quickly. The worker should
-process the job asynchronously and post the result back through the chat
-provider.
+configured, dedupe Slack retries before creating duplicate jobs, create a
+Supabase-backed job, and return quickly. The worker should process the job
+asynchronously and post the result back through the chat provider.
 
 Before the full Slack app is wired, test the generic hosted receiver directly:
 

@@ -1,6 +1,7 @@
 import type { Awaitable, InvestigationJobSource, JobQueue } from "../types.js";
 
 type ReceiverOptions = {
+  allowUnauthenticated?: boolean;
   configPath: string;
   queue: JobQueue | (() => Awaitable<JobQueue>);
   receiverToken?: string;
@@ -31,9 +32,21 @@ const sourceFrom = (value: unknown): InvestigationJobSource | undefined => {
   return source;
 };
 
-const assertAuthorized = (request: Request, receiverToken?: string) => {
-  if (!receiverToken) return;
-  if (request.headers.get("authorization") !== `Bearer ${receiverToken}`) {
+const assertAuthorized = (request: Request, { allowUnauthenticated, receiverToken }: ReceiverOptions) => {
+  const token = receiverToken?.trim();
+  if (!token) {
+    if (allowUnauthenticated) return;
+    throw new Response(
+      JSON.stringify({
+        error: "FIRSTTRACE_RECEIVER_TOKEN is required unless FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=true.",
+      }),
+      {
+        headers: { "content-type": "application/json; charset=utf-8" },
+        status: 500,
+      },
+    );
+  }
+  if (request.headers.get("authorization") !== `Bearer ${token}`) {
     throw new Response(JSON.stringify({ error: "Unauthorized." }), {
       headers: { "content-type": "application/json; charset=utf-8" },
       status: 401,
@@ -57,7 +70,7 @@ export const handleInvestigationRequest = async (request: Request, options: Rece
   }
 
   try {
-    assertAuthorized(request, options.receiverToken);
+    assertAuthorized(request, options);
     const body = await parseJsonBody(request);
     if (!isObject(body)) throw new Error("Request body must be a JSON object.");
     if (typeof body.report !== "string" || !body.report.trim()) {
@@ -91,7 +104,7 @@ export const handleJobStatusRequest = async (request: Request, options: Receiver
   }
 
   try {
-    assertAuthorized(request, options.receiverToken);
+    assertAuthorized(request, options);
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return jsonResponse(400, { error: "Missing required id query parameter." });
 

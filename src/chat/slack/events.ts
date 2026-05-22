@@ -43,6 +43,7 @@ type NormalizedSlackInvestigation = {
   channel: SlackChannelConfig;
   channelId: string;
   messageId: string;
+  reaction?: string;
   report: string;
   threadId?: string;
   trigger: "app_mention" | "message" | "reaction";
@@ -91,6 +92,18 @@ const topLevelMessage = (event: SlackEvent) => Boolean(event.ts && (!event.threa
 
 const configuredChannel = (config: FirstTraceConfig, channelId: string) =>
   config.chat?.provider === "slack" ? config.chat.channels.find((channel) => channel.id === channelId) : undefined;
+
+const dedupePart = (value: string | undefined) => (value?.trim() ? value.trim().replaceAll(":", "_") : "unknown");
+
+const slackDedupeKey = (payload: SlackEventCallbackPayload, normalized: NormalizedSlackInvestigation) =>
+  [
+    "slack",
+    dedupePart(payload.team_id),
+    dedupePart(normalized.trigger),
+    dedupePart(normalized.channelId),
+    dedupePart(normalized.messageId),
+    ...(normalized.trigger === "reaction" ? [dedupePart(normalized.reaction)] : []),
+  ].join(":");
 
 const normalizeSlackEvent = async (
   event: SlackEvent,
@@ -158,6 +171,7 @@ const normalizeSlackEvent = async (
       channel,
       channelId,
       messageId,
+      reaction: event.reaction,
       report,
       threadId: channel.response === "thread" ? messageId : undefined,
       trigger: "reaction",
@@ -214,8 +228,9 @@ export const handleSlackEventsRequest = async (
     }
 
     const config = await resolveConfig(options.config);
+    const eventPayload = payload as SlackEventCallbackPayload;
     const normalized = await normalizeSlackEvent(
-      (payload as SlackEventCallbackPayload).event ?? {},
+      eventPayload.event ?? {},
       config,
       options.slackClient,
     );
@@ -225,6 +240,7 @@ export const handleSlackEventsRequest = async (
     const job = await queue.enqueue({
       aiEnabled: normalized.channel.aiEnabled,
       configPath: config.configPath,
+      dedupeKey: slackDedupeKey(eventPayload, normalized),
       report: normalized.report,
       source: {
         channelId: normalized.channelId,

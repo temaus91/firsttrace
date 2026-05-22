@@ -70,12 +70,18 @@ export class FileSystemJobQueue implements JobQueue {
   }
 
   async enqueue(input: EnqueueInvestigationJobInput): Promise<InvestigationJob> {
+    if (input.dedupeKey) {
+      const existing = (await this.list()).find((item) => item.dedupeKey === input.dedupeKey);
+      if (existing) return existing;
+    }
+
     const timestamp = now();
     const job: InvestigationJob = {
       aiEnabled: input.aiEnabled,
       attempts: 0,
       configPath: path.resolve(input.configPath),
       createdAt: timestamp,
+      dedupeKey: input.dedupeKey,
       id: randomUUID(),
       maxAttempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
       report: input.report,

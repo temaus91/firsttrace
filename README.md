@@ -172,7 +172,10 @@ npm run firsttrace -- worker status --queue supabase --job <job-id>
 
 Supabase requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. The hosted
 receiver defaults to the Supabase queue and exposes `POST /api/investigations`
-plus `GET /api/jobs?id=<job-id>`.
+plus `GET /api/jobs?id=<job-id>`. Those generic HTTP endpoints require
+`FIRSTTRACE_RECEIVER_TOKEN` by default. Set
+`FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=true` only for local development
+when you intentionally want to test them without bearer auth.
 
 GitHub App-backed repo config:
 
@@ -239,6 +242,10 @@ Slack requires these environment variables:
 SLACK_BOT_TOKEN=
 SLACK_SIGNING_SECRET=
 ```
+
+Slack Events requests are deduped by team, trigger, channel, source message
+timestamp, and reaction name when applicable, so Slack retries return the
+existing queued job instead of creating duplicate investigations.
 
 Hosted readiness verification:
 

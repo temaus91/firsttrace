@@ -38,12 +38,18 @@ class FakeQueue implements JobQueue {
   }
 
   async enqueue(input: EnqueueInvestigationJobInput) {
+    if (input.dedupeKey) {
+      const existing = [...this.jobs.values()].find((job) => job.dedupeKey === input.dedupeKey);
+      if (existing) return existing;
+    }
+
     const timestamp = "2026-05-22T00:00:00.000Z";
     const job: InvestigationJob = {
       aiEnabled: input.aiEnabled,
       attempts: 0,
       configPath: input.configPath,
       createdAt: timestamp,
+      dedupeKey: input.dedupeKey,
       id: `job-${this.jobs.size + 1}`,
       maxAttempts: input.maxAttempts ?? 1,
       report: input.report,
@@ -202,6 +208,7 @@ describe("Slack event receiver", () => {
           type: "app_mention",
           user: "U0123456789",
         },
+        team_id: "T0123456789",
         type: "event_callback",
       }),
       {
@@ -216,6 +223,7 @@ describe("Slack event receiver", () => {
     expect(response.status).toBe(200);
     expect(jobs[0]).toMatchObject({
       aiEnabled: true,
+      dedupeKey: "slack:T0123456789:app_mention:C0123456789:1710000000.000100",
       report: "README deployment plan is unclear",
       source: {
         channelId: "C0123456789",
@@ -226,6 +234,112 @@ describe("Slack event receiver", () => {
         userId: "U0123456789",
       },
     });
+  });
+
+  it("dedupes repeated Slack app mention, message, and reaction events", async () => {
+    const cases: Array<{
+      expectedDedupeKey: string;
+      payload: unknown;
+      slackClient?: Parameters<typeof handleSlackEventsRequest>[1]["slackClient"];
+    }> = [
+      {
+        expectedDedupeKey: "slack:T0123456789:app_mention:C0123456789:1710000000.000100",
+        payload: {
+          event: {
+            channel: "C0123456789",
+            text: "<@U999999> README deployment plan is unclear",
+            ts: "1710000000.000100",
+            type: "app_mention",
+            user: "U0123456789",
+          },
+          team_id: "T0123456789",
+          type: "event_callback",
+        },
+      },
+      {
+        expectedDedupeKey: "slack:T0123456789:message:C0123456789:1710000000.000200",
+        payload: {
+          event: {
+            channel: "C0123456789",
+            text: "README deployment plan is unclear",
+            ts: "1710000000.000200",
+            type: "message",
+            user: "U0123456789",
+          },
+          team_id: "T0123456789",
+          type: "event_callback",
+        },
+      },
+      {
+        expectedDedupeKey: "slack:T0123456789:reaction:C0123456789:1710000000.000300:bug",
+        payload: {
+          event: {
+            item: { channel: "C0123456789", ts: "1710000000.000300", type: "message" },
+            reaction: "bug",
+            type: "reaction_added",
+            user: "U0123456789",
+          },
+          team_id: "T0123456789",
+          type: "event_callback",
+        },
+        slackClient: {
+          async fetchMessageText() {
+            return "README deployment plan is unclear";
+          },
+          async postMessage() {},
+        },
+      },
+    ];
+
+    for (const item of cases) {
+      const queue = new FakeQueue();
+      const options = {
+        config: loadConfig(tempConfigPath()),
+        nowSeconds,
+        queue,
+        signingSecret,
+        slackClient: item.slackClient,
+      };
+
+      const first = await handleSlackEventsRequest(signedSlackRequest(item.payload), options);
+      const second = await handleSlackEventsRequest(signedSlackRequest(item.payload), options);
+      const firstBody = (await first.json()) as { jobId: string };
+      const secondBody = (await second.json()) as { jobId: string };
+      const jobs = await queue.list();
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      expect(secondBody.jobId).toBe(firstBody.jobId);
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0]?.dedupeKey).toBe(item.expectedDedupeKey);
+    }
+  });
+
+  it("creates separate jobs for different Slack message timestamps", async () => {
+    const queue = new FakeQueue();
+    const options = {
+      config: loadConfig(tempConfigPath()),
+      nowSeconds,
+      queue,
+      signingSecret,
+    };
+
+    const payloadFor = (ts: string) => ({
+      event: {
+        channel: "C0123456789",
+        text: "README deployment plan is unclear",
+        ts,
+        type: "message",
+        user: "U0123456789",
+      },
+      team_id: "T0123456789",
+      type: "event_callback",
+    });
+
+    await handleSlackEventsRequest(signedSlackRequest(payloadFor("1710000000.000100")), options);
+    await handleSlackEventsRequest(signedSlackRequest(payloadFor("1710000000.000200")), options);
+
+    expect(await queue.list()).toHaveLength(2);
   });
 
   it("ignores unconfigured channels and threaded replies for top-level message triggers", async () => {

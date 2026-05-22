@@ -155,6 +155,7 @@ export type InvestigationJob = {
   attempts: number;
   configPath: string;
   createdAt: string;
+  dedupeKey?: string;
   error?: string;
   finishedAt?: string;
   id: string;
@@ -170,6 +171,7 @@ export type InvestigationJob = {
 export type EnqueueInvestigationJobInput = {
   aiEnabled: boolean;
   configPath: string;
+  dedupeKey?: string;
   maxAttempts?: number;
   report: string;
   source?: InvestigationJobSource;

@@ -149,6 +149,26 @@ describe("worker queue", () => {
     expect(failed.error).toBe("provider unavailable");
   });
 
+  it("returns an existing filesystem job when enqueue receives the same dedupe key", async () => {
+    const queue = new FileSystemJobQueue(tempQueuePath("dedupe"));
+    const first = await queue.enqueue({
+      aiEnabled: false,
+      configPath: "firsttrace.config.yaml",
+      dedupeKey: "slack:T0123456789:message:C0123456789:1710000000.000100",
+      report: "README deployment plan is unclear",
+    });
+    const second = await queue.enqueue({
+      aiEnabled: true,
+      configPath: "firsttrace.config.yaml",
+      dedupeKey: "slack:T0123456789:message:C0123456789:1710000000.000100",
+      report: "different retry body should not create a second job",
+    });
+
+    expect(second.id).toBe(first.id);
+    expect(second.aiEnabled).toBe(false);
+    expect(await queue.list()).toHaveLength(1);
+  });
+
   it("processes a deterministic job to succeeded", async () => {
     const queue = new FileSystemJobQueue(tempQueuePath("deterministic"));
     const job = await queue.enqueue({

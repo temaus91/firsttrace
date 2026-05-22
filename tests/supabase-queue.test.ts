@@ -14,6 +14,7 @@ const row = (overrides: Partial<SupabaseJobRow> = {}): SupabaseJobRow => ({
   attempts: 0,
   config_path: "/repo/firsttrace.config.yaml",
   created_at: "2026-05-22T00:00:00.000Z",
+  dedupe_key: null,
   error: null,
   finished_at: null,
   id: "11111111-1111-4111-8111-111111111111",
@@ -43,6 +44,10 @@ class FakeStore implements SupabaseJobStore {
     return this.rows.find((item) => item.id === id);
   }
 
+  async getByDedupeKey(dedupeKey: string) {
+    return this.rows.find((item) => item.dedupe_key === dedupeKey);
+  }
+
   async insert(inserted: SupabaseJobRow) {
     this.rows.push(inserted);
     return inserted;
@@ -66,6 +71,7 @@ describe("SupabaseJobQueue", () => {
     const job = jobFromSupabaseRow(
       row({
         ai_enabled: true,
+        dedupe_key: "slack:T0123456789:message:C0123456789:1710000000.000100",
         error: "failed",
         source: { channelId: "C0123456789", provider: "test-chat" },
         status: "failed",
@@ -74,6 +80,7 @@ describe("SupabaseJobQueue", () => {
 
     expect(job).toMatchObject({
       aiEnabled: true,
+      dedupeKey: "slack:T0123456789:message:C0123456789:1710000000.000100",
       error: "failed",
       source: { channelId: "C0123456789", provider: "test-chat" },
       status: "failed",
@@ -87,12 +94,14 @@ describe("SupabaseJobQueue", () => {
     const enqueued = await queue.enqueue({
       aiEnabled: true,
       configPath: "/repo/firsttrace.config.yaml",
+      dedupeKey: "slack:T0123456789:message:C0123456789:1710000000.000100",
       report: "checkout fails after retry",
       source: { provider: "http" },
     });
 
     expect(enqueued.status).toBe("queued");
     expect(enqueued.aiEnabled).toBe(true);
+    expect(enqueued.dedupeKey).toBe("slack:T0123456789:message:C0123456789:1710000000.000100");
     expect(await queue.get(enqueued.id)).toMatchObject({ id: enqueued.id });
     expect((await queue.list()).map((job) => job.id)).toEqual([enqueued.id]);
 
@@ -124,6 +133,49 @@ describe("SupabaseJobQueue", () => {
     const queue = new SupabaseJobQueue(store);
 
     await expect(queue.claimNext()).resolves.toBeUndefined();
+  });
+
+  it("returns an existing row when enqueue receives the same dedupe key", async () => {
+    const store = new FakeStore([
+      row({
+        dedupe_key: "slack:T0123456789:message:C0123456789:1710000000.000100",
+        id: "22222222-2222-4222-8222-222222222222",
+      }),
+    ]);
+    const queue = new SupabaseJobQueue(store);
+
+    const enqueued = await queue.enqueue({
+      aiEnabled: true,
+      configPath: "/repo/firsttrace.config.yaml",
+      dedupeKey: "slack:T0123456789:message:C0123456789:1710000000.000100",
+      report: "retry",
+    });
+
+    expect(enqueued.id).toBe("22222222-2222-4222-8222-222222222222");
+    expect(store.rows).toHaveLength(1);
+  });
+
+  it("returns the existing row when a duplicate insert races", async () => {
+    const existing = row({
+      dedupe_key: "slack:T0123456789:message:C0123456789:1710000000.000100",
+      id: "33333333-3333-4333-8333-333333333333",
+    });
+    const store = new FakeStore([existing]);
+    store.getByDedupeKey = async () => undefined;
+    store.insert = async () => {
+      store.getByDedupeKey = async () => existing;
+      throw new Error("duplicate key value violates unique constraint");
+    };
+    const queue = new SupabaseJobQueue(store);
+
+    const enqueued = await queue.enqueue({
+      aiEnabled: true,
+      configPath: "/repo/firsttrace.config.yaml",
+      dedupeKey: "slack:T0123456789:message:C0123456789:1710000000.000100",
+      report: "retry",
+    });
+
+    expect(enqueued.id).toBe("33333333-3333-4333-8333-333333333333");
   });
 });
 

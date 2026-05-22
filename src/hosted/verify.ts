@@ -20,8 +20,6 @@ import type {
 import { SlackWebApiClient, type SlackClient, type SlackPostMessageInput } from "../chat/slack/client.js";
 
 const VERIFY_SIGNING_SECRET = "firsttrace-hosted-verify-signing-secret";
-const VERIFY_TIMESTAMP = "1800000000";
-const VERIFY_MESSAGE_TS = "1800000000.000100";
 const VERIFY_USER_ID = "UFIRSTTRACEVERIFY";
 const VERIFY_BOT_ID = "UFIRSTTRACEBOT";
 const FILESYSTEM_VERIFY_QUEUE_ROOT = ".firsttrace/hosted-verify/jobs";
@@ -139,13 +137,13 @@ const configWithSyntheticChannel = (
     : config.chat,
 });
 
-const syntheticSlackPayload = (channel: SlackChannelConfig, trigger: ChatTrigger, report: string) => {
+const syntheticSlackPayload = (channel: SlackChannelConfig, trigger: ChatTrigger, report: string, messageTs: string) => {
   if (trigger === "app_mention") {
     return {
       event: {
         channel: channel.id,
         text: `<@${VERIFY_BOT_ID}> ${report}`,
-        ts: VERIFY_MESSAGE_TS,
+        ts: messageTs,
         type: "app_mention",
         user: VERIFY_USER_ID,
       },
@@ -156,7 +154,7 @@ const syntheticSlackPayload = (channel: SlackChannelConfig, trigger: ChatTrigger
   if (trigger === "reaction") {
     return {
       event: {
-        item: { channel: channel.id, ts: VERIFY_MESSAGE_TS, type: "message" },
+        item: { channel: channel.id, ts: messageTs, type: "message" },
         reaction: "firsttrace",
         type: "reaction_added",
         user: VERIFY_USER_ID,
@@ -169,7 +167,7 @@ const syntheticSlackPayload = (channel: SlackChannelConfig, trigger: ChatTrigger
     event: {
       channel: channel.id,
       text: report,
-      ts: VERIFY_MESSAGE_TS,
+      ts: messageTs,
       type: "message",
       user: VERIFY_USER_ID,
     },
@@ -177,14 +175,14 @@ const syntheticSlackPayload = (channel: SlackChannelConfig, trigger: ChatTrigger
   };
 };
 
-const signedSlackRequest = (payload: unknown) => {
+const signedSlackRequest = (payload: unknown, timestamp: string) => {
   const body = JSON.stringify(payload);
   return new Request("https://firsttrace.local/api/slack/events", {
     body,
     headers: {
       "content-type": "application/json",
-      "x-slack-request-timestamp": VERIFY_TIMESTAMP,
-      "x-slack-signature": createSlackSignature(VERIFY_SIGNING_SECRET, VERIFY_TIMESTAMP, body),
+      "x-slack-request-timestamp": timestamp,
+      "x-slack-signature": createSlackSignature(VERIFY_SIGNING_SECRET, timestamp, body),
     },
     method: "POST",
   });
@@ -222,6 +220,13 @@ const externalReadinessChecks = (
         : check("blocked", "Slack live post mode", "SLACK_BOT_TOKEN is missing.", false)
       : check("skipped", "Slack live post mode", "Using fake Slack notifier; no Slack message will be posted.", false),
   ];
+};
+
+const syntheticTimestamps = () => {
+  const nowMs = Date.now();
+  const requestTimestamp = String(Math.floor(nowMs / 1000));
+  const messageTimestamp = `${requestTimestamp}.${String(nowMs % 1_000_000).padStart(6, "0")}`;
+  return { messageTimestamp, requestTimestamp };
 };
 
 export const createHostedVerifyQueue = (provider: QueueProviderName) => {
@@ -275,13 +280,17 @@ export const runHostedVerify = async ({
   const captureSlackClient = new CaptureSlackClient(report);
   const effectiveConfig = configWithSyntheticChannel(config, channel, aiEnabled);
   const trigger = syntheticTriggerFor(channel);
-  const response = await handleSlackEventsRequest(signedSlackRequest(syntheticSlackPayload(channel, trigger, report)), {
-    config: effectiveConfig,
-    nowSeconds: Number(VERIFY_TIMESTAMP),
-    queue,
-    signingSecret: VERIFY_SIGNING_SECRET,
-    slackClient: captureSlackClient,
-  });
+  const { messageTimestamp, requestTimestamp } = syntheticTimestamps();
+  const response = await handleSlackEventsRequest(
+    signedSlackRequest(syntheticSlackPayload(channel, trigger, report, messageTimestamp), requestTimestamp),
+    {
+      config: effectiveConfig,
+      nowSeconds: Number(requestTimestamp),
+      queue,
+      signingSecret: VERIFY_SIGNING_SECRET,
+      slackClient: captureSlackClient,
+    },
+  );
   const responseBody = (await response.json()) as { error?: string; jobId?: string; ok?: boolean; status?: string };
 
   if (response.status !== 200 || !responseBody.ok || !responseBody.jobId) {

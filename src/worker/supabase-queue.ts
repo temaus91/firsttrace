@@ -29,6 +29,7 @@ export type SupabaseJobRow = {
   attempts: number;
   config_path: string;
   created_at: string;
+  dedupe_key: string | null;
   error: string | null;
   finished_at: string | null;
   id: string;
@@ -44,6 +45,7 @@ export type SupabaseJobRow = {
 export type SupabaseJobStore = {
   claimNext(): Promise<SupabaseJobRow | undefined>;
   get(id: string): Promise<SupabaseJobRow | undefined>;
+  getByDedupeKey(dedupeKey: string): Promise<SupabaseJobRow | undefined>;
   insert(row: SupabaseJobRow): Promise<SupabaseJobRow>;
   list(): Promise<SupabaseJobRow[]>;
   update(id: string, patch: Partial<SupabaseJobRow>): Promise<SupabaseJobRow>;
@@ -71,6 +73,7 @@ export const jobFromSupabaseRow = (row: SupabaseJobRow): InvestigationJob => ({
   attempts: row.attempts,
   configPath: row.config_path,
   createdAt: row.created_at,
+  dedupeKey: row.dedupe_key ?? undefined,
   error: row.error ?? undefined,
   finishedAt: row.finished_at ?? undefined,
   id: row.id,
@@ -99,6 +102,16 @@ export class SupabaseRestJobStore implements SupabaseJobStore {
       SupabaseResponse<SupabaseJobRow>
     >;
     if (error) throw new Error(`Supabase get failed: ${messageFor(error)}`);
+    return data ?? undefined;
+  }
+
+  async getByDedupeKey(dedupeKey: string): Promise<SupabaseJobRow | undefined> {
+    const { data, error } = (await this.client
+      .from(SUPABASE_JOBS_TABLE)
+      .select("*")
+      .eq("dedupe_key", dedupeKey)
+      .maybeSingle()) as Awaited<SupabaseResponse<SupabaseJobRow>>;
+    if (error) throw new Error(`Supabase get by dedupe key failed: ${messageFor(error)}`);
     return data ?? undefined;
   }
 
@@ -148,24 +161,38 @@ export class SupabaseJobQueue implements JobQueue {
   }
 
   async enqueue(input: EnqueueInvestigationJobInput): Promise<InvestigationJob> {
+    if (input.dedupeKey) {
+      const existing = await this.store.getByDedupeKey(input.dedupeKey);
+      if (existing) return jobFromSupabaseRow(existing);
+    }
+
     const timestamp = now();
-    const row = await this.store.insert({
-      ai_enabled: input.aiEnabled,
-      attempts: 0,
-      config_path: path.resolve(input.configPath),
-      created_at: timestamp,
-      error: null,
-      finished_at: null,
-      id: randomUUID(),
-      max_attempts: input.maxAttempts ?? 1,
-      report: input.report,
-      result: null,
-      source: input.source ?? null,
-      started_at: null,
-      status: "queued",
-      updated_at: timestamp,
-    });
-    return jobFromSupabaseRow(row);
+    try {
+      const row = await this.store.insert({
+        ai_enabled: input.aiEnabled,
+        attempts: 0,
+        config_path: path.resolve(input.configPath),
+        created_at: timestamp,
+        dedupe_key: input.dedupeKey ?? null,
+        error: null,
+        finished_at: null,
+        id: randomUUID(),
+        max_attempts: input.maxAttempts ?? 1,
+        report: input.report,
+        result: null,
+        source: input.source ?? null,
+        started_at: null,
+        status: "queued",
+        updated_at: timestamp,
+      });
+      return jobFromSupabaseRow(row);
+    } catch (error) {
+      if (input.dedupeKey) {
+        const existing = await this.store.getByDedupeKey(input.dedupeKey);
+        if (existing) return jobFromSupabaseRow(existing);
+      }
+      throw error;
+    }
   }
 
   async fail(id: string, error: string): Promise<InvestigationJob> {
