@@ -112,8 +112,10 @@ configured. The hosted verification runner can exercise that receiver -> queue
 -> worker -> notifier path locally before real Slack, GitHub, and Supabase
 credentials are ready.
 The CLI always gathers deterministic evidence first. OpenAI is only called when
-`--ai` is passed, and it reasons over that bounded evidence bundle rather than
-crawling the repository.
+`--ai` is passed. By default, `--ai` runs the read-only FirstTrace investigation
+agent with `OPENAI_MODEL_CHAT=gpt-5.4-mini`; set `FIRSTTRACE_INVESTIGATOR=evidence`
+to use the older one-shot evidence-bundle reasoner. `FIRSTTRACE_INVESTIGATOR=codex-cli`
+is reserved for a later adapter and is not implemented yet.
 
 ```bash
 npm install
@@ -312,7 +314,7 @@ FirstTrace v0 should stay small:
 - optional GitHub provider for public or private GitHub repos
 - issue/work-item provider support for GitHub Issues, Jira, OCI, or fixtures
 - ownership lookup via `CODEOWNERS` or `firsttrace.owners.yaml`
-- AI provider support, with OpenAI first
+- investigator provider support, with OpenAI-backed `agent` mode first
 - thread reply with citations
 - eval runner for historical bugs
 
@@ -320,7 +322,7 @@ FirstTrace v0 should stay small:
 
 FirstTrace is not:
 
-- an autonomous coding agent
+- an autonomous code-writing or code-fixing agent
 - a ticket-writing system
 - a replacement for engineers
 - a generic workplace search tool

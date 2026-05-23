@@ -1,27 +1,27 @@
 import { executeInvestigation } from "../investigation-runner.js";
 import type { RepoPreparationOptions } from "../repositories/prepare.js";
-import type { AiProvider, EvalCase, EvalCaseResult, EvalRunResult, FirstTraceConfig } from "../types.js";
+import type { EvalCase, EvalCaseResult, EvalRunResult, FirstTraceConfig, InvestigatorProvider } from "../types.js";
 import { scoreEvalResult } from "./scoring.js";
 
 export type RunEvalOptions = {
-  aiProvider?: AiProvider;
   cases: EvalCase[];
   config: FirstTraceConfig;
+  investigatorProvider?: InvestigatorProvider;
   repoPreparation?: RepoPreparationOptions;
 };
 
 export const runEval = async ({
-  aiProvider,
   cases,
   config,
+  investigatorProvider,
   repoPreparation,
 }: RunEvalOptions): Promise<EvalRunResult> => {
   const caseResults: EvalCaseResult[] = [];
 
   for (const evalCase of cases) {
     const deterministicResult = await executeInvestigation({
-      aiProvider,
       config,
+      investigatorProvider,
       report: evalCase.report,
       repoPreparation,
     });
@@ -39,14 +39,14 @@ export const runEval = async ({
   }
 
   const passed = caseResults.every((result) =>
-    aiProvider ? result.deterministicScore.passed && result.aiScore?.passed : result.deterministicScore.passed,
+    investigatorProvider ? result.deterministicScore.passed && result.aiScore?.passed : result.deterministicScore.passed,
   );
   const passedCount = caseResults.filter((result) =>
-    aiProvider ? result.deterministicScore.passed && result.aiScore?.passed : result.deterministicScore.passed,
+    investigatorProvider ? result.deterministicScore.passed && result.aiScore?.passed : result.deterministicScore.passed,
   ).length;
 
   return {
-    aiEnabled: Boolean(aiProvider),
+    aiEnabled: Boolean(investigatorProvider),
     caseResults,
     passed,
     summary: {

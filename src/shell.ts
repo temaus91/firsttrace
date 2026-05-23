@@ -10,7 +10,7 @@ export const runCommand = (
   cwd: string,
   command: string,
   args: string[],
-  options: { allowExitCodes?: number[]; displayArgs?: string[]; maxBuffer?: number } = {},
+  options: { allowExitCodes?: number[]; displayArgs?: string[]; maxBuffer?: number; timeoutMs?: number } = {},
 ): CommandResult => {
   const allowExitCodes = new Set([0, ...(options.allowExitCodes ?? [])]);
   const displayArgs = options.displayArgs ?? args;
@@ -18,6 +18,7 @@ export const runCommand = (
     cwd,
     encoding: "utf8",
     maxBuffer: options.maxBuffer ?? 20 * 1024 * 1024,
+    timeout: options.timeoutMs,
   });
 
   if (result.error) {

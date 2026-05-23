@@ -1,31 +1,30 @@
-import { buildAiReasonerRequest } from "./ai/evidence.js";
 import { investigate } from "./investigate.js";
 import { prepareConfigForInvestigation, type RepoPreparationOptions } from "./repositories/prepare.js";
-import type { AiProvider, FirstTraceConfig, InvestigationResult } from "./types.js";
+import type { FirstTraceConfig, InvestigationResult, InvestigatorProvider } from "./types.js";
 
 export type ExecuteInvestigationOptions = {
   aiFailureMode?: "throw" | "warn";
-  aiProvider?: AiProvider;
   config: FirstTraceConfig;
+  investigatorProvider?: InvestigatorProvider;
   report: string;
   repoPreparation?: RepoPreparationOptions;
 };
 
 export const executeInvestigation = async ({
   aiFailureMode = "warn",
-  aiProvider,
   config,
+  investigatorProvider,
   report,
   repoPreparation,
 }: ExecuteInvestigationOptions): Promise<InvestigationResult> => {
   const preparedConfig = await prepareConfigForInvestigation(config, repoPreparation);
   const result = await investigate(report, preparedConfig);
 
-  if (aiProvider) {
+  if (investigatorProvider) {
     try {
-      result.ai = await aiProvider.reason(buildAiReasonerRequest(result));
+      result.ai = await investigatorProvider.investigate({ preparedConfig, result });
     } catch (error) {
-      const message = `AI reasoning failed with provider ${aiProvider.name}: ${(error as Error).message}`;
+      const message = `Investigation failed with provider ${investigatorProvider.name}: ${(error as Error).message}`;
       if (aiFailureMode === "throw") throw new Error(message);
       result.warnings.push(message);
     }

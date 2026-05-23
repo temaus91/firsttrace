@@ -1,4 +1,4 @@
-import { createAiProviderFromEnv } from "../ai/provider-factory.js";
+import { createInvestigatorProviderFromEnv } from "../investigator/provider-factory.js";
 import { handleSlackEventsRequest } from "../chat/slack/events.js";
 import { SlackJobResultNotifier } from "../chat/slack/notifier.js";
 import { createSlackSignature } from "../chat/slack/signature.js";
@@ -6,7 +6,6 @@ import { createJobQueue, type QueueProviderName } from "../worker/queue-factory.
 import { FileSystemJobQueue } from "../worker/fs-queue.js";
 import { runWorkerOnce } from "../worker/runner.js";
 import type {
-  AiProvider,
   ChatTrigger,
   FirstTraceConfig,
   HostedVerifyCheck,
@@ -15,6 +14,7 @@ import type {
   InvestigationJob,
   InvestigationResult,
   JobQueue,
+  InvestigatorProvider,
   SlackChannelConfig,
 } from "../types.js";
 import { SlackWebApiClient, type SlackClient, type SlackPostMessageInput } from "../chat/slack/client.js";
@@ -28,7 +28,7 @@ type EnvRecord = Record<string, string | undefined>;
 
 export type HostedVerifyOptions = {
   aiEnabled: boolean;
-  aiProviderFactory?: () => AiProvider;
+  investigatorProviderFactory?: () => InvestigatorProvider;
   channelId?: string;
   config: FirstTraceConfig;
   env?: EnvRecord;
@@ -246,7 +246,7 @@ export const createHostedVerifyQueue = (provider: QueueProviderName) => {
 
 export const runHostedVerify = async ({
   aiEnabled,
-  aiProviderFactory = createAiProviderFromEnv,
+  investigatorProviderFactory = createInvestigatorProviderFromEnv,
   channelId,
   config,
   env = process.env,
@@ -323,7 +323,7 @@ export const runHostedVerify = async ({
     liveSlackPost ? new SlackWebApiClient(env.SLACK_BOT_TOKEN as string) : captureSlackClient,
   );
   const workerResult = await runWorkerOnce({
-    aiProviderFactory,
+    investigatorProviderFactory,
     queue,
     resultNotifier: notifier,
   });

@@ -185,7 +185,7 @@ describe("eval support", () => {
           case: evalCase(),
           deterministicResult: {
             ...investigationResult(),
-            warnings: ["AI reasoning failed with provider test: unavailable"],
+            warnings: ["Investigation failed with provider test: unavailable"],
           },
           deterministicScore: scoreEvalResult(evalCase(), investigationResult()),
         },
@@ -197,6 +197,6 @@ describe("eval support", () => {
     expect(rendered).toContain("renderer-crash: FAIL");
     expect(rendered).toContain("AI-Assisted: FAIL");
     expect(rendered).toContain("AI result unavailable.");
-    expect(rendered).toContain("AI reasoning failed with provider test: unavailable");
+    expect(rendered).toContain("Investigation failed with provider test: unavailable");
   });
 });

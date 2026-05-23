@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildAiReasonerRequest } from "../src/ai/evidence.js";
 import { groundAiResult } from "../src/ai/grounding.js";
-import { createAiProviderFromEnv } from "../src/ai/provider-factory.js";
+import { createAiProviderFromEnv, DEFAULT_OPENAI_MODEL } from "../src/ai/provider-factory.js";
+import { createInvestigatorProviderFromEnv } from "../src/investigator/provider-factory.js";
 import type { InvestigationResult } from "../src/types.js";
 
 const investigationResult = (): InvestigationResult => ({
@@ -62,6 +63,70 @@ describe("AI provider support", () => {
     expect(() => createAiProviderFromEnv({ FIRSTTRACE_AI_PROVIDER: "openai" })).toThrow(
       "OPENAI_API_KEY is required",
     );
+  });
+
+  it("uses gpt-5.4-mini as the default shared OpenAI model", () => {
+    expect(DEFAULT_OPENAI_MODEL).toBe("gpt-5.4-mini");
+    expect(createAiProviderFromEnv({ FIRSTTRACE_AI_PROVIDER: "openai", OPENAI_API_KEY: "test-key" }).model).toBe(
+      "gpt-5.4-mini",
+    );
+  });
+
+  it("defaults --ai to the read-only investigation agent", () => {
+    const provider = createInvestigatorProviderFromEnv({ OPENAI_API_KEY: "test-key" });
+    expect(provider.name).toBe("agent");
+    expect(provider.model).toBe("gpt-5.4-mini");
+  });
+
+  it("uses the provided env instead of ambient process investigator mode", () => {
+    const previous = process.env.FIRSTTRACE_INVESTIGATOR;
+    process.env.FIRSTTRACE_INVESTIGATOR = "codex-cli";
+    try {
+      const provider = createInvestigatorProviderFromEnv({ OPENAI_API_KEY: "test-key" });
+      expect(provider.name).toBe("agent");
+    } finally {
+      if (previous === undefined) {
+        delete process.env.FIRSTTRACE_INVESTIGATOR;
+      } else {
+        process.env.FIRSTTRACE_INVESTIGATOR = previous;
+      }
+    }
+  });
+
+  it("honors OPENAI_MODEL_CHAT for agent and evidence modes", () => {
+    const agent = createInvestigatorProviderFromEnv({
+      FIRSTTRACE_INVESTIGATOR: "agent",
+      OPENAI_API_KEY: "test-key",
+      OPENAI_MODEL_CHAT: "custom-model",
+    });
+    const evidence = createInvestigatorProviderFromEnv({
+      FIRSTTRACE_INVESTIGATOR: "evidence",
+      OPENAI_API_KEY: "test-key",
+      OPENAI_MODEL_CHAT: "custom-model",
+    });
+
+    expect(agent.model).toBe("custom-model");
+    expect(evidence.model).toBe("custom-model");
+  });
+
+  it("recognizes codex-cli as a future investigator adapter", async () => {
+    const provider = createInvestigatorProviderFromEnv({
+      FIRSTTRACE_INVESTIGATOR: "codex-cli",
+      OPENAI_MODEL_CHAT: "custom-model",
+    });
+
+    expect(provider.name).toBe("codex-cli");
+    expect(provider.model).toBe("custom-model");
+    await expect(provider.investigate({} as never)).rejects.toThrow("codex-cli investigator is not implemented yet");
+  });
+
+  it("rejects unknown investigator modes", () => {
+    expect(() =>
+      createInvestigatorProviderFromEnv({
+        FIRSTTRACE_INVESTIGATOR: "unknown",
+        OPENAI_API_KEY: "test-key",
+      }),
+    ).toThrow("Unsupported investigator provider");
   });
 
   it("keeps the AI provider selection explicit", () => {

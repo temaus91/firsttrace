@@ -34,12 +34,24 @@ const relatedCommitSignals = (items: EvidenceItem[], limit: number) =>
     })
     .join("\n");
 
-const implementerHints = (items: AiImplementerHint[], limit: number) =>
+const commitDateFor = (result: InvestigationResult, commit: string | null) => {
+  if (!commit) return undefined;
+  const match = result.relatedCommits.find((item) =>
+    item.citations.some(
+      (citation) => citation.commit && (commit.startsWith(citation.commit) || citation.commit.startsWith(commit)),
+    ),
+  );
+  return typeof match?.metadata?.date === "string" ? match.metadata.date : undefined;
+};
+
+const implementerHints = (result: InvestigationResult, items: AiImplementerHint[], limit: number) =>
   items
     .slice(0, limit)
     .map((item, index) => {
       const name = item.name ?? item.email ?? item.commit ?? "unknown";
-      return `${index + 1}. \`${name}\`${item.commit ? ` - commit ${item.commit}` : ""}\n   ${item.reason}\n   Evidence: ${textList(item.citations)}`;
+      const date = commitDateFor(result, item.commit);
+      const commit = [item.commit ? `commit ${item.commit}` : undefined, date].filter(Boolean).join(", ");
+      return `${index + 1}. \`${name}\`${commit ? ` - ${commit}` : ""}\n   ${item.reason}\n   Evidence: ${textList(item.citations)}`;
     })
     .join("\n");
 
@@ -53,18 +65,15 @@ export const renderSlackInvestigationReply = (result: InvestigationResult) =>
     "*FirstTrace investigation*",
     `Classification: \`${result.classification}\``,
     `Likely component: \`${result.ai?.likelyComponent ?? result.likelyComponent}\``,
-    `Likely owners: ${textList(
-      (result.ai?.likelyOwners.length ? result.ai.likelyOwners : result.likelyOwners).map((owner) => `\`${owner}\``),
-    )}`,
     result.ai ? `AI confidence: \`${result.ai.confidence.toFixed(2)}\`` : "",
     "",
+    result.ai?.explanation ? ["*Likely cause*", result.ai.explanation, ""].join("\n") : "",
     "*Best fault-location lead*",
     result.ai?.likelyFiles.length ? aiFileEvidence(result.ai.likelyFiles, 3) : topEvidence(result.suspiciousFiles, 3) || empty,
-    result.ai?.explanation ? ["", "*Why this is suspicious*", result.ai.explanation].join("\n") : "",
     "",
     "*Implementer / commit signals*",
     result.ai?.implementerHints.length
-      ? implementerHints(result.ai.implementerHints, 3)
+      ? implementerHints(result, result.ai.implementerHints, 3)
       : relatedCommitSignals(result.relatedCommits, 3) || empty,
     "",
     "*Next checks*",

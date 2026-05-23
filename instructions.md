@@ -179,8 +179,9 @@ FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false
 CRON_SECRET=
 FIRSTTRACE_GITHUB_CACHE_ROOT=
 FIRSTTRACE_AI_PROVIDER=openai
+FIRSTTRACE_INVESTIGATOR=agent
 OPENAI_API_KEY=
-OPENAI_MODEL_CHAT=
+OPENAI_MODEL_CHAT=gpt-5.4-mini
 SLACK_BOT_TOKEN=
 SLACK_SIGNING_SECRET=
 GITHUB_APP_ID=
@@ -249,8 +250,8 @@ Example:
 organization:
   name: ExampleCo
 
-ai:
-  provider: openai
+investigator:
+  provider_env: FIRSTTRACE_INVESTIGATOR
   model_env: OPENAI_MODEL_CHAT
 
 runtime:
@@ -306,12 +307,12 @@ Slack channel id, repository owner/name, ownership paths, and provider choices.
 3. The receiver verifies the Slack signature and checks the configured channel.
 4. The receiver creates a Supabase-backed investigation job.
 5. The worker gathers GitHub evidence from the configured repository.
-6. The AI provider reasons over the gathered evidence and citations.
+6. The configured investigator reasons over gathered evidence and citations.
 7. FirstTrace stores the result and replies in the Slack thread.
 
-The Slack reply should include likely files, likely owner or implementer context,
-confidence, citations, suggested next steps, and missing-info questions when the
-report is underspecified.
+The Slack reply should include the likely cause, likely files, implementer or
+commit context with dates when available, confidence, citations, suggested next
+steps, and missing-info questions when the report is underspecified.
 
 ## Verification Checklist
 

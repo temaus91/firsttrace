@@ -1,5 +1,4 @@
 import path from "node:path";
-import { createAiProviderFromEnv } from "./ai/provider-factory.js";
 import { createJobResultNotifierFromEnv } from "./chat/slack/notifier.js";
 import { loadConfig } from "./config.js";
 import { loadLocalEnv } from "./env.js";
@@ -9,6 +8,7 @@ import { runEval } from "./eval/runner.js";
 import { renderHostedVerify } from "./hosted/render.js";
 import { createHostedVerifyQueue, runHostedVerify } from "./hosted/verify.js";
 import { executeInvestigation } from "./investigation-runner.js";
+import { createInvestigatorProviderFromEnv } from "./investigator/provider-factory.js";
 import { LocalMessageDeliveryAdapter } from "./message/local-submit.js";
 import { renderMessageSubmitResult } from "./message/render.js";
 import { renderInvestigation } from "./render.js";
@@ -45,7 +45,7 @@ const usage = () => `Usage:
   npm run firsttrace -- worker status --queue filesystem --job <job-id>
 
 Options:
-  --ai              Add AI reasoning over the deterministic evidence bundle.
+  --ai              Run the configured investigator over the deterministic evidence.
   --cases <path>    Path to a FirstTrace eval cases YAML file.
   --channel <id>    Configured Slack channel id for hosted verification.
   --config <path>   Path to a FirstTrace YAML config. Defaults to firsttrace.config.yaml.
@@ -241,11 +241,11 @@ const main = async () => {
     if (!args.casesPath?.trim()) {
       throw new Error("Missing required --cases.");
     }
-    const aiProvider = args.ai ? createAiProviderFromEnv() : undefined;
+    const investigatorProvider = args.ai ? createInvestigatorProviderFromEnv() : undefined;
     const evalResult = await runEval({
-      aiProvider,
       cases: loadEvalCases(args.casesPath),
       config,
+      investigatorProvider,
     });
     console.log(renderEvalRun(evalResult));
     if (!evalResult.passed) process.exit(1);
@@ -257,8 +257,8 @@ const main = async () => {
   }
 
   const result = await executeInvestigation({
-    aiProvider: args.ai ? createAiProviderFromEnv() : undefined,
     config,
+    investigatorProvider: args.ai ? createInvestigatorProviderFromEnv() : undefined,
     report: args.report,
   });
 

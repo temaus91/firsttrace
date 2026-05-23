@@ -36,7 +36,12 @@ export type InvestigationResult = {
   warnings: string[];
 };
 
-export type AiEvidenceKind = "suspicious_file" | "related_commit" | "related_doc" | "warning";
+export type AiEvidenceKind =
+  | "suspicious_file"
+  | "related_commit"
+  | "related_doc"
+  | "agent_observation"
+  | "warning";
 
 export type AiEvidenceItem = {
   citations: string[];
@@ -91,8 +96,38 @@ export type AiInvestigationResult = {
 };
 
 export type AiProvider = {
+  model?: string;
   name: string;
   reason(request: AiReasonerRequest): Promise<AiInvestigationResult>;
+};
+
+export type InvestigationToolName =
+  | "readFile"
+  | "searchRepo"
+  | "findReferences"
+  | "gitLog"
+  | "gitBlame"
+  | "runSafeCommand";
+
+export type InvestigationToolResult = {
+  citations: string[];
+  summary: string;
+  title: string;
+};
+
+export type InvestigationToolset = {
+  execute(name: InvestigationToolName, args: unknown): Promise<InvestigationToolResult>;
+};
+
+export type InvestigatorRequest = {
+  preparedConfig: PreparedFirstTraceConfig;
+  result: InvestigationResult;
+};
+
+export type InvestigatorProvider = {
+  model?: string;
+  name: string;
+  investigate(request: InvestigatorRequest): Promise<AiInvestigationResult>;
 };
 
 export type EvalCase = {

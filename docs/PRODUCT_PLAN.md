@@ -37,7 +37,7 @@ triager could assemble one manually.
 
 FirstTrace v0 is not:
 
-- an autonomous coding agent
+- an autonomous code-writing or code-fixing agent
 - a ticket-writing or ticket-routing system
 - a generic workplace search product
 - a replacement for on-call engineers
@@ -59,7 +59,7 @@ flowchart TD
   Engine --> Git["Git Provider<br/>local repo, internal git, GitHub"]
   Engine --> Owners["Ownership Provider<br/>CODEOWNERS, firsttrace.owners.yaml"]
   Engine --> Issues["Issue Provider<br/>Jira, GitHub Issues, fixtures"]
-  Engine --> Reasoner["AI Provider<br/>OpenAI, Claude, Google AI, local model"]
+  Engine --> Reasoner["Investigator Provider<br/>FirstTrace agent, codex-cli"]
   Engine --> Runtime["Runtime Provider<br/>local, Vercel, Supabase, OCI"]
 
   Git --> Evidence["Evidence Store"]
@@ -137,8 +137,9 @@ EvalCase
 ```
 
 The first implementation can keep these as TypeScript types or plain JSON
-schemas. The important boundary is that providers return evidence, and the AI
-provider reasons over that evidence instead of inventing facts.
+schemas. The important boundary is that providers return evidence, and the
+investigator reasons over that evidence with read-only tools instead of
+inventing facts.
 
 ## Provider Interfaces
 
@@ -160,8 +161,20 @@ IssueProvider
   searchIssues(query)
   getIssue(id)
 
+InvestigatorProvider
+  investigate(request, evidence, tools)
+  returnStructuredResult()
+
+InvestigationToolset
+  readFile(path)
+  searchRepo(query)
+  findReferences(symbolOrPath)
+  gitLog(path)
+  gitBlame(path, line)
+  runSafeCommand(command)
+
 AiProvider
-  reason(request, evidence)
+  structuredCompletion(prompt, schema)
 
 InputProvider
   receive()
@@ -185,8 +198,10 @@ Phase 1 providers are deliberately simple:
 
 Future phases add:
 
-- OpenAI AI provider first, with Claude, Google AI, or local model providers
-  possible later
+- read-only FirstTrace agent provider first, powered by OpenAI and
+  `OPENAI_MODEL_CHAT`
+- later `codex-cli` investigator adapter using the same model and the same
+  structured result contract
 - fixture issue provider for evals
 - Slack chat provider first, with Teams or other chat providers possible later
 - GitHub issue/code provider, Vercel/Supabase runtime providers, and OCI
@@ -194,9 +209,9 @@ Future phases add:
 
 Provider implementations can depend on a vendor SDK, but the core investigation
 engine should only depend on the provider interfaces. Adding Slack, OpenAI,
-GitHub, Vercel, Supabase, OCI, Claude, Google AI, Teams, or another service
-should not require rewriting the core search, evidence, reasoning, evaluation,
-or rendering flow.
+GitHub, Vercel, Supabase, OCI, `codex-cli`, Teams, or another service should not
+require rewriting the core search, evidence, investigation, evaluation, or
+rendering flow.
 
 ## Channel Agent Model
 
@@ -277,8 +292,7 @@ that bounded evidence bundle, not the repository directly.
 Current capability:
 
 - opt-in `--ai` flag for local CLI investigations
-- provider interface for AI reasoning so later Claude, Google AI, or local model
-  providers can be added without changing the core engine
+- provider interface for the current one-shot AI reasoning path
 - OpenAI provider using structured output
 - `.env.local` support for local credentials
 - AI result section with likely files/components, confidence, owner and
@@ -288,9 +302,21 @@ Current capability:
 Local configuration:
 
 - `OPENAI_API_KEY` from `.env.local` or the shell
-- `OPENAI_MODEL_CHAT` from `.env.local` or the shell
+- `OPENAI_MODEL_CHAT` from `.env.local` or the shell for the existing completed
+  reasoner path
 - `FIRSTTRACE_AI_PROVIDER=openai` by default
+- `FIRSTTRACE_INVESTIGATOR=agent|evidence|codex-cli`, with `agent` as the
+  default when `--ai` is enabled
 - explicit opt-in through `--ai`
+
+Planned model direction:
+
+- move the default `OPENAI_MODEL_CHAT` value from `gpt-4o-mini` to
+  `gpt-5.4-mini`
+- use `OPENAI_MODEL_CHAT` as the shared model selector for `agent`, `evidence`,
+  and later `codex-cli`
+- avoid cross-model benchmarking for now; compare investigation modes, not model
+  families
 
 Limitations:
 
@@ -574,7 +600,7 @@ configured Slack channel
   -> Supabase-backed job
   -> worker
   -> GitHub private repo evidence
-  -> AI reasoning
+  -> configured investigator
   -> Slack thread reply
 ```
 
@@ -584,10 +610,79 @@ This phase should verify:
 - an unconfigured channel is ignored or receives a safe denial
 - the backend validates Slack signatures before enqueueing work
 - the worker can read a private GitHub repository through the configured provider
-- AI reasoning uses gathered evidence and citations
+- the configured investigator uses gathered evidence and citations
 - the Slack reply names likely files, likely owner or implementer context,
   confidence, citations, and missing-info questions
 - no company-specific names, repositories, or channels are hardcoded
+
+### Phase 10: Read-Only Agentic Investigator
+
+Improve investigation quality by turning the current one-shot evidence summary
+into a small read-only debugging agent:
+
+```text
+Slack report
+  -> retrieve candidate files and commits
+  -> FirstTrace agent
+  -> read files, follow imports/usages, inspect git history/blame
+  -> optionally run safe allowlisted commands
+  -> return cited structured JSON
+  -> Slack handoff
+```
+
+The current deterministic search should remain useful as the first candidate
+generator and as the fallback path. The new agent should iterate over those
+candidates with explicit read-only tools instead of asking the model to summarize
+one fixed evidence bundle.
+
+Target behavior:
+
+- use `OPENAI_MODEL_CHAT=gpt-5.4-mini` for dogfood
+- do not add a separate model env var for agent mode
+- add an investigator mode such as `FIRSTTRACE_INVESTIGATOR=agent`
+- keep the existing evidence mode available as a fallback, for example
+  `FIRSTTRACE_INVESTIGATOR=evidence`
+- expose only bounded tools: `readFile`, `searchRepo`, `findReferences`,
+  `gitLog`, `gitBlame`, and allowlisted `runSafeCommand`
+- enforce max steps, max runtime, max file bytes, and command allowlists
+- require structured JSON with cited files, lines, commits, authors, confidence,
+  missing information, and warnings
+- make the agent usable from CLI, local worker, and Supabase-backed worker
+  without requiring Docker
+- test quality with eval cases and live Slack dogfood reports
+
+Non-goals for this phase:
+
+- no code edits or write actions
+- no arbitrary shell access
+- no dependency on `codex-cli`
+- no benchmark against `gpt-5.3-codex`
+
+### Later: Codex CLI Investigator Adapter
+
+After the built-in FirstTrace agent is working, add `codex-cli` as an optional
+investigator adapter:
+
+```text
+FIRSTTRACE_INVESTIGATOR=codex-cli
+```
+
+This adapter should use the same `OPENAI_MODEL_CHAT` value and the same
+structured result contract as the built-in agent. The comparison should be about
+execution harness quality:
+
+```text
+FirstTrace agent + OPENAI_MODEL_CHAT=gpt-5.4-mini
+vs
+codex-cli adapter + OPENAI_MODEL_CHAT=gpt-5.4-mini
+```
+
+Do not introduce a separate `gpt-5.3-codex` benchmark path at this stage.
+
+The `codex-cli` adapter should only be added after the local Codex CLI install
+is verified, because the previously observed local wrapper pointed at a missing
+native binary. The adapter can run locally or inside a worker process; Docker is
+only a deployment option for keeping that worker alive on a server.
 
 ### Later: Work Item Provider
 
@@ -682,8 +777,30 @@ Useful metrics:
 - component match
 - citation coverage
 - unsupported claim count
+- agent step count and timeout rate
+- safe-command usage rate
+- cited commit/blame usefulness
 - write-action precision for bug/work-item creation evals
 - result length
+
+Near-term evals should compare:
+
+```text
+evidence mode + OPENAI_MODEL_CHAT=gpt-5.4-mini
+vs
+FirstTrace agent mode + OPENAI_MODEL_CHAT=gpt-5.4-mini
+```
+
+Later evals may compare:
+
+```text
+FirstTrace agent mode + OPENAI_MODEL_CHAT=gpt-5.4-mini
+vs
+codex-cli mode + OPENAI_MODEL_CHAT=gpt-5.4-mini
+```
+
+Do not add a `gpt-5.3-codex` benchmark until there is a specific customer or
+quality reason to justify the extra model path.
 
 ## External Integration Test Backlog
 
@@ -895,12 +1012,15 @@ features.
 
 ## Immediate Next Steps
 
-1. Run Phase 9B live hosted dogfood with real Slack, GitHub App, Supabase, and AI.
-2. Verify the hosted end-to-end workflow from configured Slack channel to AI
-   analysis reply.
-3. Package FirstTrace for npm embedding and prove it inside the existing
+1. Implement Phase 10 read-only agentic investigator with
+   `OPENAI_MODEL_CHAT=gpt-5.4-mini`.
+2. Rerun live hosted dogfood from configured Slack channel to agent-generated
+   Slack reply.
+3. Add the later `codex-cli` investigator adapter only after the built-in agent
+   path is validated, using the same `OPENAI_MODEL_CHAT` value.
+4. Package FirstTrace for npm embedding and prove it inside the existing
    Wallspace Vercel project after standalone dogfood succeeds.
-4. Add GitHub Issues, Vercel/Supabase, OCI, and work-item providers only through the
+5. Add GitHub Issues, Vercel/Supabase, OCI, and work-item providers only through the
    generic provider interfaces.
 
 ## Open Questions

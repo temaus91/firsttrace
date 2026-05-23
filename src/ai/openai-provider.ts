@@ -1,41 +1,8 @@
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
-import { z } from "zod";
 import { groundAiResult } from "./grounding.js";
+import { AiInvestigationResultPayloadSchema } from "./schema.js";
 import type { AiInvestigationResult, AiProvider, AiReasonerRequest } from "../types.js";
-
-const Confidence = z.number().min(0).max(1);
-
-const AiInvestigationResultSchema = z.object({
-  confidence: Confidence,
-  explanation: z.string(),
-  implementerHints: z
-    .array(
-      z.object({
-        citations: z.array(z.string()),
-        commit: z.string().nullable(),
-        email: z.string().nullable(),
-        name: z.string().nullable(),
-        reason: z.string(),
-      }),
-    )
-    .max(5),
-  likelyComponent: z.string(),
-  likelyFiles: z
-    .array(
-      z.object({
-        citations: z.array(z.string()),
-        confidence: Confidence,
-        path: z.string(),
-        reason: z.string(),
-        repo: z.string(),
-      }),
-    )
-    .max(5),
-  likelyOwners: z.array(z.string()).max(8),
-  missingInfoQuestions: z.array(z.string()).max(5),
-  warnings: z.array(z.string()).max(8),
-});
 
 const systemPrompt = `You are FirstTrace's AI reasoner.
 FirstTrace is a read-only bug localization tool.
@@ -64,13 +31,15 @@ ${JSON.stringify(request, null, 2)}`;
 export type OpenAiProviderOptions = {
   apiKey: string;
   model: string;
+  resultProviderName?: string;
 };
 
-export const createOpenAiProvider = ({ apiKey, model }: OpenAiProviderOptions): AiProvider => {
+export const createOpenAiProvider = ({ apiKey, model, resultProviderName = "evidence" }: OpenAiProviderOptions): AiProvider => {
   const client = new OpenAI({ apiKey });
 
   return {
-    name: "openai",
+    model,
+    name: resultProviderName,
     async reason(request: AiReasonerRequest): Promise<AiInvestigationResult> {
       const response = await client.responses.parse({
         input: [
@@ -79,7 +48,7 @@ export const createOpenAiProvider = ({ apiKey, model }: OpenAiProviderOptions): 
         ],
         model,
         text: {
-          format: zodTextFormat(AiInvestigationResultSchema, "firsttrace_ai_investigation_result"),
+          format: zodTextFormat(AiInvestigationResultPayloadSchema, "firsttrace_ai_investigation_result"),
         },
       });
 
@@ -89,7 +58,7 @@ export const createOpenAiProvider = ({ apiKey, model }: OpenAiProviderOptions): 
 
       return groundAiResult({
         ...response.output_parsed,
-        provider: "openai",
+        provider: resultProviderName,
       }, request);
     },
   };

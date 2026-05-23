@@ -593,7 +593,7 @@ describe("Slack result notification", () => {
     });
 
     expect(rendered).toContain("Classification: `unknown`");
-    expect(rendered).toContain("Likely owners: `@project-docs`");
+    expect(rendered).not.toContain("Likely owners:");
     expect(rendered).toContain("Evidence: README.md:1");
   });
 
@@ -629,7 +629,17 @@ describe("Slack result notification", () => {
       classification: "bug",
       likelyComponent: "app",
       likelyOwners: ["@frontend"],
-      relatedCommits: [],
+      relatedCommits: [
+        {
+          citations: [{ commit: "abc123456789", label: "wallspace:abc123456789", repo: "wallspace" }],
+          metadata: { author: "Dev Owner", date: "2026-05-20" },
+          repo: "wallspace",
+          score: 8,
+          summary: "Changed the artist profile loading state.",
+          title: "abc123 Change profile loading state",
+          type: "commit",
+        },
+      ],
       relatedDocs: [],
       report: "Artist profile is empty for a few seconds after login",
       searchTerms: ["artist", "profile", "empty"],
@@ -638,11 +648,15 @@ describe("Slack result notification", () => {
       warnings: [],
     });
 
+    expect(rendered).not.toContain("Likely owners:");
+    expect(rendered).toContain("*Likely cause*");
     expect(rendered).toContain("*Best fault-location lead*");
     expect(rendered).toContain("The route owns the artist profile loading branch");
-    expect(rendered).toContain("*Why this is suspicious*");
+    expect(rendered.indexOf("*Likely cause*")).toBeLessThan(rendered.indexOf("*Best fault-location lead*"));
+    expect(rendered).not.toContain("*Why this is suspicious*");
     expect(rendered).toContain("*Implementer / commit signals*");
     expect(rendered).toContain("Dev Owner");
+    expect(rendered).toContain("2026-05-20");
     expect(rendered).toContain("Ask: Does the blank state appear");
   });
 });

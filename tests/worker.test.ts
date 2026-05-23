@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { FileSystemJobQueue } from "../src/worker/fs-queue.js";
 import { renderJobStatus } from "../src/worker/render.js";
 import { runWorkerOnce } from "../src/worker/runner.js";
-import type { AiProvider, AiReasonerRequest, InvestigationJob, JobQueue } from "../src/types.js";
+import type { Citation, InvestigationJob, InvestigatorProvider, JobQueue } from "../src/types.js";
 
 const tempQueuePath = (name: string) => {
   const dir = path.join(tmpdir(), `firsttrace-${name}-${Date.now()}-${Math.random().toString(16).slice(2)}`);
@@ -13,45 +13,48 @@ const tempQueuePath = (name: string) => {
   return dir;
 };
 
-const fakeAiProvider: AiProvider = {
-  name: "fake-ai",
-  async reason(request: AiReasonerRequest) {
-    const fileEvidence = request.evidence.find((item) => item.path);
+const citationLabel = (citation: Citation) =>
+  citation.path && citation.line ? `${citation.path}:${citation.line}` : citation.label;
+
+const fakeInvestigatorProvider: InvestigatorProvider = {
+  name: "fake-investigator",
+  async investigate({ result }) {
+    const fileEvidence = result.suspiciousFiles[0];
     return {
       confidence: 0.8,
-      explanation: "Fake provider used the bounded evidence bundle.",
+      explanation: "Fake provider used the bounded investigation result.",
       implementerHints: [
         {
-          citations: fileEvidence?.citations.slice(0, 1) ?? [],
+          citations: fileEvidence?.citations.map(citationLabel).slice(0, 1) ?? [],
           commit: null,
           email: null,
-          name: request.likelyOwners[0] ?? null,
+          name: result.likelyOwners[0] ?? null,
           reason: "Owner came from gathered evidence.",
         },
       ],
-      likelyComponent: request.likelyComponent,
+      likelyComponent: result.likelyComponent,
       likelyFiles: fileEvidence?.path
         ? [
             {
-              citations: fileEvidence.citations.slice(0, 1),
+              citations: fileEvidence.citations.map(citationLabel).slice(0, 1),
               confidence: 0.8,
               path: fileEvidence.path,
               reason: "File came from gathered evidence.",
-              repo: fileEvidence.repo ?? "repo",
+              repo: fileEvidence.repo,
             },
           ]
         : [],
-      likelyOwners: request.likelyOwners,
+      likelyOwners: result.likelyOwners,
       missingInfoQuestions: [],
-      provider: "fake-ai",
+      provider: "fake-investigator",
       warnings: [],
     };
   },
 };
 
-const failingAiProvider: AiProvider = {
-  name: "failing-ai",
-  async reason() {
+const failingInvestigatorProvider: InvestigatorProvider = {
+  name: "failing-investigator",
+  async investigate() {
     throw new Error("provider unavailable");
   },
 };
@@ -204,14 +207,14 @@ describe("worker queue", () => {
     });
 
     const result = await runWorkerOnce({
-      aiProviderFactory: () => fakeAiProvider,
+      investigatorProviderFactory: () => fakeInvestigatorProvider,
       queue,
     });
 
     expect(result.job?.id).toBe(job.id);
     expect(result.job?.status).toBe("succeeded");
-    expect(result.job?.result?.ai?.provider).toBe("fake-ai");
-    expect(renderJobStatus(result.job)).toContain("AI provider: `fake-ai`");
+    expect(result.job?.result?.ai?.provider).toBe("fake-investigator");
+    expect(renderJobStatus(result.job)).toContain("AI provider: `fake-investigator`");
   });
 
   it("records failed jobs with errors and attempt counts", async () => {
@@ -239,14 +242,14 @@ describe("worker queue", () => {
     });
 
     const result = await runWorkerOnce({
-      aiProviderFactory: () => failingAiProvider,
+      investigatorProviderFactory: () => failingInvestigatorProvider,
       queue,
     });
 
     expect(result.job?.id).toBe(job.id);
     expect(result.job?.status).toBe("failed");
     expect(result.job?.attempts).toBe(1);
-    expect(result.job?.error).toContain("AI reasoning failed with provider failing-ai");
+    expect(result.job?.error).toContain("Investigation failed with provider failing-investigator");
   });
 
   it("rejects invalid job ids before building a path", async () => {
