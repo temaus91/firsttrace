@@ -657,6 +657,9 @@ describe("Slack result notification", () => {
     expect(rendered).toContain("*Implementer / commit signals*");
     expect(rendered).toContain("Dev Owner");
     expect(rendered).toContain("2026-05-20");
+    expect(rendered).toContain("Inspect app/artists/[artistId]/page.tsx first.");
+    expect(rendered).toContain("Route the first pass to Dev Owner.");
+    expect(rendered).not.toContain("Open the artist profile route and check the loading branch.");
     expect(rendered).toContain("Ask: Does the blank state appear");
   });
 });

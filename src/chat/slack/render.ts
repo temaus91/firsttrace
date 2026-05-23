@@ -57,6 +57,21 @@ const implementerHints = (result: InvestigationResult, items: AiImplementerHint[
 
 const nextChecks = (result: InvestigationResult) => {
   const questions = result.ai?.missingInfoQuestions.map((question) => `Ask: ${question}`) ?? [];
+  if (result.ai) {
+    const topFile = result.ai.likelyFiles[0];
+    const topImplementer = result.ai.implementerHints[0];
+    return [
+      topFile ? `Inspect ${topFile.path} first.` : undefined,
+      topImplementer?.name ? `Route the first pass to ${topImplementer.name}.` : undefined,
+      topImplementer?.commit ? `Review related commit ${topImplementer.commit}.` : undefined,
+      ...questions,
+    ]
+      .filter((step): step is string => Boolean(step))
+      .slice(0, 4)
+      .map((step, index) => `${index + 1}. ${step}`)
+      .join("\n");
+  }
+
   return [...result.suggestedNextSteps, ...questions].slice(0, 4).map((step, index) => `${index + 1}. ${step}`).join("\n");
 };
 

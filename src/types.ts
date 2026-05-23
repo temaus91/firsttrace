@@ -102,6 +102,7 @@ export type AiProvider = {
 };
 
 export type InvestigationToolName =
+  | "findFiles"
   | "readFile"
   | "searchRepo"
   | "findReferences"

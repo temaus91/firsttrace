@@ -14,6 +14,28 @@ const tempRepo = (name: string) => {
     path.join(repoPath, "src", "render.ts"),
     ["export const render = () => {", "  return 'citations';", "};", ""].join("\n"),
   );
+  mkdirSync(path.join(repoPath, "lib"), { recursive: true });
+  writeFileSync(path.join(repoPath, "lib", "app-context.tsx"), "export const isAppBootstrapReady = false\n");
+  mkdirSync(path.join(repoPath, "components"), { recursive: true });
+  writeFileSync(path.join(repoPath, "components", "profile-tab.tsx"), "export function ProfileTab() { return null }\n");
+  writeFileSync(path.join(repoPath, "components", "reservation-detail.tsx"), "export function ReservationDetail() { return null }\n");
+  mkdirSync(path.join(repoPath, "app"), { recursive: true });
+  writeFileSync(
+    path.join(repoPath, "app", "page.tsx"),
+    [
+      "const activeTab = 'profile'",
+      "const renderScreen = (screen, reservations) => {",
+      "  switch (screen.type) {",
+      "    case 'reservation-detail': {",
+      "      const activeReservation = reservations.find((item) => item.id === screen.reservationId)",
+      "      if (!activeReservation) return null",
+      "      return activeReservation",
+      "    }",
+      "  }",
+      "}",
+      "",
+    ].join("\n"),
+  );
   runCommand(repoPath, "git", ["init"]);
   runCommand(repoPath, "git", ["config", "user.email", "dev@example.com"]);
   runCommand(repoPath, "git", ["config", "user.name", "Dev Owner"]);
@@ -88,6 +110,14 @@ describe("investigation agent tools", () => {
     expect(blame.citations.find((citation) => citation.startsWith("commit "))).toBeTruthy();
   });
 
+  it("finds file paths by query", async () => {
+    const toolset = createInvestigationToolset(preparedConfig(tempRepo("find-files")));
+
+    await expect(toolset.execute("findFiles", { query: "profile" })).resolves.toMatchObject({
+      citations: ["components/profile-tab.tsx"],
+    });
+  });
+
   it("rejects non-allowlisted safe commands", async () => {
     const toolset = createInvestigationToolset(preparedConfig(tempRepo("safe-command")));
 
@@ -96,6 +126,289 @@ describe("investigation agent tools", () => {
 });
 
 describe("read-only investigation agent", () => {
+  it("seeds UI journey file path candidates before the model loop", async () => {
+    const modelClient: AgentModelClient = {
+      async next({ observations }) {
+        expect(observations.some((item) => item.tool === "findFiles" && item.summary.includes("profile-tab.tsx"))).toBe(true);
+        expect(observations.some((item) => item.tool === "searchRepo" && item.summary.includes("ProfileTab"))).toBe(true);
+        expect(observations.some((item) => item.tool === "searchRepo" && item.title.includes("isAppBootstrapReady"))).toBe(true);
+        return {
+          result: {
+            confidence: 0.83,
+            explanation: "The authenticated profile tab is the best lead.",
+            implementerHints: [],
+            likelyComponent: "components/profile-tab.tsx",
+            likelyFiles: [
+              {
+                citations: ["components/profile-tab.tsx"],
+                confidence: 0.83,
+                path: "components/profile-tab.tsx",
+                reason: "The journey mentions login and the profile screen.",
+                repo: "repo",
+              },
+            ],
+            likelyOwners: [],
+            missingInfoQuestions: [],
+            warnings: [],
+          },
+          type: "final",
+        };
+      },
+      async final({ observations }) {
+        expect(observations.some((item) => item.title.includes("Bootstrap state correction"))).toBe(true);
+        return {
+          confidence: 0.83,
+          explanation: "The authenticated profile tab and app bootstrap state are the best leads.",
+          implementerHints: [],
+          likelyComponent: "components/profile-tab.tsx",
+          likelyFiles: [
+            {
+              citations: ["components/profile-tab.tsx"],
+              confidence: 0.83,
+              path: "components/profile-tab.tsx",
+              reason: "The journey mentions login and the profile screen.",
+              repo: "repo",
+            },
+            {
+              citations: ["lib/app-context.tsx:1"],
+              confidence: 0.7,
+              path: "lib/app-context.tsx",
+              reason: "The app context owns bootstrap readiness.",
+              repo: "repo",
+            },
+          ],
+          likelyOwners: [],
+          missingInfoQuestions: [],
+          warnings: [],
+        };
+      },
+    };
+
+    const provider = createAgentInvestigator({ model: "test-model", modelClient });
+    const result = await provider.investigate({
+      preparedConfig: preparedConfig(tempRepo("journey-seed")),
+      result: {
+        ...investigationResult(),
+        report: "When I login and go to profile page it looks empty.",
+        searchTerms: ["login", "profile", "page", "empty"],
+      },
+    });
+
+    expect(result.likelyFiles[0]?.path).toBe("components/profile-tab.tsx");
+    expect(result.likelyFiles.map((item) => item.path)).toContain("lib/app-context.tsx");
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("reconsiders public dynamic routes for authenticated screen journeys", async () => {
+    let usedCorrection = false;
+    const modelClient: AgentModelClient = {
+      async next() {
+        return {
+          result: {
+            confidence: 0.9,
+            explanation: "The public detail route is the likely source.",
+            implementerHints: [],
+            likelyComponent: "app/users/[userId]/page.tsx",
+            likelyFiles: [
+              {
+                citations: ["app/users/[userId]/page.tsx:1"],
+                confidence: 0.9,
+                path: "app/users/[userId]/page.tsx",
+                reason: "It is a dynamic public route.",
+                repo: "repo",
+              },
+            ],
+            likelyOwners: [],
+            missingInfoQuestions: [],
+            warnings: [],
+          },
+          type: "final",
+        };
+      },
+      async final({ observations }) {
+        usedCorrection = observations.some((item) => item.title.includes("Journey correction"));
+        return {
+          confidence: 0.84,
+          explanation: "The authenticated profile tab is the better match.",
+          implementerHints: [],
+          likelyComponent: "components/profile-tab.tsx",
+          likelyFiles: [
+            {
+              citations: ["components/profile-tab.tsx"],
+              confidence: 0.84,
+              path: "components/profile-tab.tsx",
+              reason: "The report describes a login journey to the profile screen.",
+              repo: "repo",
+            },
+          ],
+          likelyOwners: [],
+          missingInfoQuestions: [],
+          warnings: [],
+        };
+      },
+    };
+
+    const provider = createAgentInvestigator({ model: "test-model", modelClient });
+    const result = await provider.investigate({
+      preparedConfig: preparedConfig(tempRepo("journey-correction")),
+      result: {
+        ...investigationResult(),
+        report: "When I login and go to profile page it looks empty.",
+        searchTerms: ["login", "profile", "page", "empty"],
+      },
+    });
+
+    expect(usedCorrection).toBe(true);
+    expect(result.likelyFiles[0]?.path).toBe("components/profile-tab.tsx");
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("keeps rendered tab components in authenticated shell investigations", async () => {
+    let usedCorrection = false;
+    const modelClient: AgentModelClient = {
+      async next() {
+        return {
+          result: {
+            confidence: 0.86,
+            explanation: "The authenticated shell bootstrap is the strongest lead.",
+            implementerHints: [],
+            likelyComponent: "app/page.tsx",
+            likelyFiles: [
+              {
+                citations: ["app/page.tsx:1"],
+                confidence: 0.86,
+                path: "app/page.tsx",
+                reason: "The app shell handles tab routing.",
+                repo: "repo",
+              },
+            ],
+            likelyOwners: [],
+            missingInfoQuestions: [],
+            warnings: [],
+          },
+          type: "final",
+        };
+      },
+      async final({ observations }) {
+        usedCorrection = observations.some((item) => item.title.includes("Rendered surface correction"));
+        expect(observations.some((item) => item.title.includes("Bootstrap state correction"))).toBe(true);
+        return {
+          confidence: 0.86,
+          explanation: "The shell is primary, with the rendered profile tab and bootstrap state as secondary surfaces.",
+          implementerHints: [],
+          likelyComponent: "app/page.tsx",
+          likelyFiles: [
+            {
+              citations: ["app/page.tsx:1"],
+              confidence: 0.86,
+              path: "app/page.tsx",
+              reason: "The app shell handles tab routing.",
+              repo: "repo",
+            },
+            {
+              citations: ["components/profile-tab.tsx"],
+              confidence: 0.72,
+              path: "components/profile-tab.tsx",
+              reason: "The report names the profile tab and seeded evidence found the rendered component.",
+              repo: "repo",
+            },
+            {
+              citations: ["lib/app-context.tsx:1"],
+              confidence: 0.64,
+              path: "lib/app-context.tsx",
+              reason: "The report is about auth/bootstrap readiness and the context owns the readiness flag.",
+              repo: "repo",
+            },
+          ],
+          likelyOwners: [],
+          missingInfoQuestions: [],
+          warnings: [],
+        };
+      },
+    };
+
+    const provider = createAgentInvestigator({ model: "test-model", modelClient });
+    const result = await provider.investigate({
+      preparedConfig: preparedConfig(tempRepo("rendered-tab-correction")),
+      result: {
+        ...investigationResult(),
+        report: "When I login and open profile it looks empty.",
+        searchTerms: ["login", "profile", "empty"],
+      },
+    });
+
+    expect(usedCorrection).toBe(true);
+    expect(result.likelyFiles.map((item) => item.path)).toContain("components/profile-tab.tsx");
+    expect(result.likelyFiles.map((item) => item.path)).toContain("lib/app-context.tsx");
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("reconsiders leaf detail components for missing entity blank screens", async () => {
+    let usedCorrection = false;
+    const modelClient: AgentModelClient = {
+      async next({ observations }) {
+        expect(observations.some((item) => item.summary.includes("activeReservation"))).toBe(true);
+        expect(observations.some((item) => item.summary.includes("return null"))).toBe(true);
+        return {
+          result: {
+            confidence: 0.88,
+            explanation: "The reservation detail component is the likely source.",
+            implementerHints: [],
+            likelyComponent: "components/reservation-detail.tsx",
+            likelyFiles: [
+              {
+                citations: ["components/reservation-detail.tsx"],
+                confidence: 0.88,
+                path: "components/reservation-detail.tsx",
+                reason: "The report mentions reservation detail.",
+                repo: "repo",
+              },
+            ],
+            likelyOwners: [],
+            missingInfoQuestions: [],
+            warnings: [],
+          },
+          type: "final",
+        };
+      },
+      async final({ observations }) {
+        usedCorrection = observations.some((item) => item.title.includes("Missing entity correction"));
+        return {
+          confidence: 0.86,
+          explanation: "The parent shell returns null before the detail component can render.",
+          implementerHints: [],
+          likelyComponent: "app/page.tsx",
+          likelyFiles: [
+            {
+              citations: ["app/page.tsx:5", "app/page.tsx:6"],
+              confidence: 0.86,
+              path: "app/page.tsx",
+              reason: "The shell looks up the reservation id and returns null when it is missing.",
+              repo: "repo",
+            },
+          ],
+          likelyOwners: [],
+          missingInfoQuestions: [],
+          warnings: [],
+        };
+      },
+    };
+
+    const provider = createAgentInvestigator({ model: "test-model", modelClient });
+    const result = await provider.investigate({
+      preparedConfig: preparedConfig(tempRepo("missing-detail-correction")),
+      result: {
+        ...investigationResult(),
+        report: "When I open an old reservation detail after it disappeared from my list, the screen goes blank.",
+        searchTerms: ["open", "old", "reservation", "detail", "disappeared", "list", "screen", "blank"],
+      },
+    });
+
+    expect(usedCorrection).toBe(true);
+    expect(result.likelyFiles[0]?.path).toBe("app/page.tsx");
+    expect(result.warnings).toEqual([]);
+  });
+
   it("keeps investigating after a rejected tool call", async () => {
     let observedToolError = false;
     const modelClient: AgentModelClient = {
@@ -195,6 +508,7 @@ describe("read-only investigation agent", () => {
 
     expect(result.provider).toBe("agent");
     expect(result.likelyFiles[0]?.citations).toEqual(["src/render.ts:1"]);
+    expect(result.implementerHints[0]?.name).toBe("Dev Owner");
     expect(result.warnings).toEqual([]);
   });
 });

@@ -79,6 +79,9 @@ describe("renderInvestigation", () => {
     expect(rendered).toContain("## AI Reasoning");
     expect(rendered).toContain("Provider: `openai`");
     expect(rendered).toContain("src/render.ts:12");
+    expect(rendered).toContain("Inspect src/render.ts first.");
+    expect(rendered).toContain("Route the first pass to Dev Owner.");
+    expect(rendered).toContain("Review related commit abc123.");
     expect(rendered).toContain("What exact command reproduced the crash?");
     expect(rendered).toContain("Evidence is limited.");
   });

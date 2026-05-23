@@ -33,6 +33,10 @@ const SearchArg = RepoArg.extend({
   query: z.string().min(1),
 });
 
+const FindFilesArg = RepoArg.extend({
+  query: z.string().min(1),
+});
+
 const ReferencesArg = RepoArg.extend({
   symbolOrPath: z.string().min(1),
 });
@@ -89,6 +93,39 @@ const safeRepoPath = (repo: SearchableRepoConfig, requestedPath: string) => {
 const lineCitation = (relativePath: string, line: number) => `${relativePath}:${line}`;
 
 const gitCommitCitation = (hash: string) => `commit ${hash.slice(0, 7)}`;
+
+const listRepoFiles = (repo: SearchableRepoConfig) => {
+  try {
+    return runCommand(repo.path, "rg", ["--files", "--glob", "!**/.git/**", "--glob", "!**/node_modules/**"], {
+      allowExitCodes: [1],
+      maxBuffer: 2 * 1024 * 1024,
+      timeoutMs: TOOL_COMMAND_TIMEOUT_MS,
+    }).stdout
+      .split("\n")
+      .filter(Boolean)
+      .map(toPosixPath);
+  } catch (error) {
+    if ((error as Error).message.includes("spawnSync rg ENOENT")) {
+      throw new Error("findFiles requires ripgrep to list repository files.");
+    }
+    throw error;
+  }
+};
+
+const findFilesTool = (config: PreparedFirstTraceConfig, args: unknown): InvestigationToolResult => {
+  const parsed = FindFilesArg.parse(args);
+  const repo = repoByName(config, parsed.repo);
+  const query = parsed.query.toLowerCase();
+  const matches = listRepoFiles(repo)
+    .filter((filePath) => filePath.toLowerCase().includes(query))
+    .slice(0, 20);
+
+  return {
+    citations: matches,
+    summary: matches.length ? matches.join("\n") : "No matching file paths.",
+    title: `Find files in ${repo.name} matching ${parsed.query}`,
+  };
+};
 
 const readFileTool = (config: PreparedFirstTraceConfig, args: unknown): InvestigationToolResult => {
   const parsed = ReadFileArg.parse(args);
@@ -256,6 +293,7 @@ const safeCommandTool = (config: PreparedFirstTraceConfig, args: unknown): Inves
 
 export const createInvestigationToolset = (config: PreparedFirstTraceConfig): InvestigationToolset => ({
   async execute(name: InvestigationToolName, args: unknown) {
+    if (name === "findFiles") return findFilesTool(config, args);
     if (name === "readFile") return readFileTool(config, args);
     if (name === "searchRepo") return searchRepoTool(config, args);
     if (name === "findReferences") return findReferencesTool(config, args);

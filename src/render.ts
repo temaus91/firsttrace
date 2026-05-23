@@ -20,6 +20,16 @@ const citationText = (item: EvidenceItem) => citationListText(item.citations);
 const aiList = (items: string[]) =>
   items.length ? items.map((item, index) => `${index + 1}. ${item}`).join("\n") : empty;
 
+const aiNextSteps = (ai: AiInvestigationResult) =>
+  [
+    ai.likelyFiles[0] ? `Inspect ${ai.likelyFiles[0].path} first.` : undefined,
+    ai.implementerHints[0]?.name ? `Route the first pass to ${ai.implementerHints[0].name}.` : undefined,
+    ai.implementerHints[0]?.commit ? `Review related commit ${ai.implementerHints[0].commit}.` : undefined,
+    ...ai.missingInfoQuestions.map((question) => `Ask: ${question}`),
+  ]
+    .filter((step): step is string => Boolean(step))
+    .slice(0, 4);
+
 const renderAiReasoning = (ai: AiInvestigationResult) =>
   section(
     "AI Reasoning",
@@ -77,7 +87,7 @@ export const renderInvestigation = (result: InvestigationResult) =>
     section("Related Docs And Issue Exports", evidenceList(result.relatedDocs)),
     section(
       "Suggested Next Steps",
-      result.suggestedNextSteps.map((step, index) => `${index + 1}. ${step}`).join("\n") || empty,
+      (result.ai ? aiNextSteps(result.ai) : result.suggestedNextSteps).map((step, index) => `${index + 1}. ${step}`).join("\n") || empty,
     ),
     result.warnings.length
       ? section("Warnings", result.warnings.map((warning) => `- ${warning}`).join("\n"))
