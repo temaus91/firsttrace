@@ -74,10 +74,12 @@ Rules:
 - For app shell or tab reports, include both the parent shell/router and the rendered screen/tab component when both are supported by observations.
 - For auth/bootstrap/loading reports, include the state owner file that defines readiness flags when observations identify it.
 - For reports where an old, expired, missing, deleted, or disappeared item opens a blank detail screen, inspect the parent route/shell/switch that resolves the item id and fallback state before ranking the leaf detail component. A detail component cannot render if the parent returns null before mounting it.
+- For retry, duplicate, idempotency, skipped, failed, or status reports, trace: entrypoint -> claim/idempotency guard -> persisted status or unique constraint -> retry eligibility. The store/repository/database function that decides whether a retry is allowed is usually more important than the route or wrapper that calls it.
 - When file-path candidates include both public detail routes and authenticated shell/tab components, prefer the path that matches the reported journey, and cite why adjacent routes are secondary if needed.
 - Never suggest code edits as if they were already made.
 - Do not ask to inspect the repo if a read-only tool can inspect it.
 - Every likely file and implementer hint must cite evidence or tool observation citations.
+- Use exact citation labels from the evidence or tool observations when possible; prefer individual line labels over invented line ranges.
 - Keep the final handoff short: prioritize fault location, owner/person, and commit/date over detailed fix instructions.
 - Return final JSON when you have the strongest supported handoff.`;
 
@@ -241,15 +243,61 @@ const UI_JOURNEY_TERMS = [
   "venue",
 ];
 
+const BACKEND_FLOW_TERMS = [
+  "api",
+  "checkout",
+  "database",
+  "db",
+  "email",
+  "job",
+  "notification",
+  "payment",
+  "queue",
+  "receipt",
+  "resend",
+  "sale",
+  "store",
+  "stripe",
+  "token",
+  "webhook",
+  "worker",
+];
+
+const STATE_MACHINE_TERMS = [
+  "already",
+  "claim",
+  "claimed",
+  "duplicate",
+  "idempotency",
+  "idempotent",
+  "retry",
+  "retried",
+  "skip",
+  "skipped",
+  "state",
+  "status",
+];
+
+const FAILURE_STATE_TERMS = ["failed", "failure"];
+
 const reportLooksLikeUiJourney = (request: AiReasonerRequest) => {
   const text = `${request.report} ${request.searchTerms.join(" ")}`.toLowerCase();
   return UI_JOURNEY_TERMS.some((term) => text.includes(term));
+};
+
+const reportLooksLikeBackendFlow = (request: AiReasonerRequest) => {
+  const text = `${request.report} ${request.searchTerms.join(" ")}`.toLowerCase();
+  return BACKEND_FLOW_TERMS.some((term) => text.includes(term));
 };
 
 const reportIncludesAny = (request: AiReasonerRequest, terms: string[]) => {
   const text = `${request.report} ${request.searchTerms.join(" ")}`.toLowerCase();
   return terms.some((term) => text.includes(term));
 };
+
+const reportLooksLikeStateMachineFlow = (request: AiReasonerRequest) =>
+  reportIncludesAny(request, STATE_MACHINE_TERMS) ||
+  (reportIncludesAny(request, FAILURE_STATE_TERMS) && reportLooksLikeBackendFlow(request));
 
 const seedFilePathQueries = (request: AiReasonerRequest) =>
   request.searchTerms
@@ -292,6 +340,17 @@ const seedSearchQueries = (request: AiReasonerRequest) => {
     }
   }
 
+  if (reportLooksLikeStateMachineFlow(request)) {
+    queries.add("shouldSend");
+    queries.add("delivery_status");
+    queries.add("23505");
+    queries.add("unique");
+    queries.add("SENDING");
+    queries.add("FAILED");
+    queries.add("skipped");
+    queries.add("claim");
+  }
+
   return [...queries].slice(0, 8);
 };
 
@@ -299,7 +358,7 @@ const seedJourneyObservations = async (
   request: AiReasonerRequest,
   toolset: ReturnType<typeof createInvestigationToolset>,
 ): Promise<AgentObservation[]> => {
-  if (!reportLooksLikeUiJourney(request)) return [];
+  if (!reportLooksLikeUiJourney(request) && !reportLooksLikeBackendFlow(request)) return [];
 
   const observations: AgentObservation[] = [];
   const calls: Array<{ args: Record<string, string>; tool: InvestigationToolName }> = [
@@ -398,6 +457,79 @@ const hasMissingEntityShellSignals = (observations: AgentObservation[]) => {
   );
 };
 
+const observationText = (observations: AgentObservation[]) =>
+  observations
+    .map((observation) => `${observation.title}\n${observation.summary}\n${observation.citations.join("\n")}`)
+    .join("\n")
+    .toLowerCase();
+
+const hasRetryStatePersistenceSignals = (observations: AgentObservation[]) => {
+  const text = observationText(observations);
+  const hasRetryGuard = (
+    text.includes("23505") ||
+    text.includes("shouldsend") ||
+    text.includes("idempot") ||
+    text.includes("unique") ||
+    text.includes("claim")
+  );
+  const hasPersistedStatus = (
+    text.includes("delivery_status") ||
+    text.includes("failed") ||
+    text.includes("sending") ||
+    text.includes("skipped") ||
+    text.includes("status")
+  );
+  const hasPersistenceOwner = (
+    text.includes(".from(") ||
+    text.includes("insert") ||
+    text.includes("migration") ||
+    text.includes("repository") ||
+    text.includes("store") ||
+    text.includes("update")
+  );
+  return hasRetryGuard && hasPersistedStatus && hasPersistenceOwner;
+};
+
+const isStatePersistencePath = (filePath: string) =>
+  /(^|\/|[-_.])(db|database|model|repository|repo|schema|store|storage)\b/i.test(filePath) ||
+  /(^|\/)migrations\//i.test(filePath);
+
+const isStateCodePath = (filePath: string) =>
+  isStatePersistencePath(filePath) && !/(^|\/)migrations\//i.test(filePath);
+
+const preferRetryStateOwner = (
+  payload: AiInvestigationResultPayload,
+  request: AiReasonerRequest,
+  observations: AgentObservation[],
+) => {
+  if (!reportLooksLikeStateMachineFlow(request) || !hasRetryStatePersistenceSignals(observations)) {
+    return payload;
+  }
+
+  const topFile = payload.likelyFiles[0];
+  if (!topFile || isStatePersistencePath(topFile.path)) {
+    return payload;
+  }
+
+  const stateIndex = payload.likelyFiles.findIndex((file) => isStateCodePath(file.path));
+  if (stateIndex < 1) return payload;
+
+  const stateFile = payload.likelyFiles[stateIndex];
+  if (!stateFile || stateFile.confidence < topFile.confidence - 0.1) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    likelyComponent: isStateCodePath(payload.likelyComponent) ? payload.likelyComponent : stateFile.path,
+    likelyFiles: [
+      stateFile,
+      ...payload.likelyFiles.slice(0, stateIndex),
+      ...payload.likelyFiles.slice(stateIndex + 1),
+    ],
+  };
+};
+
 const shouldReconsiderJourneyFinal = (
   payload: AiInvestigationResultPayload,
   request: AiReasonerRequest,
@@ -445,6 +577,20 @@ const shouldReconsiderMissingBootstrapStateFinal = (
   hasBootstrapStateSignals(observations) &&
   !payload.likelyFiles.some((file) => file.path.toLowerCase().includes("app-context"));
 
+const shouldReconsiderRetryStateFinal = (
+  payload: AiInvestigationResultPayload,
+  request: AiReasonerRequest,
+  observations: AgentObservation[],
+) => {
+  const topPath = payload.likelyFiles[0]?.path;
+  return Boolean(
+    topPath &&
+      reportLooksLikeStateMachineFlow(request) &&
+      hasRetryStatePersistenceSignals(observations) &&
+      !isStatePersistencePath(topPath),
+  );
+};
+
 const journeyCorrectionObservation = (observations: AgentObservation[]): AgentObservation => ({
   citations: [],
   id: `tool-${observations.length + 1}`,
@@ -491,6 +637,19 @@ const missingEntityCorrectionObservation = (observations: AgentObservation[]): A
     "Re-evaluate the parent lookup/fallback code as the primary fault location, then keep the leaf detail component only as secondary if needed.",
   ].join(" "),
   title: "Missing entity correction: reconsider leaf detail component vs parent fallback",
+  tool: "searchRepo",
+});
+
+const retryStateCorrectionObservation = (observations: AgentObservation[]): AgentObservation => ({
+  citations: [],
+  id: `tool-${observations.length + 1}`,
+  summary: [
+    "The draft final answer selected an entry route, wrapper, or sender for a retry/skipped/failed/idempotency report.",
+    "The observations include persisted claim/status/unique-constraint evidence.",
+    "Re-evaluate the store, repository, database, or migration code that decides whether a retry is allowed as the primary fault location.",
+    "Keep the caller as secondary only when it owns the state transition.",
+  ].join(" "),
+  title: "Retry state correction: reconsider caller vs persisted state owner",
   tool: "searchRepo",
 });
 
@@ -542,20 +701,29 @@ const finalPayload = async (
   const needsMissingEntityCorrection = shouldReconsiderMissingEntityFinal(payload, baseRequest, observations);
   const needsRenderedSurfaceCorrection = shouldReconsiderMissingRenderedSurfaceFinal(payload, baseRequest, observations);
   const needsBootstrapStateCorrection = shouldReconsiderMissingBootstrapStateFinal(payload, baseRequest, observations);
-  if (!needsJourneyCorrection && !needsMissingEntityCorrection && !needsRenderedSurfaceCorrection && !needsBootstrapStateCorrection) {
-    return payload;
+  const needsRetryStateCorrection = shouldReconsiderRetryStateFinal(payload, baseRequest, observations);
+  if (
+    !needsJourneyCorrection &&
+    !needsMissingEntityCorrection &&
+    !needsRenderedSurfaceCorrection &&
+    !needsBootstrapStateCorrection &&
+    !needsRetryStateCorrection
+  ) {
+    return preferRetryStateOwner(payload, baseRequest, observations);
   }
 
   if (needsJourneyCorrection) observations.push(journeyCorrectionObservation(observations));
   if (needsRenderedSurfaceCorrection) observations.push(renderedSurfaceCorrectionObservation(observations));
   if (needsBootstrapStateCorrection) observations.push(bootstrapStateCorrectionObservation(observations));
   if (needsMissingEntityCorrection) observations.push(missingEntityCorrectionObservation(observations));
-  return modelClient.final({
+  if (needsRetryStateCorrection) observations.push(retryStateCorrectionObservation(observations));
+  const revised = await modelClient.final({
     maxSteps: MAX_AGENT_STEPS,
     observations,
     request: requestWithObservations(baseRequest, observations),
     step: MAX_AGENT_STEPS,
   });
+  return preferRetryStateOwner(revised, baseRequest, observations);
 };
 
 const enrichOwnerSignals = async (

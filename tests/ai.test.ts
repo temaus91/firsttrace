@@ -175,4 +175,33 @@ describe("AI provider support", () => {
     expect(grounded.implementerHints[0]?.citations).toEqual(["commit abc123"]);
     expect(grounded.warnings.join("\n")).toContain("unsupported citations");
   });
+
+  it("normalizes AI line ranges to supported evidence citations", () => {
+    const request = buildAiReasonerRequest(investigationResult());
+    const grounded = groundAiResult(
+      {
+        confidence: 0.7,
+        explanation: "Renderer evidence points at the bug.",
+        implementerHints: [],
+        likelyComponent: "src",
+        likelyFiles: [
+          {
+            citations: ["src/render.ts:10-20"],
+            confidence: 0.8,
+            path: "src/render.ts",
+            reason: "Renderer evidence matches.",
+            repo: "repo",
+          },
+        ],
+        likelyOwners: ["@core"],
+        missingInfoQuestions: [],
+        provider: "test",
+        warnings: [],
+      },
+      request,
+    );
+
+    expect(grounded.likelyFiles[0]?.citations).toEqual(["src/render.ts:12"]);
+    expect(grounded.warnings.join("\n")).not.toContain("unsupported citations");
+  });
 });

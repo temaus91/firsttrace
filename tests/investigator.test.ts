@@ -16,6 +16,48 @@ const tempRepo = (name: string) => {
   );
   mkdirSync(path.join(repoPath, "lib"), { recursive: true });
   writeFileSync(path.join(repoPath, "lib", "app-context.tsx"), "export const isAppBootstrapReady = false\n");
+  mkdirSync(path.join(repoPath, "lib", "server"), { recursive: true });
+  writeFileSync(
+    path.join(repoPath, "lib", "server", "receipt-email.ts"),
+    [
+      "import { claimReceiptNotification, markReceiptNotificationFailed } from './receipt-store'",
+      "",
+      "export const sendReceiptEmail = async () => {",
+      "  if (!process.env.RESEND_API_KEY) throw new Error('Missing RESEND_API_KEY')",
+      "  const claim = await claimReceiptNotification()",
+      "  if (!claim.shouldSend) return { status: 'skipped' }",
+      "  try {",
+      "    return { status: 'sent' }",
+      "  } catch (error) {",
+      "    await markReceiptNotificationFailed()",
+      "    return { status: 'failed' }",
+      "  }",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  writeFileSync(
+    path.join(repoPath, "lib", "server", "receipt-store.ts"),
+    [
+      "export const claimReceiptNotification = async () => {",
+      "  try {",
+      "    await db.from('sale_notifications').insert({ delivery_status: 'SENDING' })",
+      "    return { notification: {}, shouldSend: true }",
+      "  } catch (error) {",
+      "    if (error.code === '23505') {",
+      "      const existing = await db.from('sale_notifications').select('*').single()",
+      "      return { notification: existing, shouldSend: false }",
+      "    }",
+      "    throw error",
+      "  }",
+      "}",
+      "",
+      "export const markReceiptNotificationFailed = async () => {",
+      "  await db.from('sale_notifications').update({ delivery_status: 'FAILED' })",
+      "}",
+      "",
+    ].join("\n"),
+  );
   mkdirSync(path.join(repoPath, "components"), { recursive: true });
   writeFileSync(path.join(repoPath, "components", "profile-tab.tsx"), "export function ProfileTab() { return null }\n");
   writeFileSync(path.join(repoPath, "components", "reservation-detail.tsx"), "export function ReservationDetail() { return null }\n");
@@ -406,6 +448,125 @@ describe("read-only investigation agent", () => {
 
     expect(usedCorrection).toBe(true);
     expect(result.likelyFiles[0]?.path).toBe("app/page.tsx");
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("seeds retry/idempotency state-machine evidence before the model loop", async () => {
+    const modelClient: AgentModelClient = {
+      async next({ observations }) {
+        expect(observations.some((item) => item.summary.includes("shouldSend"))).toBe(true);
+        expect(observations.some((item) => item.summary.includes("delivery_status"))).toBe(true);
+        expect(observations.some((item) => item.summary.includes("23505"))).toBe(true);
+        return {
+          result: {
+            confidence: 0.84,
+            explanation: "The receipt store owns retry eligibility.",
+            implementerHints: [],
+            likelyComponent: "lib/server/receipt-store.ts",
+            likelyFiles: [
+              {
+                citations: ["lib/server/receipt-store.ts:1", "lib/server/receipt-store.ts:6"],
+                confidence: 0.84,
+                path: "lib/server/receipt-store.ts",
+                reason: "The store owns the claim and duplicate handling path.",
+                repo: "repo",
+              },
+            ],
+            likelyOwners: [],
+            missingInfoQuestions: [],
+            warnings: [],
+          },
+          type: "final",
+        };
+      },
+      async final() {
+        throw new Error("final fallback should not be used");
+      },
+    };
+
+    const provider = createAgentInvestigator({ model: "test-model", modelClient });
+    const result = await provider.investigate({
+      preparedConfig: preparedConfig(tempRepo("retry-state-seed")),
+      result: {
+        ...investigationResult(),
+        report: "Receipt email failed when RESEND_API_KEY was missing. After configuring it, retry is skipped for the same sale.",
+        searchTerms: ["receipt", "email", "failed", "resend_api_key", "missing", "retry", "skipped", "sale"],
+      },
+    });
+
+    expect(result.likelyFiles[0]?.path).toBe("lib/server/receipt-store.ts");
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("reconsiders entry routes and senders for retry state-machine bugs", async () => {
+    let usedCorrection = false;
+    const modelClient: AgentModelClient = {
+      async next() {
+        return {
+          result: {
+            confidence: 0.88,
+            explanation: "The receipt email sender returns skipped.",
+            implementerHints: [],
+            likelyComponent: "lib/server/receipt-email.ts",
+            likelyFiles: [
+              {
+                citations: ["lib/server/receipt-email.ts:6"],
+                confidence: 0.88,
+                path: "lib/server/receipt-email.ts",
+                reason: "The sender returns skipped when shouldSend is false.",
+                repo: "repo",
+              },
+            ],
+            likelyOwners: [],
+            missingInfoQuestions: [],
+            warnings: [],
+          },
+          type: "final",
+        };
+      },
+      async final({ observations }) {
+        usedCorrection = observations.some((item) => item.title.includes("Retry state correction"));
+        return {
+          confidence: 0.87,
+          explanation: "The persisted claim state makes failed notifications non-retryable.",
+          implementerHints: [],
+          likelyComponent: "lib/server/receipt-email.ts",
+          likelyFiles: [
+            {
+              citations: ["lib/server/receipt-email.ts:6"],
+              confidence: 0.88,
+              path: "lib/server/receipt-email.ts",
+              reason: "The sender surfaces the skipped result from the store claim.",
+              repo: "repo",
+            },
+            {
+              citations: ["lib/server/receipt-store.ts:1", "lib/server/receipt-store.ts:6", "lib/server/receipt-store.ts:8"],
+              confidence: 0.87,
+              path: "lib/server/receipt-store.ts",
+              reason: "The store maps duplicate notification rows to shouldSend false regardless of failed status.",
+              repo: "repo",
+            },
+          ],
+          likelyOwners: [],
+          missingInfoQuestions: [],
+          warnings: [],
+        };
+      },
+    };
+
+    const provider = createAgentInvestigator({ model: "test-model", modelClient });
+    const result = await provider.investigate({
+      preparedConfig: preparedConfig(tempRepo("retry-state-correction")),
+      result: {
+        ...investigationResult(),
+        report: "Receipt email failed when RESEND_API_KEY was missing. After configuring it, retry is skipped for the same sale.",
+        searchTerms: ["receipt", "email", "failed", "resend_api_key", "missing", "retry", "skipped", "sale"],
+      },
+    });
+
+    expect(usedCorrection).toBe(true);
+    expect(result.likelyComponent).toBe("lib/server/receipt-store.ts");
+    expect(result.likelyFiles[0]?.path).toBe("lib/server/receipt-store.ts");
     expect(result.warnings).toEqual([]);
   });
 
