@@ -552,6 +552,15 @@ const authenticatedSurfaceCandidates = (observations: AgentObservation[]) => {
     .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
 };
 
+const authSurfaceCorrectedExplanation = (filePath: string, explanation: string) =>
+  [
+    `The report describes an authenticated/login journey, so ${filePath} is the best first check before public dynamic detail routes.`,
+    explanation,
+  ].join(" ");
+
+const authSurfaceCorrectedWarnings = (warnings: string[]) =>
+  warnings.filter((warning) => !/public .*route.*best|best match.*public|public .*best match/i.test(warning));
+
 const preferAuthenticatedSurfaceOwner = (
   payload: AiInvestigationResultPayload,
   request: AiReasonerRequest,
@@ -560,7 +569,6 @@ const preferAuthenticatedSurfaceOwner = (
   const topFile = payload.likelyFiles[0];
   if (
     !topFile ||
-    !isPublicDynamicRoutePath(topFile.path) ||
     !reportIncludesAny(request, AUTH_JOURNEY_TERMS) ||
     !hasAuthenticatedSurfaceSignals(observations)
   ) {
@@ -568,6 +576,7 @@ const preferAuthenticatedSurfaceOwner = (
   }
 
   const observedCandidate = authenticatedSurfaceCandidates(observations)[0];
+  const hasPublicDynamicCandidate = payload.likelyFiles.some((file) => isPublicDynamicRoutePath(file.path));
   const existingIndex = payload.likelyFiles.findIndex(
     (file, index) => index > 0 && authenticatedSurfaceCandidateScore(file.path) >= 3,
   );
@@ -575,38 +584,48 @@ const preferAuthenticatedSurfaceOwner = (
   const observedExistingIndex = observedCandidate
     ? payload.likelyFiles.findIndex((file) => file.path === observedCandidate.path)
     : -1;
+  const shouldPromoteObserved =
+    Boolean(observedCandidate) &&
+    observedCandidate!.score >= 6 &&
+    observedCandidate!.path !== topFile.path &&
+    (isPublicDynamicRoutePath(topFile.path) || hasPublicDynamicCandidate);
 
-  if (observedExistingIndex > 0 && (observedCandidate?.score ?? 0) > existingScore) {
+  if (observedExistingIndex > 0 && shouldPromoteObserved) {
     const candidate = payload.likelyFiles[observedExistingIndex];
     return {
       ...payload,
+      explanation: authSurfaceCorrectedExplanation(candidate?.path ?? payload.likelyComponent, payload.explanation),
       likelyComponent: candidate?.path ?? payload.likelyComponent,
       likelyFiles: [
         payload.likelyFiles[observedExistingIndex]!,
         ...payload.likelyFiles.slice(0, observedExistingIndex),
         ...payload.likelyFiles.slice(observedExistingIndex + 1),
       ],
+      warnings: authSurfaceCorrectedWarnings(payload.warnings),
     };
   }
 
-  if (existingIndex > 0 && (!observedCandidate || existingScore >= observedCandidate.score)) {
+  if (existingIndex > 0 && !shouldPromoteObserved && isPublicDynamicRoutePath(topFile.path) && (!observedCandidate || existingScore >= observedCandidate.score)) {
     const candidate = payload.likelyFiles[existingIndex];
     return {
       ...payload,
+      explanation: authSurfaceCorrectedExplanation(candidate?.path ?? payload.likelyComponent, payload.explanation),
       likelyComponent: candidate?.path ?? payload.likelyComponent,
       likelyFiles: [
         payload.likelyFiles[existingIndex]!,
         ...payload.likelyFiles.slice(0, existingIndex),
         ...payload.likelyFiles.slice(existingIndex + 1),
       ],
+      warnings: authSurfaceCorrectedWarnings(payload.warnings),
     };
   }
 
   const candidate = observedCandidate;
-  if (!candidate) return payload;
+  if (!candidate || !shouldPromoteObserved) return payload;
 
   return {
     ...payload,
+    explanation: authSurfaceCorrectedExplanation(candidate.path, payload.explanation),
     likelyComponent: candidate.path,
     likelyFiles: [
       {
@@ -618,6 +637,7 @@ const preferAuthenticatedSurfaceOwner = (
       },
       ...payload.likelyFiles,
     ],
+    warnings: authSurfaceCorrectedWarnings(payload.warnings),
   };
 };
 

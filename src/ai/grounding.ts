@@ -34,6 +34,12 @@ const allowedLineCitationsInRange = (citation: string, allowedCitations: Set<str
     .slice(0, 5);
 };
 
+const allowedFileCitationForLine = (citation: string, allowedCitations: Set<string>) => {
+  const parsed = parseLineSpec(citation);
+  if (!parsed || !allowedCitations.has(parsed.path)) return [];
+  return [parsed.path];
+};
+
 const groundedCitations = (
   citations: string[],
   allowedCitations: Set<string>,
@@ -48,7 +54,10 @@ const groundedCitations = (
       continue;
     }
 
-    const normalized = allowedLineCitationsInRange(citation, allowedCitations);
+    const normalized = [
+      ...allowedLineCitationsInRange(citation, allowedCitations),
+      ...allowedFileCitationForLine(citation, allowedCitations),
+    ];
     if (normalized.length) {
       allowed.push(...normalized);
       continue;

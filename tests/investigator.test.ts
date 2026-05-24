@@ -372,6 +372,85 @@ describe("read-only investigation agent", () => {
     expect(result.likelyComponent).toBe("app/page.tsx");
     expect(result.likelyFiles[0]?.path).toBe("app/page.tsx");
     expect(result.likelyFiles[0]?.citations).toContain("app/page.tsx:1");
+    expect(result.explanation).toContain("authenticated/login journey");
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("promotes authenticated shell evidence over leaf profile components when public route confusion remains", async () => {
+    const modelClient: AgentModelClient = {
+      async next() {
+        return {
+          result: {
+            confidence: 0.89,
+            explanation: "The leaf profile component and public route look likely.",
+            implementerHints: [],
+            likelyComponent: "components/profile-tab.tsx",
+            likelyFiles: [
+              {
+                citations: ["components/profile-tab.tsx"],
+                confidence: 0.82,
+                path: "components/profile-tab.tsx",
+                reason: "The visible profile surface renders here.",
+                repo: "repo",
+              },
+              {
+                citations: ["app/page.tsx:1"],
+                confidence: 0.97,
+                path: "app/users/[userId]/page.tsx",
+                reason: "The public route also mentions the profile noun.",
+                repo: "repo",
+              },
+            ],
+            likelyOwners: [],
+            missingInfoQuestions: [],
+            warnings: [],
+          },
+          type: "final",
+        };
+      },
+      async final() {
+        return {
+          confidence: 0.89,
+          explanation: "The leaf profile component and public route still look likely.",
+          implementerHints: [],
+          likelyComponent: "components/profile-tab.tsx",
+          likelyFiles: [
+            {
+              citations: ["components/profile-tab.tsx"],
+              confidence: 0.82,
+              path: "components/profile-tab.tsx",
+              reason: "The visible profile surface renders here.",
+              repo: "repo",
+            },
+            {
+              citations: ["app/page.tsx:1"],
+              confidence: 0.97,
+              path: "app/users/[userId]/page.tsx",
+              reason: "The public route also mentions the profile noun.",
+              repo: "repo",
+            },
+          ],
+          likelyOwners: [],
+          missingInfoQuestions: [],
+          warnings: [],
+        };
+      },
+    };
+
+    const provider = createAgentInvestigator({ model: "test-model", modelClient });
+    const result = await provider.investigate({
+      preparedConfig: preparedConfig(tempRepo("journey-leaf-deterministic-promotion")),
+      result: {
+        ...investigationResult(),
+        report: "When I login as an artist and go to profile page it looks empty.",
+        searchTerms: ["login", "artist", "profile", "page", "empty"],
+      },
+    });
+
+    expect(result.likelyComponent).toBe("app/page.tsx");
+    expect(result.likelyFiles[0]?.path).toBe("app/page.tsx");
+    expect(result.likelyFiles[1]?.path).toBe("components/profile-tab.tsx");
+    expect(result.explanation).toContain("authenticated/login journey");
     expect(result.warnings).toEqual([]);
   });
 

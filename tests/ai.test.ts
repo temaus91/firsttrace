@@ -204,4 +204,45 @@ describe("AI provider support", () => {
     expect(grounded.likelyFiles[0]?.citations).toEqual(["src/render.ts:12"]);
     expect(grounded.warnings.join("\n")).not.toContain("unsupported citations");
   });
+
+  it("normalizes AI line citations to supported file-path evidence citations", () => {
+    const request = {
+      ...buildAiReasonerRequest(investigationResult()),
+      evidence: [
+        ...buildAiReasonerRequest(investigationResult()).evidence,
+        {
+          citations: ["components/profile-tab.tsx"],
+          id: "tool-1",
+          kind: "agent_observation" as const,
+          summary: "components/profile-tab.tsx",
+          title: "Find profile files",
+        },
+      ],
+    };
+    const grounded = groundAiResult(
+      {
+        confidence: 0.7,
+        explanation: "Profile tab evidence points at the bug.",
+        implementerHints: [],
+        likelyComponent: "components/profile-tab.tsx",
+        likelyFiles: [
+          {
+            citations: ["components/profile-tab.tsx:1"],
+            confidence: 0.8,
+            path: "components/profile-tab.tsx",
+            reason: "Profile tab evidence matches.",
+            repo: "repo",
+          },
+        ],
+        likelyOwners: ["@core"],
+        missingInfoQuestions: [],
+        provider: "test",
+        warnings: [],
+      },
+      request,
+    );
+
+    expect(grounded.likelyFiles[0]?.citations).toEqual(["components/profile-tab.tsx"]);
+    expect(grounded.warnings.join("\n")).not.toContain("unsupported citations");
+  });
 });
