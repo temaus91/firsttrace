@@ -427,6 +427,11 @@ const groundedResult = (
 const isPublicDynamicRoutePath = (filePath: string) =>
   /(^|\/)(app|pages)\//.test(filePath) && /\[[^\]]+\]/.test(filePath);
 
+const pathFromCitation = (citation: string) => {
+  const lineMatch = /^(.+):\d+$/.exec(citation);
+  return lineMatch?.[1] ?? citation;
+};
+
 const hasAuthenticatedSurfaceSignals = (observations: AgentObservation[]) =>
   observations.some((observation) => {
     const text = `${observation.title}\n${observation.summary}\n${observation.citations.join("\n")}`.toLowerCase();
@@ -496,6 +501,125 @@ const isStatePersistencePath = (filePath: string) =>
 
 const isStateCodePath = (filePath: string) =>
   isStatePersistencePath(filePath) && !/(^|\/)migrations\//i.test(filePath);
+
+type CandidateCitation = {
+  citations: string[];
+  path: string;
+  score: number;
+};
+
+const authenticatedSurfaceCandidateScore = (filePath: string) => {
+  const normalized = filePath.toLowerCase();
+  if (isPublicDynamicRoutePath(normalized)) return 0;
+
+  let score = 0;
+  if (/^app\/page\.(tsx|ts|jsx|js)$/.test(normalized) || /^pages\/index\.(tsx|ts|jsx|js)$/.test(normalized)) {
+    score += 6;
+  }
+  if (normalized.includes("shell")) score += 4;
+  if (normalized.includes("active") || normalized.includes("navigation")) score += 2;
+  if (normalized.includes("-tab") || normalized.includes("tab.")) score += 2;
+  if (normalized.includes("profile")) score += 2;
+  if (normalized.includes("app-context") || normalized.includes("auth")) score += 1;
+  if (/^(app|pages|src\/app|src\/pages)\//.test(normalized)) score += 1;
+  if (/^components\//.test(normalized)) score += 1;
+  return score;
+};
+
+const authenticatedSurfaceCandidates = (observations: AgentObservation[]) => {
+  const candidates = new Map<string, CandidateCitation>();
+  for (const observation of observations) {
+    for (const citation of observation.citations) {
+      const filePath = pathFromCitation(citation);
+      const score = authenticatedSurfaceCandidateScore(filePath);
+      if (!score) continue;
+
+      const existing = candidates.get(filePath);
+      if (existing) {
+        existing.citations.push(citation);
+        existing.score = Math.max(existing.score, score);
+      } else {
+        candidates.set(filePath, { citations: [citation], path: filePath, score });
+      }
+    }
+  }
+
+  return [...candidates.values()]
+    .map((candidate) => ({
+      ...candidate,
+      citations: [...new Set(candidate.citations)].slice(0, 6),
+    }))
+    .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
+};
+
+const preferAuthenticatedSurfaceOwner = (
+  payload: AiInvestigationResultPayload,
+  request: AiReasonerRequest,
+  observations: AgentObservation[],
+) => {
+  const topFile = payload.likelyFiles[0];
+  if (
+    !topFile ||
+    !isPublicDynamicRoutePath(topFile.path) ||
+    !reportIncludesAny(request, AUTH_JOURNEY_TERMS) ||
+    !hasAuthenticatedSurfaceSignals(observations)
+  ) {
+    return payload;
+  }
+
+  const observedCandidate = authenticatedSurfaceCandidates(observations)[0];
+  const existingIndex = payload.likelyFiles.findIndex(
+    (file, index) => index > 0 && authenticatedSurfaceCandidateScore(file.path) >= 3,
+  );
+  const existingScore = existingIndex > 0 ? authenticatedSurfaceCandidateScore(payload.likelyFiles[existingIndex]!.path) : 0;
+  const observedExistingIndex = observedCandidate
+    ? payload.likelyFiles.findIndex((file) => file.path === observedCandidate.path)
+    : -1;
+
+  if (observedExistingIndex > 0 && (observedCandidate?.score ?? 0) > existingScore) {
+    const candidate = payload.likelyFiles[observedExistingIndex];
+    return {
+      ...payload,
+      likelyComponent: candidate?.path ?? payload.likelyComponent,
+      likelyFiles: [
+        payload.likelyFiles[observedExistingIndex]!,
+        ...payload.likelyFiles.slice(0, observedExistingIndex),
+        ...payload.likelyFiles.slice(observedExistingIndex + 1),
+      ],
+    };
+  }
+
+  if (existingIndex > 0 && (!observedCandidate || existingScore >= observedCandidate.score)) {
+    const candidate = payload.likelyFiles[existingIndex];
+    return {
+      ...payload,
+      likelyComponent: candidate?.path ?? payload.likelyComponent,
+      likelyFiles: [
+        payload.likelyFiles[existingIndex]!,
+        ...payload.likelyFiles.slice(0, existingIndex),
+        ...payload.likelyFiles.slice(existingIndex + 1),
+      ],
+    };
+  }
+
+  const candidate = observedCandidate;
+  if (!candidate) return payload;
+
+  return {
+    ...payload,
+    likelyComponent: candidate.path,
+    likelyFiles: [
+      {
+        citations: candidate.citations,
+        confidence: Math.max(0.82, Math.min(0.95, topFile.confidence)),
+        path: candidate.path,
+        reason: "Authenticated/login journey evidence points to this shell or screen owner rather than the public dynamic detail route.",
+        repo: topFile.repo,
+      },
+      ...payload.likelyFiles,
+    ],
+  };
+};
 
 const preferRetryStateOwner = (
   payload: AiInvestigationResultPayload,
@@ -697,6 +821,8 @@ const finalPayload = async (
   baseRequest: AiReasonerRequest,
   observations: AgentObservation[],
 ) => {
+  const normalizePayload = (result: AiInvestigationResultPayload) =>
+    preferRetryStateOwner(preferAuthenticatedSurfaceOwner(result, baseRequest, observations), baseRequest, observations);
   const needsJourneyCorrection = shouldReconsiderJourneyFinal(payload, baseRequest, observations);
   const needsMissingEntityCorrection = shouldReconsiderMissingEntityFinal(payload, baseRequest, observations);
   const needsRenderedSurfaceCorrection = shouldReconsiderMissingRenderedSurfaceFinal(payload, baseRequest, observations);
@@ -709,7 +835,7 @@ const finalPayload = async (
     !needsBootstrapStateCorrection &&
     !needsRetryStateCorrection
   ) {
-    return preferRetryStateOwner(payload, baseRequest, observations);
+    return normalizePayload(payload);
   }
 
   if (needsJourneyCorrection) observations.push(journeyCorrectionObservation(observations));
@@ -723,7 +849,7 @@ const finalPayload = async (
     request: requestWithObservations(baseRequest, observations),
     step: MAX_AGENT_STEPS,
   });
-  return preferRetryStateOwner(revised, baseRequest, observations);
+  return normalizePayload(revised);
 };
 
 const enrichOwnerSignals = async (

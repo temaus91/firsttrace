@@ -253,7 +253,7 @@ describe("read-only investigation agent", () => {
             likelyComponent: "app/users/[userId]/page.tsx",
             likelyFiles: [
               {
-                citations: ["app/users/[userId]/page.tsx:1"],
+                citations: ["app/page.tsx:1"],
                 confidence: 0.9,
                 path: "app/users/[userId]/page.tsx",
                 reason: "It is a dynamic public route.",
@@ -302,6 +302,76 @@ describe("read-only investigation agent", () => {
 
     expect(usedCorrection).toBe(true);
     expect(result.likelyFiles[0]?.path).toBe("components/profile-tab.tsx");
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("promotes authenticated shell evidence when correction still returns a public route", async () => {
+    const modelClient: AgentModelClient = {
+      async next() {
+        return {
+          result: {
+            confidence: 0.9,
+            explanation: "The public detail route is the likely source.",
+            implementerHints: [],
+            likelyComponent: "app/users/[userId]/page.tsx",
+            likelyFiles: [
+              {
+                citations: ["app/users/[userId]/page.tsx:1"],
+                confidence: 0.9,
+                path: "app/users/[userId]/page.tsx",
+                reason: "It is a dynamic public route.",
+                repo: "repo",
+              },
+            ],
+            likelyOwners: [],
+            missingInfoQuestions: [],
+            warnings: [],
+          },
+          type: "final",
+        };
+      },
+      async final() {
+        return {
+          confidence: 0.88,
+          explanation: "The public route still looks likely.",
+          implementerHints: [],
+          likelyComponent: "app/users/[userId]/page.tsx",
+          likelyFiles: [
+            {
+              citations: ["app/page.tsx:1"],
+              confidence: 0.88,
+              path: "app/users/[userId]/page.tsx",
+              reason: "It is a dynamic public route.",
+              repo: "repo",
+            },
+            {
+              citations: ["components/profile-tab.tsx"],
+              confidence: 0.7,
+              path: "components/profile-tab.tsx",
+              reason: "The rendered tab is nearby.",
+              repo: "repo",
+            },
+          ],
+          likelyOwners: [],
+          missingInfoQuestions: [],
+          warnings: [],
+        };
+      },
+    };
+
+    const provider = createAgentInvestigator({ model: "test-model", modelClient });
+    const result = await provider.investigate({
+      preparedConfig: preparedConfig(tempRepo("journey-deterministic-promotion")),
+      result: {
+        ...investigationResult(),
+        report: "When I login as an artist and go to profile page it looks empty.",
+        searchTerms: ["login", "artist", "profile", "page", "empty"],
+      },
+    });
+
+    expect(result.likelyComponent).toBe("app/page.tsx");
+    expect(result.likelyFiles[0]?.path).toBe("app/page.tsx");
+    expect(result.likelyFiles[0]?.citations).toContain("app/page.tsx:1");
     expect(result.warnings).toEqual([]);
   });
 
