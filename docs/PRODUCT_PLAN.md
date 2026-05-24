@@ -474,7 +474,7 @@ Current capability:
 - local `path` repository configs remain valid and default to `provider: local`
 - `provider: github` repository configs support owner, repo, and default branch
 - GitHub App credentials are read from environment secrets
-- local dogfood can use `GITHUB_TOKEN` when a user-scoped token already has read
+- local validation can use `GITHUB_TOKEN` when a user-scoped token already has read
   access to the target repository
 - escaped private-key newlines are normalized for hosted env stores
 - short-lived installation tokens are created at runtime
@@ -550,12 +550,12 @@ Limitations:
 - no Slack command shortcut or modal flow
 - no Slack retry/deduplication table beyond the existing queue/job records
 - channel repository routing is parsed and preserved, but repository subset
-  filtering is deferred until multi-repo hosted dogfood needs it
+  filtering is deferred until multi-repo hosted deployment needs it
 
 The investigation engine should remain chat-agnostic so Teams, Discord, Linear,
 or other sources can be added later.
 
-### Phase 9A: Hosted Dogfood Readiness Runner - Complete
+### Phase 9A: Hosted Deployment Readiness Runner - Complete
 
 The implemented Phase 9A flow proves the hosted orchestration path locally
 without pretending live external services have passed:
@@ -590,7 +590,7 @@ Limitations:
   applied in a dedicated Supabase project
 - local readiness can pass while optional live checks remain blocked
 
-### Phase 9B: Live Hosted Dogfood
+### Phase 9B: Live Hosted Verification
 
 Prove the full hosted workflow for a generic company setup:
 
@@ -615,6 +615,109 @@ This phase should verify:
   confidence, citations, and missing-info questions
 - no company-specific names, repositories, or channels are hardcoded
 
+### Phase 9C: OCI Queue Runtime - Implemented
+
+Add an Oracle Cloud Infrastructure deployment path without removing or
+weakening the existing Vercel/Supabase path. The goal is side-by-side production validation:
+one Slack app or channel can keep using Vercel/Supabase while another can use
+OCI, or a later router can select the runtime per channel/prefix.
+
+Preferred OCI shape for the first implementation:
+
+```text
+Slack Event
+  -> OCI HTTPS receiver
+  -> OCI Queue message
+  -> OCI worker container
+  -> OCI Object Storage dedupe/processing marker
+  -> GitHub repo materialization
+  -> configured investigator
+  -> Slack thread processing message + final reply
+```
+
+Deliberate scope:
+
+- keep Vercel/Supabase adapters and production deployment intact
+- add OCI as a new runtime adapter, not a replacement
+- use OCI Queue as the work queue from the start
+- avoid Autonomous Database in the first OCI deployment unless the need for a
+  queryable dashboard or long-term job history becomes real
+- treat Slack as the long-term human-readable history
+- use OCI Object Storage only for small runtime markers:
+  - Slack event dedupe key
+  - processing message timestamp
+  - final status marker for retry safety
+- keep queue messages small enough for OCI Queue limits by storing only report,
+  Slack source, config/runtime hints, and correlation ids
+
+Why Queue plus Object Storage marker instead of a database:
+
+- OCI Queue is the correct primitive for work delivery, visibility timeout,
+  retries, and dead-letter handling
+- FirstTrace does not need queryable job history for OCI deployment if Slack keeps
+  the visible history
+- Object Storage markers are enough to avoid duplicate replies when Slack
+  retries events or OCI Queue redelivers work
+- this keeps the OCI MVP smaller than adding Autonomous Database, schema
+  migrations, SQL claim logic, and DB credentials
+
+Implemented FirstTrace code changes:
+
+- Docker image that includes Node, git, and ripgrep so hosted investigations have
+  the same search tools locally and in production
+- generic long-running HTTP server for non-Vercel runtimes:
+  - `POST /api/slack/events`
+  - `POST /api/investigations`
+  - `GET /api/jobs?id=<id>` can be omitted or return queue-marker status only
+  - `GET|POST /api/worker/run-once` for manual repair/debug
+- `OciQueue` adapter for OCI Queue publish/consume/delete/update
+- Object Storage runtime state backed by Object Storage for dedupe and processing
+  markers
+- Slack notifier support for:
+  - posting a short "processing" reply immediately after enqueue/claim
+  - storing that processing message timestamp in the marker
+  - posting the final investigation reply in the same thread
+  - skipping duplicate final replies when a marker already says completed
+- config/runtime selection:
+  - `FIRSTTRACE_QUEUE_PROVIDER=oci`
+  - OCI compartment/queue/object-storage env vars
+  - no company-specific Slack channel names or repo names in core code
+- Terraform-first deployment under `deploy/oci` for OCI Resource Manager or
+  local Terraform
+- Vault sync helper that imports runtime secrets without storing secret values in
+  Terraform state
+
+OCI resources:
+
+- OCI Queue for job delivery
+- OCI Container Registry for the FirstTrace image
+- OCI Container Instances or a small Compute VM for receiver/worker containers
+- OCI Object Storage bucket for dedupe/processing/final markers
+- OCI Vault for Slack, GitHub, OpenAI, and receiver secrets
+- OCI API Gateway for a public HTTPS Slack Events URL
+
+OCI account plan:
+
+- create a new OCI account and choose the home region carefully
+- create or choose a `firsttrace` compartment
+- set budget alerts before deploying anything
+- use the Oracle Cloud Free Trial credits for Queue, Container Registry,
+  Container Instances/API Gateway/Load Balancer experiments
+- keep Always Free-compatible resources where possible, but do not assume OCI
+  Queue is Always Free; verify pricing before leaving it running
+
+Production validation plan:
+
+1. Deploy OCI receiver and worker container with `FIRSTTRACE_QUEUE_PROVIDER=oci`.
+2. Point the configured Slack app Event Subscription request URL to the OCI URL.
+3. Post the same bug report to Vercel/Supabase and OCI.
+4. Confirm OCI posts one processing reply and one final reply.
+5. Re-send the same Slack event payload and confirm dedupe suppresses duplicate
+   final replies.
+6. Stop the worker mid-job and confirm OCI Queue redelivers after visibility
+   timeout or moves to DLQ after configured attempts.
+7. Compare investigation quality and latency against Vercel/Supabase.
+
 ### Phase 10: Read-Only Agentic Investigator
 
 Improve investigation quality by turning the current one-shot evidence summary
@@ -637,7 +740,7 @@ one fixed evidence bundle.
 
 Target behavior:
 
-- use `OPENAI_MODEL_CHAT=gpt-5.4-mini` for dogfood
+- use `OPENAI_MODEL_CHAT=gpt-5.4-mini` for production validation
 - do not add a separate model env var for agent mode
 - add an investigator mode such as `FIRSTTRACE_INVESTIGATOR=agent`
 - keep the existing evidence mode available as a fallback, for example
@@ -649,7 +752,7 @@ Target behavior:
   missing information, and warnings
 - make the agent usable from CLI, local worker, and Supabase-backed worker
   without requiring Docker
-- test quality with eval cases and live Slack dogfood reports
+- test quality with eval cases and live Slack reports
 
 Non-goals for this phase:
 
@@ -714,9 +817,9 @@ generic investigation submission, job status, and worker execution. That lets a
 team reuse its existing Vercel project, domains, auth posture, and operational
 habits while keeping FirstTrace provider logic reusable.
 
-Standalone deployment remains the fastest current dogfood path. The npm package
+Standalone deployment remains the fastest current validation path. The npm package
 direction should be validated next by embedding FirstTrace into the Wallspace
-app after the hosted Slack dogfood proves the workflow.
+app after the hosted Slack workflow is proven.
 
 Later packaging options:
 
@@ -736,7 +839,7 @@ JobQueue
   SupabaseQueue      Vercel/Supabase hosted path
   RedisQueue         generic Docker Compose
   VercelQueue        Vercel-native users
-  OciQueue           OCI deployments
+  OciQueue           OCI Queue work delivery
 ```
 
 Recommended progression:
@@ -744,11 +847,23 @@ Recommended progression:
 1. filesystem or in-memory queue for local development
 2. Supabase queue for Vercel/Supabase hosted deployments
 3. Redis queue for generic open-source Docker Compose
-4. OCI queue for OCI deployments
+4. OCI Queue for OCI deployments
 
 The worker should be a normal long-running process. It can run locally, in a
 container, in OCI Container Instances, on Kubernetes, or behind another queue
 adapter.
+
+For OCI, do not make a database pretend to be a queue. Use OCI Queue as the work
+delivery primitive. If long-term queryable history is not required, avoid an OCI
+database in the first OCI deployment and rely on:
+
+- Slack thread history for human-readable history
+- OCI Queue retention for temporary work delivery
+- OCI Object Storage markers for dedupe, processing-message timestamps, and
+  final-completion state
+
+Add Autonomous Database only if customers need dashboards, job search, audits,
+or retention beyond Slack/Queue.
 
 ## Eval Strategy
 
@@ -1014,12 +1129,12 @@ features.
 
 1. Implement Phase 10 read-only agentic investigator with
    `OPENAI_MODEL_CHAT=gpt-5.4-mini`.
-2. Rerun live hosted dogfood from configured Slack channel to agent-generated
+2. Rerun live hosted validation from configured Slack channel to agent-generated
    Slack reply.
 3. Add the later `codex-cli` investigator adapter only after the built-in agent
    path is validated, using the same `OPENAI_MODEL_CHAT` value.
 4. Package FirstTrace for npm embedding and prove it inside the existing
-   Wallspace Vercel project after standalone dogfood succeeds.
+   Wallspace Vercel project after standalone validation succeeds.
 5. Add GitHub Issues, Vercel/Supabase, OCI, and work-item providers only through the
    generic provider interfaces.
 

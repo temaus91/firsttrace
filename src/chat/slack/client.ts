@@ -4,6 +4,10 @@ export type SlackPostMessageInput = {
   threadTs?: string;
 };
 
+export type SlackPostMessageResult = {
+  ts?: string;
+};
+
 export type SlackMessageLookupInput = {
   channel: string;
   ts: string;
@@ -12,7 +16,7 @@ export type SlackMessageLookupInput = {
 export type SlackClient = {
   fetchMessageText(input: SlackMessageLookupInput): Promise<string | undefined>;
   fetchThreadMessages?(input: SlackMessageLookupInput): Promise<string[]>;
-  postMessage(input: SlackPostMessageInput): Promise<void>;
+  postMessage(input: SlackPostMessageInput): Promise<SlackPostMessageResult | void>;
 };
 
 type FetchLike = typeof fetch;
@@ -50,7 +54,7 @@ export class SlackWebApiClient implements SlackClient {
     return body.messages?.flatMap((message) => (message.text ? [message.text] : [])) ?? [];
   }
 
-  async postMessage({ channel, text, threadTs }: SlackPostMessageInput): Promise<void> {
+  async postMessage({ channel, text, threadTs }: SlackPostMessageInput): Promise<SlackPostMessageResult> {
     const response = await this.fetchImpl("https://slack.com/api/chat.postMessage", {
       body: JSON.stringify({
         channel,
@@ -63,6 +67,7 @@ export class SlackWebApiClient implements SlackClient {
       },
       method: "POST",
     });
-    await assertSlackOk(response, "chat.postMessage");
+    const body = (await assertSlackOk(response, "chat.postMessage")) as { ts?: string };
+    return { ts: body.ts };
   }
 }

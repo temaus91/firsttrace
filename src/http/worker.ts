@@ -1,9 +1,10 @@
-import type { Awaitable, JobQueue, JobResultNotifier } from "../types.js";
+import type { Awaitable, JobProgressNotifier, JobQueue, JobResultNotifier } from "../types.js";
 import type { RepoPreparationOptions } from "../repositories/prepare.js";
 import { runWorkerOnce } from "../worker/runner.js";
 
 type WorkerRunOnceOptions = {
   cronSecret?: string;
+  progressNotifier?: JobProgressNotifier | (() => Awaitable<JobProgressNotifier | undefined>);
   queue: JobQueue | (() => Awaitable<JobQueue>);
   receiverToken?: string;
   repoPreparation?: RepoPreparationOptions;
@@ -39,6 +40,9 @@ const resolveQueue = async (queue: WorkerRunOnceOptions["queue"]) => (typeof que
 const resolveNotifier = async (resultNotifier: WorkerRunOnceOptions["resultNotifier"]) =>
   typeof resultNotifier === "function" ? resultNotifier() : resultNotifier;
 
+const resolveProgressNotifier = async (progressNotifier: WorkerRunOnceOptions["progressNotifier"]) =>
+  typeof progressNotifier === "function" ? progressNotifier() : progressNotifier;
+
 export const handleWorkerRunOnceRequest = async (
   request: Request,
   options: WorkerRunOnceOptions,
@@ -50,6 +54,7 @@ export const handleWorkerRunOnceRequest = async (
   try {
     assertAuthorized(request, options);
     const result = await runWorkerOnce({
+      progressNotifier: await resolveProgressNotifier(options.progressNotifier),
       queue: await resolveQueue(options.queue),
       repoPreparation: options.repoPreparation,
       resultNotifier: await resolveNotifier(options.resultNotifier),

@@ -7,7 +7,7 @@ Current implementation status: the local CLI, AI-assisted local investigation,
 eval runner, local worker runtime, local `submit` message adapter, hosted
 Vercel-compatible receiver/status handlers, Supabase-backed queue, and GitHub
 App repository provider, Slack Events provider, and hosted readiness verifier
-exist. Full live hosted dogfood still requires a configured Slack app, Supabase
+exist. Full live hosted deployment still requires a configured Slack app, Supabase
 project, GitHub App, and worker environment.
 
 ## Target Workflow
@@ -130,7 +130,7 @@ variable store. Do not commit it into the repository.
 If the private key is stored as a single-line environment variable, escaped
 newlines such as `\n` are supported.
 
-For local dogfood only, a personal GitHub token can be used instead:
+For local validation only, a personal GitHub token can be used instead:
 
 ```text
 GITHUB_TOKEN=
@@ -210,7 +210,7 @@ or for cron on plans that support the desired frequency:
 GET|POST /api/worker/run-once
 ```
 
-Manual dogfood runs can call the same endpoint with either `CRON_SECRET` or
+Manual repair runs can call the same endpoint with either `CRON_SECRET` or
 `FIRSTTRACE_RECEIVER_TOKEN` as a bearer token. On Vercel,
 `FIRSTTRACE_GITHUB_CACHE_ROOT` should point at `/tmp/firsttrace/github` or be
 left unset so the worker uses `/tmp` instead of the read-only deployment

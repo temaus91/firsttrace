@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { handleWorkerRunOnceRequest } from "../src/http/worker.js";
 import { FileSystemJobQueue } from "../src/worker/fs-queue.js";
-import type { InvestigationJob, JobResultNotifier } from "../src/types.js";
+import type { InvestigationJob, JobProgressNotifier, JobResultNotifier } from "../src/types.js";
 
 const json = async (response: Response) => (await response.json()) as Record<string, unknown>;
 
@@ -44,6 +44,14 @@ class CaptureNotifier implements JobResultNotifier {
   }
 }
 
+class CaptureProgressNotifier implements JobProgressNotifier {
+  notified: InvestigationJob[] = [];
+
+  async notifyStarted(job: InvestigationJob) {
+    this.notified.push(job);
+  }
+}
+
 describe("worker HTTP endpoint", () => {
   it("fails closed when no worker token is configured", async () => {
     const response = await handleWorkerRunOnceRequest(request(), {
@@ -71,6 +79,7 @@ describe("worker HTTP endpoint", () => {
   it("processes one queued job with the receiver token", async () => {
     const queue = new FileSystemJobQueue(path.join(tmpdir(), `firsttrace-worker-http-queue-${Date.now()}`));
     const notifier = new CaptureNotifier();
+    const progressNotifier = new CaptureProgressNotifier();
     const job = await queue.enqueue({
       aiEnabled: false,
       configPath: tempConfigPath(),
@@ -80,6 +89,7 @@ describe("worker HTTP endpoint", () => {
 
     const response = await handleWorkerRunOnceRequest(request("receiver-token", "POST"), {
       queue,
+      progressNotifier,
       receiverToken: "receiver-token",
       resultNotifier: notifier,
     });
@@ -89,6 +99,7 @@ describe("worker HTTP endpoint", () => {
     expect(body.status).toBe("processed");
     expect((body.job as InvestigationJob).id).toBe(job.id);
     expect((await queue.get(job.id))?.status).toBe("succeeded");
+    expect(progressNotifier.notified).toHaveLength(1);
     expect(notifier.notified).toHaveLength(1);
   });
 

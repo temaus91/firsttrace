@@ -21,6 +21,13 @@ describe("queue factory", () => {
     expect(queueProviderFrom("supabase")).toBe("supabase");
   });
 
+  it("accepts oci as a provider name", () => {
+    const selection = createJobQueue("oci");
+    expect(queueProviderFrom("oci")).toBe("oci");
+    expect(selection.provider).toBe("oci");
+    expect(selection.describeJobLocation({ id: "job-1" } as never)).toBe("OCI Object Storage job marker: jobs/job-1.json");
+  });
+
   it("rejects unsupported providers", () => {
     expect(() => queueProviderFrom("redis")).toThrow("Unsupported queue provider");
   });

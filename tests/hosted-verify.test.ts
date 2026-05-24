@@ -228,6 +228,27 @@ describe("hosted verification runner", () => {
     );
   });
 
+  it("reports missing OCI env values when OCI queue is selected", async () => {
+    const result = await runHostedVerify({
+      aiEnabled: false,
+      config: loadConfig(writeConfig()),
+      env: {},
+      liveSlackPost: false,
+      queue: new FakeQueue(),
+      queueProvider: "oci",
+      report: "README deployment plan is unclear",
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.checks).toContainEqual(
+      expect.objectContaining({
+        name: "OCI live environment",
+        required: true,
+        status: "failed",
+      }),
+    );
+  });
+
   it("can run through a fake Supabase queue path", async () => {
     const result = await runHostedVerify({
       aiEnabled: false,

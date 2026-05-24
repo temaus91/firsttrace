@@ -84,11 +84,11 @@ Completed:
 6. Phase 6: hosted Vercel/Supabase runtime.
 7. Phase 7: GitHub App repository provider.
 8. Phase 8: Slack chat provider and channel configuration.
-9. Phase 9A: hosted dogfood readiness runner.
+9. Phase 9A: hosted production-readiness runner.
 
 Next:
 
-1. Phase 9B: live hosted dogfood.
+1. Phase 9B: live hosted production validation.
    - Verify a configured Slack channel can submit a bug, the hosted backend can
      queue it, the worker can inspect a configured private repository, AI can
      reason over cited evidence, and Slack receives the result.
@@ -180,7 +180,7 @@ Hosted workflow details:
 - By default hosted verification uses a fake Slack notifier. `--live-slack-post`
   is the only mode that should call Slack Web API.
 - Phase 9A can pass with blocked optional live checks. Phase 9B is the first
-  phase that can mark real Slack/GitHub/Supabase dogfood complete.
+  phase that can mark real Slack/GitHub/Supabase hosted validation complete.
 
 Eval runner details:
 

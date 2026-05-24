@@ -202,7 +202,7 @@ search:
 ```
 
 GitHub repos should use a read-only GitHub App installation for hosted or shared
-dogfood environments:
+production environments:
 
 ```bash
 GITHUB_APP_ID=
@@ -210,7 +210,7 @@ GITHUB_APP_INSTALLATION_ID=
 GITHUB_APP_PRIVATE_KEY=
 ```
 
-For a local dogfood run, `GITHUB_TOKEN` can be used instead of a GitHub App. A
+For a local validation run, `GITHUB_TOKEN` can be used instead of a GitHub App. A
 token from `gh auth token` works if that account has read access to the target
 repository. Prefer the GitHub App path for hosted deployments because it can be
 installed only on the repositories FirstTrace is allowed to inspect.
@@ -271,7 +271,7 @@ The command uses a synthetic signed Slack event and a fake Slack notifier by
 default. Add `--live-slack-post` only when a real `SLACK_BOT_TOKEN` and
 configured Slack channel are available.
 
-## Hosted Dogfood Setup
+## Hosted Deployment Setup
 
 Use this sequence to connect the full hosted path:
 
@@ -288,13 +288,13 @@ Use this sequence to connect the full hosted path:
    `FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false`.
 6. Configure repositories with either a read-only GitHub App
    (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`) or
-   local dogfood `GITHUB_TOKEN`.
+   local validation `GITHUB_TOKEN`.
 7. Run `hosted verify` locally with `--queue supabase`; add
    `--live-slack-post` after Slack env is present.
 8. Deploy the API to a public HTTPS host. On Vercel, the Slack endpoint can use
    background processing to run one worker pass after Slack has been
    acknowledged. Keep the protected worker endpoint,
-   `GET|POST /api/worker/run-once`, available for manual dogfood repair runs or
+   `GET|POST /api/worker/run-once`, available for manual repair runs or
    cron on plans that support the desired frequency.
 9. Set Slack Event Subscriptions to
    `https://<host>/api/slack/events`.
@@ -303,6 +303,31 @@ Vercel is not required for local end-to-end verification. It is needed only when
 Slack itself must call the public `/api/slack/events` endpoint. Vercel worker
 runs use `/tmp/firsttrace/github` by default for GitHub materialization because
 the deployed function directory is read-only.
+
+## OCI Deployment
+
+FirstTrace also ships a production OCI deployment path under
+[`deploy/oci`](deploy/oci). It uses Terraform/OCI Resource Manager to create OCI
+Queue, Object Storage runtime markers, Vault/KMS, OCIR, Container Instances, API
+Gateway, and IAM policies. The same image runs a receiver container and a worker
+container.
+
+The OCI runtime is selected with:
+
+```bash
+FIRSTTRACE_QUEUE_PROVIDER=oci
+```
+
+Runtime secrets should be stored in OCI Vault, not Terraform state. After the
+Terraform stack creates Vault/KMS, run:
+
+```bash
+npm run oci:sync-secrets
+```
+
+Then set the Slack app Event Subscription request URL to the Terraform
+`slack_events_url` output. See [deploy/oci/README.md](deploy/oci/README.md) for
+the full reusable deployment sequence.
 
 ## MVP Scope
 
@@ -379,7 +404,7 @@ JobQueue
   OciQueue
 ```
 
-## Initial Dogfood Plan
+## Initial Product Validation Plan
 
 The first real test corpus can be any private repo with known historical bugs,
 expected files, and expected owners. If FirstTrace cannot localize those bugs
@@ -440,7 +465,7 @@ npm run firsttrace -- hosted verify \
 
 Next planned work:
 
-1. Run the live hosted dogfood flow with real Slack, GitHub App, Supabase, and AI.
+1. Run the live hosted deployment flow with real Slack, GitHub App, Supabase, and AI.
 2. Add GitHub Issues or another issue provider through the generic provider boundary.
 
 ## License

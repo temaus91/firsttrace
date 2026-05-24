@@ -1,0 +1,16 @@
+# Copy this file to terraform.tfvars for local Terraform.
+# OCI Resource Manager users can enter the same values as stack variables.
+
+tenancy_ocid     = "ocid1.tenancy.oc1..replace"
+compartment_ocid = "ocid1.compartment.oc1..replace"
+region           = "us-ashburn-1"
+project_name     = "firsttrace"
+
+# First apply:
+# container_image_url = ""
+#
+# After building and pushing the image to OCIR, set:
+# container_image_url = "<region-key>.ocir.io/<namespace>/firsttrace:latest"
+container_image_url = ""
+
+config_path = "firsttrace.config.yaml"

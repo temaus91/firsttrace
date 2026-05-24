@@ -198,6 +198,11 @@ const externalReadinessChecks = (
   const hasGitHubApp = githubMissing.length === 0;
   const hasGitHubToken = Boolean(env.GITHUB_TOKEN?.trim() || env.GH_TOKEN?.trim());
   const supabaseMissing = missingEnv(env, ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]);
+  const ociMissing = missingEnv(env, [
+    "OCI_OBJECTSTORAGE_BUCKET",
+    "OCI_OBJECTSTORAGE_NAMESPACE",
+    "OCI_QUEUE_ID",
+  ]);
 
   return [
     slackMissing.length
@@ -220,7 +225,12 @@ const externalReadinessChecks = (
       ? supabaseMissing.length
         ? check("failed", "Supabase live environment", `Missing ${supabaseMissing.join(", ")}.`)
         : check("passed", "Supabase live environment", "Supabase environment variables are present.")
-      : check("skipped", "Supabase live queue", "Not requested; verification is using filesystem queue.", false),
+      : check("skipped", "Supabase live queue", "Not requested.", false),
+    queueProvider === "oci"
+      ? ociMissing.length
+        ? check("failed", "OCI live environment", `Missing ${ociMissing.join(", ")}.`)
+        : check("passed", "OCI live environment", "OCI Queue and Object Storage environment variables are present.")
+      : check("skipped", "OCI live queue", "Not requested.", false),
     liveSlackPost
       ? env.SLACK_BOT_TOKEN?.trim()
         ? check("passed", "Slack live post mode", "Worker result will be posted through Slack Web API.", false)
@@ -238,8 +248,16 @@ const syntheticTimestamps = () => {
 
 export const createHostedVerifyQueue = (provider: QueueProviderName) => {
   if (provider === "filesystem") return new FileSystemJobQueue(FILESYSTEM_VERIFY_QUEUE_ROOT);
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (provider === "supabase" && (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY)) {
     return new FailingJobQueue("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for the Supabase queue.");
+  }
+  if (
+    provider === "oci" &&
+    (!process.env.OCI_OBJECTSTORAGE_BUCKET || !process.env.OCI_OBJECTSTORAGE_NAMESPACE || !process.env.OCI_QUEUE_ID)
+  ) {
+    return new FailingJobQueue(
+      "OCI_QUEUE_ID, OCI_OBJECTSTORAGE_NAMESPACE, and OCI_OBJECTSTORAGE_BUCKET are required for the OCI queue.",
+    );
   }
   return createJobQueue(provider).queue;
 };

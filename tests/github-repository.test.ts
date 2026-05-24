@@ -83,11 +83,11 @@ describe("GitHub repository provider", () => {
     );
   });
 
-  it("uses a static GitHub token when configured for local dogfood", async () => {
-    expect(readGitHubTokenFromEnv({ GITHUB_TOKEN: "  dogfood-token  " })).toBe("dogfood-token");
+  it("uses a static GitHub token when configured for local validation", async () => {
+    expect(readGitHubTokenFromEnv({ GITHUB_TOKEN: "  validation-token  " })).toBe("validation-token");
 
-    const tokenProvider = createGitHubTokenProviderFromEnv({ GITHUB_TOKEN: "dogfood-token" });
-    await expect(tokenProvider.getInstallationToken("web-app")).resolves.toBe("dogfood-token");
+    const tokenProvider = createGitHubTokenProviderFromEnv({ GITHUB_TOKEN: "validation-token" });
+    await expect(tokenProvider.getInstallationToken("web-app")).resolves.toBe("validation-token");
   });
 
   it("builds token-safe git command arguments", () => {

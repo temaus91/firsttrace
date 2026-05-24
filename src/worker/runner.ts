@@ -2,10 +2,11 @@ import { createInvestigatorProviderFromEnv } from "../investigator/provider-fact
 import { loadConfig } from "../config.js";
 import { executeInvestigation } from "../investigation-runner.js";
 import type { RepoPreparationOptions } from "../repositories/prepare.js";
-import type { InvestigatorProvider, JobQueue, JobResultNotifier, WorkerRunResult } from "../types.js";
+import type { InvestigatorProvider, JobProgressNotifier, JobQueue, JobResultNotifier, WorkerRunResult } from "../types.js";
 
 export type RunWorkerOnceOptions = {
   investigatorProviderFactory?: () => InvestigatorProvider;
+  progressNotifier?: JobProgressNotifier;
   resultNotifier?: JobResultNotifier;
   queue: JobQueue;
   repoPreparation?: RepoPreparationOptions;
@@ -13,6 +14,7 @@ export type RunWorkerOnceOptions = {
 
 export const runWorkerOnce = async ({
   investigatorProviderFactory = createInvestigatorProviderFromEnv,
+  progressNotifier,
   resultNotifier,
   queue,
   repoPreparation,
@@ -25,6 +27,16 @@ export const runWorkerOnce = async ({
     };
   }
 
+  const notifications: string[] = [];
+  if (progressNotifier) {
+    try {
+      await progressNotifier.notifyStarted(job);
+      notifications.push(`Progress notification processed for job ${job.id}.`);
+    } catch (notificationError) {
+      notifications.push(`Progress notification failed for job ${job.id}: ${(notificationError as Error).message}`);
+    }
+  }
+
   try {
     const config = loadConfig(job.configPath);
     const result = await executeInvestigation({
@@ -35,7 +47,6 @@ export const runWorkerOnce = async ({
       repoPreparation,
     });
     const completed = await queue.complete(job.id, result);
-    const notifications: string[] = [];
     if (resultNotifier) {
       try {
         await resultNotifier.notify(completed);
@@ -55,6 +66,7 @@ export const runWorkerOnce = async ({
     return {
       job: failed,
       message: `Job ${job.id} failed: ${(error as Error).message}`,
+      notifications,
       status: "processed",
     };
   }

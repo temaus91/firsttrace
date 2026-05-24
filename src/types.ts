@@ -268,6 +268,10 @@ export type JobResultNotifier = {
   notify(job: InvestigationJob): Promise<void>;
 };
 
+export type JobProgressNotifier = {
+  notifyStarted(job: InvestigationJob): Promise<void>;
+};
+
 export type LocalRepoConfig = {
   name: string;
   path: string;
