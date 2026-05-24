@@ -160,6 +160,22 @@ describe("investigation agent tools", () => {
     });
   });
 
+  it("falls back to Node file search when ripgrep is unavailable", async () => {
+    const toolset = createInvestigationToolset(preparedConfig(tempRepo("no-rg")));
+    const previousPath = process.env.PATH;
+    process.env.PATH = "";
+    try {
+      await expect(toolset.execute("findFiles", { query: "profile" })).resolves.toMatchObject({
+        citations: ["components/profile-tab.tsx"],
+      });
+      await expect(toolset.execute("searchRepo", { query: "activeTab" })).resolves.toMatchObject({
+        citations: ["app/page.tsx:1"],
+      });
+    } finally {
+      process.env.PATH = previousPath;
+    }
+  });
+
   it("rejects non-allowlisted safe commands", async () => {
     const toolset = createInvestigationToolset(preparedConfig(tempRepo("safe-command")));
 

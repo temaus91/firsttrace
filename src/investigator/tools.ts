@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { toPosixPath } from "../owners.js";
@@ -12,6 +12,8 @@ import type {
 } from "../types.js";
 
 const MAX_FILE_BYTES = 64 * 1024;
+const MAX_SEARCH_FILE_BYTES = 512 * 1024;
+const MAX_WALK_FILES = 10_000;
 const MAX_TOOL_OUTPUT_LENGTH = 4_000;
 const SAFE_COMMAND_TIMEOUT_MS = 30_000;
 const TOOL_COMMAND_TIMEOUT_MS = 10_000;
@@ -94,6 +96,31 @@ const lineCitation = (relativePath: string, line: number) => `${relativePath}:${
 
 const gitCommitCitation = (hash: string) => `commit ${hash.slice(0, 7)}`;
 
+const IGNORED_DIRS = new Set([".git", ".next", "build", "coverage", "dist", "node_modules"]);
+
+const isMissingRipgrep = (error: unknown) => (error as Error).message.includes("spawnSync rg ENOENT");
+
+const walkRepoFiles = (repo: SearchableRepoConfig) => {
+  const repoRoot = path.resolve(repo.path);
+  const files: string[] = [];
+  const walk = (directory: string) => {
+    if (files.length >= MAX_WALK_FILES) return;
+
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (files.length >= MAX_WALK_FILES) return;
+      if (entry.isDirectory()) {
+        if (IGNORED_DIRS.has(entry.name)) continue;
+        walk(path.join(directory, entry.name));
+      } else if (entry.isFile()) {
+        files.push(toPosixPath(path.relative(repoRoot, path.join(directory, entry.name))));
+      }
+    }
+  };
+
+  walk(repoRoot);
+  return files;
+};
+
 const listRepoFiles = (repo: SearchableRepoConfig) => {
   try {
     return runCommand(repo.path, "rg", ["--files", "--glob", "!**/.git/**", "--glob", "!**/node_modules/**"], {
@@ -105,8 +132,8 @@ const listRepoFiles = (repo: SearchableRepoConfig) => {
       .filter(Boolean)
       .map(toPosixPath);
   } catch (error) {
-    if ((error as Error).message.includes("spawnSync rg ENOENT")) {
-      throw new Error("findFiles requires ripgrep to list repository files.");
+    if (isMissingRipgrep(error)) {
+      return walkRepoFiles(repo);
     }
     throw error;
   }
@@ -165,28 +192,54 @@ const parseRgOutput = (stdout: string) =>
     });
 
 const rgSearch = (repo: SearchableRepoConfig, query: string) => {
-  const result = runCommand(
-    repo.path,
-    "rg",
-    [
-      "--line-number",
-      "--ignore-case",
-      "--fixed-strings",
-      "--glob",
-      "!**/.git/**",
-      "--glob",
-      "!**/node_modules/**",
-      "--glob",
-      "!**/dist/**",
-      "--glob",
-      "!**/build/**",
-      "--",
-      query,
-      ".",
-    ],
-    { allowExitCodes: [1], maxBuffer: 2 * 1024 * 1024, timeoutMs: TOOL_COMMAND_TIMEOUT_MS },
-  );
-  return parseRgOutput(result.stdout).slice(0, 12);
+  try {
+    const result = runCommand(
+      repo.path,
+      "rg",
+      [
+        "--line-number",
+        "--ignore-case",
+        "--fixed-strings",
+        "--glob",
+        "!**/.git/**",
+        "--glob",
+        "!**/node_modules/**",
+        "--glob",
+        "!**/dist/**",
+        "--glob",
+        "!**/build/**",
+        "--",
+        query,
+        ".",
+      ],
+      { allowExitCodes: [1], maxBuffer: 2 * 1024 * 1024, timeoutMs: TOOL_COMMAND_TIMEOUT_MS },
+    );
+    return parseRgOutput(result.stdout).slice(0, 12);
+  } catch (error) {
+    if (!isMissingRipgrep(error)) throw error;
+  }
+
+  const queryLower = query.toLowerCase();
+  const matches: Array<{ line: number; path: string; text: string }> = [];
+  for (const filePath of listRepoFiles(repo)) {
+    const absolutePath = path.resolve(repo.path, filePath);
+    const stats = statSync(absolutePath);
+    if (!stats.isFile() || stats.size > MAX_SEARCH_FILE_BYTES) continue;
+
+    let lines: string[];
+    try {
+      lines = readFileSync(absolutePath, "utf8").split("\n");
+    } catch {
+      continue;
+    }
+
+    for (const [index, line] of lines.entries()) {
+      if (!line.toLowerCase().includes(queryLower)) continue;
+      matches.push({ line: index + 1, path: filePath, text: line });
+      if (matches.length >= 12) return matches;
+    }
+  }
+  return matches;
 };
 
 const searchRepoTool = (config: PreparedFirstTraceConfig, args: unknown): InvestigationToolResult => {
