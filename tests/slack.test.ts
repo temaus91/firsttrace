@@ -602,6 +602,38 @@ describe("Slack result notification", () => {
     expect(rendered).toContain("README.md: README matched the report.");
   });
 
+  it("does not truncate likely-cause sentences at file extensions", () => {
+    const rendered = renderSlackInvestigationReply({
+      ai: {
+        confidence: 0.91,
+        explanation:
+          "The lead is app/page.tsx because it routes the authenticated profile tab. The app context controls readiness.",
+        implementerHints: [],
+        likelyComponent: "app/page.tsx",
+        likelyFiles: [],
+        likelyOwners: [],
+        missingInfoQuestions: [],
+        provider: "agent",
+        warnings: [],
+      },
+      classification: "bug",
+      likelyComponent: "app/page.tsx",
+      likelyOwners: [],
+      relatedCommits: [],
+      relatedDocs: [],
+      report: "Profile is blank after login",
+      searchTerms: ["profile"],
+      suggestedNextSteps: [],
+      suspiciousFiles: [],
+      warnings: [],
+    });
+
+    expect(rendered).toContain(
+      "The lead is app/page.tsx because it routes the authenticated profile tab. The app context controls readiness.",
+    );
+    expect(rendered).not.toContain("*Likely cause*\nThe lead is app/page.\n");
+  });
+
   it("renders compact AI debugging leads and implementer hints in Slack replies", () => {
     const rendered = renderSlackInvestigationReply({
       ai: {

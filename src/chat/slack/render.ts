@@ -32,7 +32,7 @@ const unique = (items: string[]) => {
 const sentenceLimit = (text: string, limit: number) => {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (!normalized) return "";
-  const sentences = normalized.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((sentence) => sentence.trim()) ?? [normalized];
+  const sentences = normalized.split(/(?<=[.!?])\s+/).filter(Boolean);
   return sentences.slice(0, limit).join(" ");
 };
 
