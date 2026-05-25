@@ -38,6 +38,15 @@ jobs:
       - name: Build package tarball
         run: npm pack
 
+      - name: Verify packaged Slack renderer
+        run: |
+          mkdir -p /tmp/firsttrace-package
+          tar -xzf firsttrace-0.1.0.tgz -C /tmp/firsttrace-package
+          grep -q 'Likely owner' /tmp/firsttrace-package/package/dist/src/chat/slack/render.js
+          grep -q 'Primary files' /tmp/firsttrace-package/package/dist/src/chat/slack/render.js
+          ! grep -q 'Best fault-location lead' /tmp/firsttrace-package/package/dist/src/chat/slack/render.js
+          ! grep -q 'Likely component' /tmp/firsttrace-package/package/dist/src/chat/slack/render.js
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -63,3 +72,4 @@ jobs:
             FIRSTTRACE_PACKAGE_TARBALL=firsttrace-0.1.0.tgz
             FIRSTTRACE_CONFIG_FILE=firsttrace.wallspace.config.yaml
             FIRSTTRACE_CONFIG_DEST=firsttrace.wallspace.config.yaml
+            FIRSTTRACE_BUILD_REF=${{ github.sha }}

@@ -19,6 +19,8 @@ const DEFAULT_PORT = 8080;
 const hostedConfigPath = () => process.env.FIRSTTRACE_CONFIG_PATH ?? "firsttrace.config.yaml";
 const hostedQueueProvider = () => process.env.FIRSTTRACE_QUEUE_PROVIDER ?? "filesystem";
 const allowUnauthenticatedReceiver = () => process.env.FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER === "true";
+const buildRef = () => process.env.FIRSTTRACE_BUILD_REF?.trim() || "local";
+const slackReplyFormat = () => process.env.FIRSTTRACE_SLACK_REPLY_FORMAT?.trim() || "compact-v1";
 
 const slackClient = () => {
   const botToken = process.env.SLACK_BOT_TOKEN?.trim();
@@ -79,7 +81,15 @@ export const createFirstTraceHttpServer = async () => {
       const pathname = new URL(request.url).pathname;
 
       if (pathname === "/healthz") {
-        await writeResponse(outgoing, jsonResponse(200, { ok: true, queueProvider: queueSelection.provider }));
+        await writeResponse(
+          outgoing,
+          jsonResponse(200, {
+            buildRef: buildRef(),
+            ok: true,
+            queueProvider: queueSelection.provider,
+            slackReplyFormat: slackReplyFormat(),
+          }),
+        );
         return;
       }
 
