@@ -3,6 +3,11 @@
 This directory contains the reusable OCI deployment path for FirstTrace. It is
 intended for real deployments, not a one-off environment.
 
+The preferred runtime image is package-based: `deploy/oci/Dockerfile.package`
+installs the `firsttrace` npm package tarball and copies one deployment config
+file into the image. OCI still runs Container Instances, but the image no longer
+needs the full FirstTrace source tree at runtime.
+
 ## What Terraform Creates
 
 - OCI Queue for investigation jobs
@@ -20,11 +25,11 @@ from the npm package, or `npm run oci:sync-secrets` from a source checkout.
 
 ## Deploy With OCI Resource Manager
 
-1. Build the project locally:
+1. Prepare a FirstTrace package tarball and deployment config:
 
    ```bash
-   npm ci
-   npm run typecheck
+   npm pack
+   cp firsttrace.config.yaml firsttrace.oci.config.yaml
    ```
 
 2. Create a zip of `deploy/oci/terraform` and upload it as an OCI Resource
@@ -42,10 +47,16 @@ from the npm package, or `npm run oci:sync-secrets` from a source checkout.
 
 4. Apply once. This creates the base infrastructure and OCIR repository.
 
-5. Build and push the container image to OCIR. Authenticate Docker to the
+5. Build and push the package image to OCIR. Authenticate Docker to the
    region's OCIR registry first with an OCI auth token, then run:
 
    ```bash
+   export FIRSTTRACE_DOCKERFILE="deploy/oci/Dockerfile.package"
+   export FIRSTTRACE_PACKAGE_TARBALL="$(ls firsttrace-*.tgz | tail -n 1)"
+   export FIRSTTRACE_CONFIG_FILE="firsttrace.oci.config.yaml"
+   export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
+   export FIRSTTRACE_CONTAINER_PLATFORM="linux/amd64"
+
    ./deploy/oci/scripts/build-and-push.sh <region-key> <namespace> firsttrace latest
    ```
 
@@ -101,16 +112,27 @@ export COMPARTMENT_OCID="<compartment_ocid>"
 export OCI_REGION="<oci-region>"        # Example: us-sanjose-1
 export OCI_REGION_KEY="<ocir-region-key>" # Example: sjc
 export PROJECT_NAME="firsttrace"
-export IMAGE_TAG="$(git -C ~/firsttrace rev-parse --short HEAD 2>/dev/null || echo latest)"
+export FIRSTTRACE_VERSION="0.1.0"
+export IMAGE_TAG="${FIRSTTRACE_VERSION}"
 ```
 
-Clone FirstTrace and check out the desired branch or release:
+Prepare the package, Terraform files, image script, and config file. After
+FirstTrace is published to npm, `npm pack firsttrace@"$FIRSTTRACE_VERSION"` is
+enough. Before public publish, run `npm pack` from a release/source checkout and
+upload the resulting tarball instead.
 
 ```bash
-git clone https://github.com/<owner>/firsttrace.git ~/firsttrace
+mkdir -p ~/firsttrace
 cd ~/firsttrace
-git checkout <branch-or-tag>
+npm pack firsttrace@"$FIRSTTRACE_VERSION"
+tar -xzf "firsttrace-${FIRSTTRACE_VERSION}.tgz" package/deploy/oci
+cp -R package/deploy/oci ./deploy/oci
+cp "firsttrace-${FIRSTTRACE_VERSION}.tgz" firsttrace-package.tgz
 ```
+
+Upload or create your deployment config as `~/firsttrace/firsttrace.config.yaml`.
+It should contain your `repos`, `owners`, and Slack channel configuration, but
+not secrets.
 
 Create the base OCI infrastructure. Keep `container_image_url` empty for the
 first apply because the OCIR repository must exist before the image can be
@@ -217,6 +239,11 @@ Build and push the image:
 ```bash
 cd ~/firsttrace
 export FIRSTTRACE_CONTAINER_PLATFORM="linux/amd64"
+export FIRSTTRACE_DOCKERFILE="deploy/oci/Dockerfile.package"
+export FIRSTTRACE_PACKAGE_TARBALL="firsttrace-package.tgz"
+export FIRSTTRACE_CONFIG_FILE="firsttrace.config.yaml"
+export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
+
 ./deploy/oci/scripts/build-and-push.sh \
   "$OCI_REGION_KEY" \
   "$OCI_NAMESPACE" \
@@ -244,8 +271,8 @@ export OCI_VAULT_ID="$(terraform output -json secret_sync_env | jq -r '.OCI_VAUL
 export OCI_VAULT_KEY_ID="$(terraform output -json secret_sync_env | jq -r '.OCI_VAULT_KEY_ID')"
 
 cd ~/firsttrace
-npm ci
-npm run oci:sync-secrets
+npm install --prefix ~/firsttrace/tools ./firsttrace-package.tgz
+PATH="$HOME/firsttrace/tools/node_modules/.bin:$PATH" firsttrace-oci-sync-secrets
 rm -f ~/firsttrace/.env.local ~/firsttrace.env.local
 ```
 

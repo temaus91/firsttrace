@@ -13,11 +13,25 @@ repository="$3"
 tag="${4:-latest}"
 image="${region_key}.ocir.io/${namespace}/${repository}:${tag}"
 platform="${FIRSTTRACE_CONTAINER_PLATFORM:-linux/amd64}"
+dockerfile="${FIRSTTRACE_DOCKERFILE:-Dockerfile}"
+build_args=()
+
+if [[ -n "${FIRSTTRACE_PACKAGE_TARBALL:-}" ]]; then
+  build_args+=(--build-arg "FIRSTTRACE_PACKAGE_TARBALL=${FIRSTTRACE_PACKAGE_TARBALL}")
+fi
+
+if [[ -n "${FIRSTTRACE_CONFIG_FILE:-}" ]]; then
+  build_args+=(--build-arg "FIRSTTRACE_CONFIG_FILE=${FIRSTTRACE_CONFIG_FILE}")
+fi
+
+if [[ -n "${FIRSTTRACE_CONFIG_DEST:-}" ]]; then
+  build_args+=(--build-arg "FIRSTTRACE_CONFIG_DEST=${FIRSTTRACE_CONFIG_DEST}")
+fi
 
 if docker buildx version >/dev/null 2>&1; then
-  docker buildx build --platform "${platform}" -t "${image}" --push .
+  docker buildx build --platform "${platform}" -f "${dockerfile}" "${build_args[@]}" -t "${image}" --push .
 else
-  docker build --platform "${platform}" -t "${image}" .
+  docker build --platform "${platform}" -f "${dockerfile}" "${build_args[@]}" -t "${image}" .
   docker push "${image}"
 fi
 

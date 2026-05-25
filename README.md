@@ -320,7 +320,9 @@ FirstTrace also ships a production OCI deployment path under
 [`deploy/oci`](deploy/oci). It uses Terraform/OCI Resource Manager to create OCI
 Queue, Object Storage runtime markers, Vault/KMS, OCIR, Container Instances, API
 Gateway, and IAM policies. The same image runs a receiver container and a worker
-container.
+container. The OCI image should be built with `deploy/oci/Dockerfile.package`,
+which installs the packed `firsttrace` npm package and copies only the deployment
+config into the image.
 
 The OCI runtime is selected with:
 

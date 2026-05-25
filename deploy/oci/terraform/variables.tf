@@ -31,7 +31,7 @@ variable "container_image_url" {
 }
 
 variable "config_path" {
-  description = "Config file path baked into the container image."
+  description = "Config file path inside the container image."
   type        = string
   default     = "firsttrace.config.yaml"
 }

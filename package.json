@@ -61,6 +61,7 @@
     "LICENSE",
     "examples/**",
     "deploy/oci/README.md",
+    "deploy/oci/Dockerfile.package",
     "deploy/oci/scripts/**",
     "deploy/oci/terraform/*.tf",
     "deploy/oci/terraform/*.example",

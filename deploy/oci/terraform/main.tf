@@ -183,16 +183,16 @@ resource "oci_container_instances_container_instance" "runtime" {
   }
 
   containers {
-    arguments             = ["dist/src/runtime/http-server.js"]
-    command               = ["node"]
+    arguments             = []
+    command               = ["firsttrace-http"]
     display_name          = "receiver"
     environment_variables = merge(local.runtime_env, { PORT = "8080" })
     image_url             = var.container_image_url
   }
 
   containers {
-    arguments             = ["dist/src/runtime/worker-loop.js"]
-    command               = ["node"]
+    arguments             = []
+    command               = ["firsttrace-worker"]
     display_name          = "worker"
     environment_variables = local.runtime_env
     image_url             = var.container_image_url

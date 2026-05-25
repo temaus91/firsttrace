@@ -663,8 +663,9 @@ Why Queue plus Object Storage marker instead of a database:
 
 Implemented FirstTrace code changes:
 
-- Docker image that includes Node, git, and ripgrep so hosted investigations have
-  the same search tools locally and in production
+- package-based OCI image that installs the `firsttrace` npm package tarball and
+  includes Node, git, and ripgrep so hosted investigations have the same search
+  tools locally and in production
 - generic long-running HTTP server for non-Vercel runtimes:
   - `POST /api/slack/events`
   - `POST /api/investigations`
@@ -817,14 +818,14 @@ generic investigation submission, job status, and worker execution. That lets a
 team reuse its existing Vercel project, domains, auth posture, and operational
 habits while keeping FirstTrace provider logic reusable.
 
-Standalone deployment remains the fastest current validation path. The npm package
-direction should be validated next by embedding FirstTrace into the Wallspace
-app after the hosted Slack workflow is proven.
+Standalone deployment remains the fastest current validation path. OCI should use
+a package-based image built from the same npm artifact, while Vercel customers can
+embed FirstTrace route helpers into an existing app.
 
 Later packaging options:
 
-- Docker image once there is enough receiver/worker usage to justify an
-  always-on deployment artifact
+- prebuilt Docker image once there is enough receiver/worker usage to justify a
+  public always-on deployment artifact
 - GitHub Container Registry first: `ghcr.io/temaus91/firsttrace`
 - Docker Hub later if external adoption needs it
 
