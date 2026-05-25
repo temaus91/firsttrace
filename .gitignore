@@ -8,3 +8,7 @@ build/
 .firsttrace/
 supabase/.temp/
 .vercel
+deploy/oci/terraform/.terraform/
+deploy/oci/terraform/terraform.tfstate
+deploy/oci/terraform/terraform.tfstate.*
+deploy/oci/terraform/terraform.tfvars

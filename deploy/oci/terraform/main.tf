@@ -68,6 +68,16 @@ resource "oci_core_security_list" "runtime" {
 
   ingress_security_rules {
     protocol = "6"
+    source   = "0.0.0.0/0"
+
+    tcp_options {
+      min = 443
+      max = 443
+    }
+  }
+
+  ingress_security_rules {
+    protocol = "6"
     source   = var.subnet_cidr
 
     tcp_options {
