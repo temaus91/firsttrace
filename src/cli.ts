@@ -54,7 +54,7 @@ Options:
   --job <id>        Worker job id for status lookup.
   --live-slack-post Post hosted verification results to Slack instead of using the fake notifier.
   --once            Process at most one queued job.
-  --queue <name>    Queue provider: filesystem or supabase. Defaults to FIRSTTRACE_QUEUE_PROVIDER or filesystem.
+  --queue <name>    Queue provider: filesystem, supabase, or oci. Defaults to FIRSTTRACE_QUEUE_PROVIDER or filesystem.
   --report <text>   Bug report or feedback text to investigate.
   --help            Show this message.`;
 

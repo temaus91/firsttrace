@@ -402,7 +402,9 @@ Teams should be able to bring their own infrastructure:
 - **Local/dev:** in-memory queue or Redis
 - **Vercel/Supabase path:** Vercel receiver + Supabase Queue + worker process
 - **Generic open-source path:** Docker Compose + Redis or Postgres
-- **OCI path:** OCI Container Instances or OKE + OCI Queue + OCI Vault
+- **OCI path:** OCI Container Instances or OKE + OCI Queue + OCI Vault. The
+  recommended OCI runtime is a Docker/OCI image that installs the `firsttrace`
+  npm package, not a full source checkout.
 
 Queue and runtime should be adapters:
 

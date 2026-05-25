@@ -73,6 +73,21 @@ from the npm package, or `npm run oci:sync-secrets` from a source checkout.
    <region-key>.ocir.io/<namespace>/firsttrace:latest
    ```
 
+   If Cloud Shell is ARM but the target region has no `CI.Standard.A1.Flex`
+   capacity, build the package image with the repository workflow instead. The
+   included `.github/workflows/package-image.yml` workflow builds a Linux AMD64
+   image from the npm tarball and pushes it to GHCR. Trigger it from GitHub
+   Actions, then use the resulting image with an AMD64 Container Instance shape:
+
+   ```bash
+   terraform apply -auto-approve \
+     -var='container_image_url=ghcr.io/<owner>/firsttrace:<commit-sha>' \
+     -var='shape=CI.Standard.E4.Flex'
+   ```
+
+   This keeps the deployed runtime package-based, but uses GitHub-hosted Docker
+   Buildx instead of relying on Cloud Shell cross-architecture emulation.
+
 6. Export the secret-sync outputs from Terraform, then sync local runtime
    secrets into OCI Vault:
 
@@ -253,6 +268,30 @@ export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
   "$OCI_REPOSITORY" \
   "$IMAGE_TAG"
 ```
+
+If `CI.Standard.A1.Flex` is out of capacity, or if you need an AMD64 image from
+an ARM Cloud Shell where Docker Buildx emulation is not available, use the
+repository package-image workflow instead of building in Cloud Shell:
+
+```bash
+# Push or manually dispatch .github/workflows/package-image.yml.
+# After it succeeds, copy the image tag printed by the workflow.
+export IMAGE_URL="ghcr.io/<owner>/firsttrace:<commit-sha>"
+export OCI_SHAPE="CI.Standard.E4.Flex"
+```
+
+Then apply with explicit overrides:
+
+```bash
+cd ~/firsttrace/deploy/oci/terraform
+terraform apply -auto-approve \
+  -var="container_image_url=${IMAGE_URL}" \
+  -var="shape=${OCI_SHAPE}"
+```
+
+`CI.Standard.E4.Flex` is an AMD64 shape and may consume trial credits or paid
+usage. Prefer `CI.Standard.A1.Flex` plus `linux/arm64` when Always Free capacity
+is available.
 
 Sync runtime secrets into OCI Vault. The sync command reads a local `.env` file;
 do not commit this file or place it in Terraform variables.
