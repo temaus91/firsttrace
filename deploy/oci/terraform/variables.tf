@@ -37,9 +37,9 @@ variable "config_path" {
 }
 
 variable "runtime_secret_names" {
-  description = "Comma-separated Vault secret names the runtime may load."
+  description = "Comma-separated Vault secret names the runtime must load. Add optional tuning env vars here only when you also create matching Vault secrets."
   type        = string
-  default     = "OPENAI_API_KEY,OPENAI_MODEL_CHAT,FIRSTTRACE_AI_PROVIDER,FIRSTTRACE_INVESTIGATOR,FIRSTTRACE_RECEIVER_TOKEN,SLACK_SIGNING_SECRET,SLACK_BOT_TOKEN,GITHUB_APP_ID,GITHUB_APP_PRIVATE_KEY,GITHUB_APP_INSTALLATION_ID"
+  default     = "OPENAI_API_KEY,OPENAI_MODEL_CHAT,FIRSTTRACE_RECEIVER_TOKEN,SLACK_SIGNING_SECRET,SLACK_BOT_TOKEN,GITHUB_APP_ID,GITHUB_APP_PRIVATE_KEY,GITHUB_APP_INSTALLATION_ID"
 }
 
 variable "vcn_cidr" {

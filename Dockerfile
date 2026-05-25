@@ -14,10 +14,10 @@ RUN apt-get update \
 
 WORKDIR /app
 ENV NODE_ENV=production
-COPY package.json package-lock.json ./
+COPY --from=build /app/package.json /app/package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
-COPY firsttrace.config.yaml firsttrace.wallspace.config.yaml ./
+COPY --from=build /app/firsttrace.config.yaml /app/firsttrace.wallspace.config.yaml ./
 
 EXPOSE 8080
 CMD ["node", "dist/src/runtime/http-server.js"]
