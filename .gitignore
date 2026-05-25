@@ -3,6 +3,7 @@
 !.env.example
 node_modules/
 dist/
+*.tgz
 build/
 .DS_Store
 .firsttrace/

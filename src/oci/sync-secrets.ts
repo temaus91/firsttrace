@@ -1,3 +1,7 @@
+#!/usr/bin/env node
+
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { loadLocalEnv } from "../env.js";
 import { createOciAuthProvider } from "./auth.js";
 
@@ -105,6 +109,16 @@ export const syncOciVaultSecretsFromEnv = async () => {
   }
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isMainModule = () => {
+  const argvPath = process.argv[1];
+  if (!argvPath) return false;
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(argvPath);
+  } catch {
+    return false;
+  }
+};
+
+if (isMainModule()) {
   await syncOciVaultSecretsFromEnv();
 }

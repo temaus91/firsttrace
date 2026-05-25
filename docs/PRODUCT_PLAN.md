@@ -251,7 +251,7 @@ in the channel profile.
 The implemented Phase 1 flow is:
 
 ```bash
-npm run firsttrace -- investigate \
+firsttrace investigate \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear"
 ```
@@ -280,7 +280,7 @@ The implemented Phase 2 flow adds an optional AI reasoning pass on top of Phase
 1 evidence:
 
 ```bash
-npm run firsttrace -- investigate \
+firsttrace investigate \
   --config firsttrace.config.yaml \
   --report "checkout retry leaves the buyer stuck" \
   --ai
@@ -330,7 +330,7 @@ Limitations:
 The implemented Phase 3 flow adds eval cases before chat or worker integrations:
 
 ```bash
-npm run firsttrace -- eval \
+firsttrace eval \
   --config firsttrace.config.yaml \
   --cases evals/example.yaml
 ```
@@ -338,7 +338,7 @@ npm run firsttrace -- eval \
 Optional AI comparison:
 
 ```bash
-npm run firsttrace -- eval \
+firsttrace eval \
   --config firsttrace.config.yaml \
   --cases evals/example.yaml \
   --ai
@@ -370,13 +370,13 @@ The implemented Phase 4 flow adds a local asynchronous runtime that reuses the
 same investigation engine as the CLI:
 
 ```bash
-npm run firsttrace -- worker enqueue \
+firsttrace worker enqueue \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear"
 
-npm run firsttrace -- worker run --once
+firsttrace worker run --once
 
-npm run firsttrace -- worker status --job <job-id>
+firsttrace worker status --job <job-id>
 ```
 
 Current capability:
@@ -401,7 +401,7 @@ Limitations:
 The implemented Phase 5 flow adds a local message delivery adapter before Slack:
 
 ```bash
-npm run firsttrace -- submit \
+firsttrace submit \
   --config firsttrace.config.yaml \
   --report "checkout retry leaves the buyer stuck"
 ```
@@ -561,7 +561,7 @@ The implemented Phase 9A flow proves the hosted orchestration path locally
 without pretending live external services have passed:
 
 ```bash
-npm run firsttrace -- hosted verify \
+firsttrace hosted verify \
   --config examples/hosted.local.config.yaml \
   --queue filesystem \
   --report "README deployment plan is unclear"
@@ -953,14 +953,14 @@ Prerequisites:
 Smoke test:
 
 ```bash
-npm run firsttrace -- submit \
+firsttrace submit \
   --queue supabase \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear"
 
-npm run firsttrace -- worker run --once --queue supabase
+firsttrace worker run --once --queue supabase
 
-npm run firsttrace -- worker status --queue supabase --job <job-id>
+firsttrace worker status --queue supabase --job <job-id>
 ```
 
 Expected result:
@@ -1018,7 +1018,7 @@ search:
 Smoke test:
 
 ```bash
-npm run firsttrace -- investigate \
+firsttrace investigate \
   --config firsttrace.github.local.yaml \
   --report "README deployment plan is unclear"
 ```

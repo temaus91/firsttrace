@@ -1,4 +1,8 @@
+#!/usr/bin/env node
+
+import { realpathSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import { createJobProgressNotifierFromEnv, createJobResultNotifierFromEnv } from "../chat/slack/notifier.js";
 import { loadLocalEnv } from "../env.js";
 import { createOciSlackNotifiersFromEnv } from "../oci/notifiers.js";
@@ -76,6 +80,16 @@ export const startWorkerLoopFromEnv = async () => {
   });
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isMainModule = () => {
+  const argvPath = process.argv[1];
+  if (!argvPath) return false;
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(argvPath);
+  } catch {
+    return false;
+  }
+};
+
+if (isMainModule()) {
   await startWorkerLoopFromEnv();
 }

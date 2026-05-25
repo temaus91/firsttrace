@@ -2,8 +2,8 @@ import type { MessageSubmitResult } from "../types.js";
 import { renderJobSummary } from "../worker/render.js";
 
 export const renderMessageSubmitResult = (result: MessageSubmitResult, location?: string, queueProvider = "filesystem") => {
-  const runCommand = `npm run firsttrace -- worker run --once --queue ${queueProvider}`;
-  const statusCommand = `npm run firsttrace -- worker status --queue ${queueProvider} --job ${result.job.id}`;
+  const runCommand = `firsttrace worker run --once --queue ${queueProvider}`;
+  const statusCommand = `firsttrace worker status --queue ${queueProvider} --job ${result.job.id}`;
 
   return [
     "# FirstTrace Local Message Submitted",

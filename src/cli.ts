@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import path from "node:path";
 import { createJobResultNotifierFromEnv } from "./chat/slack/notifier.js";
 import { loadConfig } from "./config.js";
@@ -33,16 +35,16 @@ type ParsedArgs = {
 };
 
 const usage = () => `Usage:
-  npm run firsttrace -- investigate --config firsttrace.config.yaml --report "bug text"
-  npm run firsttrace -- investigate --config firsttrace.config.yaml --report "bug text" --ai
-  npm run firsttrace -- eval --config firsttrace.config.yaml --cases evals/example.yaml
-  npm run firsttrace -- eval --config firsttrace.config.yaml --cases evals/example.yaml --ai
-  npm run firsttrace -- submit --queue filesystem --config firsttrace.config.yaml --report "bug text"
-  npm run firsttrace -- submit --queue supabase --config firsttrace.config.yaml --report "bug text" --ai
-  npm run firsttrace -- hosted verify --config examples/hosted.local.config.yaml --queue filesystem --report "bug text"
-  npm run firsttrace -- worker enqueue --queue filesystem --config firsttrace.config.yaml --report "bug text"
-  npm run firsttrace -- worker run --once --queue filesystem
-  npm run firsttrace -- worker status --queue filesystem --job <job-id>
+  firsttrace investigate --config firsttrace.config.yaml --report "bug text"
+  firsttrace investigate --config firsttrace.config.yaml --report "bug text" --ai
+  firsttrace eval --config firsttrace.config.yaml --cases evals/example.yaml
+  firsttrace eval --config firsttrace.config.yaml --cases evals/example.yaml --ai
+  firsttrace submit --queue filesystem --config firsttrace.config.yaml --report "bug text"
+  firsttrace submit --queue supabase --config firsttrace.config.yaml --report "bug text" --ai
+  firsttrace hosted verify --config examples/hosted.local.config.yaml --queue filesystem --report "bug text"
+  firsttrace worker enqueue --queue filesystem --config firsttrace.config.yaml --report "bug text"
+  firsttrace worker run --once --queue filesystem
+  firsttrace worker status --queue filesystem --job <job-id>
 
 Options:
   --ai              Run the configured investigator over the deterministic evidence.

@@ -15,7 +15,8 @@ intended for real deployments, not a one-off environment.
 - API Gateway in front of the receiver
 
 The Terraform does not store real Slack, GitHub, or OpenAI secrets in state.
-Secrets are synced after the Vault exists by running `npm run oci:sync-secrets`.
+Secrets are synced after the Vault exists by running `firsttrace-oci-sync-secrets`
+from the npm package, or `npm run oci:sync-secrets` from a source checkout.
 
 ## Deploy With OCI Resource Manager
 

@@ -1,4 +1,8 @@
+#!/usr/bin/env node
+
+import { realpathSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { fileURLToPath } from "node:url";
 import { SlackWebApiClient } from "../chat/slack/client.js";
 import { handleSlackEventsRequest, loadSlackConfigFromPath } from "../chat/slack/events.js";
 import { createJobProgressNotifierFromEnv, createJobResultNotifierFromEnv } from "../chat/slack/notifier.js";
@@ -156,6 +160,16 @@ export const startFirstTraceHttpServer = async () => {
   return server;
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isMainModule = () => {
+  const argvPath = process.argv[1];
+  if (!argvPath) return false;
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(argvPath);
+  } catch {
+    return false;
+  }
+};
+
+if (isMainModule()) {
   await startFirstTraceHttpServer();
 }

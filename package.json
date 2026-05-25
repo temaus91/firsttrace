@@ -1,13 +1,79 @@
 {
   "name": "firsttrace",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Self-hosted bug localization for teams with private, internal, or public git repos.",
+  "license": "Apache-2.0",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "bin": {
+    "firsttrace": "./dist/src/cli.js",
+    "firsttrace-http": "./dist/src/runtime/http-server.js",
+    "firsttrace-oci-sync-secrets": "./dist/src/oci/sync-secrets.js",
+    "firsttrace-worker": "./dist/src/runtime/worker-loop.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./chat/slack/events": {
+      "types": "./dist/src/chat/slack/events.d.ts",
+      "import": "./dist/src/chat/slack/events.js"
+    },
+    "./chat/slack/render": {
+      "types": "./dist/src/chat/slack/render.d.ts",
+      "import": "./dist/src/chat/slack/render.js"
+    },
+    "./http/receiver": {
+      "types": "./dist/src/http/receiver.d.ts",
+      "import": "./dist/src/http/receiver.js"
+    },
+    "./http/vercel-adapter": {
+      "types": "./dist/src/http/vercel-adapter.d.ts",
+      "import": "./dist/src/http/vercel-adapter.js"
+    },
+    "./http/worker": {
+      "types": "./dist/src/http/worker.d.ts",
+      "import": "./dist/src/http/worker.js"
+    },
+    "./oci/sync-secrets": {
+      "types": "./dist/src/oci/sync-secrets.d.ts",
+      "import": "./dist/src/oci/sync-secrets.js"
+    },
+    "./runtime/http-server": {
+      "types": "./dist/src/runtime/http-server.d.ts",
+      "import": "./dist/src/runtime/http-server.js"
+    },
+    "./runtime/worker-loop": {
+      "types": "./dist/src/runtime/worker-loop.d.ts",
+      "import": "./dist/src/runtime/worker-loop.js"
+    },
+    "./worker/queue-factory": {
+      "types": "./dist/src/worker/queue-factory.d.ts",
+      "import": "./dist/src/worker/queue-factory.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/src/**",
+    "README.md",
+    "LICENSE",
+    "examples/**",
+    "deploy/oci/README.md",
+    "deploy/oci/scripts/**",
+    "deploy/oci/terraform/*.tf",
+    "deploy/oci/terraform/*.example",
+    "supabase/migrations/**"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc",
     "firsttrace": "tsx src/cli.ts",
     "oci:sync-secrets": "tsx src/oci/sync-secrets.ts",
+    "prepack": "npm run build",
     "start:http": "node dist/src/runtime/http-server.js",
     "start:worker": "node dist/src/runtime/worker-loop.js",
     "test": "vitest run",

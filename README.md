@@ -102,7 +102,18 @@ triage channel.
 
 ## Local CLI
 
-The current CLI supports deterministic investigation, optional AI reasoning,
+Install the packaged CLI when you want to use FirstTrace from another project or
+deployment wrapper:
+
+```bash
+npm install -g firsttrace
+```
+
+When working from this source checkout, run `npm install` first and use
+`npm run firsttrace -- ...` as the development equivalent of the `firsttrace`
+commands below.
+
+The CLI supports deterministic investigation, optional AI reasoning,
 evals, a local worker runtime, a local `submit` message adapter, hosted queue
 selection for Supabase-backed jobs, and GitHub App-backed repository
 materialization. The hosted API also includes a Slack Events receiver that can
@@ -118,8 +129,7 @@ to use the older one-shot evidence-bundle reasoner. `FIRSTTRACE_INVESTIGATOR=cod
 is reserved for a later adapter and is not implemented yet.
 
 ```bash
-npm install
-npm run firsttrace -- investigate \
+firsttrace investigate \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear"
 ```
@@ -129,7 +139,7 @@ Optional AI-assisted run:
 ```bash
 cp .env.example .env.local
 # Fill in OPENAI_API_KEY in .env.local.
-npm run firsttrace -- investigate \
+firsttrace investigate \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear" \
   --ai
@@ -138,7 +148,7 @@ npm run firsttrace -- investigate \
 Eval run:
 
 ```bash
-npm run firsttrace -- eval \
+firsttrace eval \
   --config firsttrace.config.yaml \
   --cases evals/example.yaml
 ```
@@ -146,14 +156,14 @@ npm run firsttrace -- eval \
 Local submit and worker run:
 
 ```bash
-npm run firsttrace -- submit \
+firsttrace submit \
   --queue filesystem \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear"
 
-npm run firsttrace -- worker run --once --queue filesystem
+firsttrace worker run --once --queue filesystem
 
-npm run firsttrace -- worker status --queue filesystem --job <job-id>
+firsttrace worker status --queue filesystem --job <job-id>
 ```
 
 `worker enqueue` is the lower-level queue command. `submit` is the local
@@ -162,14 +172,14 @@ message-delivery path that future chat and HTTP adapters should mirror.
 Supabase-backed queue run:
 
 ```bash
-npm run firsttrace -- submit \
+firsttrace submit \
   --queue supabase \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear"
 
-npm run firsttrace -- worker run --once --queue supabase
+firsttrace worker run --once --queue supabase
 
-npm run firsttrace -- worker status --queue supabase --job <job-id>
+firsttrace worker status --queue supabase --job <job-id>
 ```
 
 Supabase requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. The hosted
@@ -261,7 +271,7 @@ existing queued job instead of creating duplicate investigations.
 Hosted readiness verification:
 
 ```bash
-npm run firsttrace -- hosted verify \
+firsttrace hosted verify \
   --config examples/hosted.local.config.yaml \
   --queue filesystem \
   --report "README deployment plan is unclear"
@@ -322,7 +332,7 @@ Runtime secrets should be stored in OCI Vault, not Terraform state. After the
 Terraform stack creates Vault/KMS, run:
 
 ```bash
-npm run oci:sync-secrets
+firsttrace-oci-sync-secrets
 ```
 
 Then set the Slack app Event Subscription request URL to the Terraform
@@ -419,7 +429,7 @@ notification, plus hosted readiness verification are implemented. The
 deterministic command is:
 
 ```bash
-npm run firsttrace -- investigate \
+firsttrace investigate \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear"
 ```
@@ -427,7 +437,7 @@ npm run firsttrace -- investigate \
 The AI-assisted command is:
 
 ```bash
-npm run firsttrace -- investigate \
+firsttrace investigate \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear" \
   --ai
@@ -436,7 +446,7 @@ npm run firsttrace -- investigate \
 The eval command is:
 
 ```bash
-npm run firsttrace -- eval \
+firsttrace eval \
   --config firsttrace.config.yaml \
   --cases evals/example.yaml
 ```
@@ -444,20 +454,20 @@ npm run firsttrace -- eval \
 The local submit and worker command sequence is:
 
 ```bash
-npm run firsttrace -- submit \
+firsttrace submit \
   --queue filesystem \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear"
 
-npm run firsttrace -- worker run --once --queue filesystem
+firsttrace worker run --once --queue filesystem
 
-npm run firsttrace -- worker status --queue filesystem --job <job-id>
+firsttrace worker status --queue filesystem --job <job-id>
 ```
 
 The hosted readiness command is:
 
 ```bash
-npm run firsttrace -- hosted verify \
+firsttrace hosted verify \
   --config examples/hosted.local.config.yaml \
   --queue filesystem \
   --report "README deployment plan is unclear"
