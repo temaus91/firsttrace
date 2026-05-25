@@ -12,9 +12,14 @@ namespace="$2"
 repository="$3"
 tag="${4:-latest}"
 image="${region_key}.ocir.io/${namespace}/${repository}:${tag}"
-platform="${FIRSTTRACE_CONTAINER_PLATFORM:-linux/amd64}"
+platform="${FIRSTTRACE_CONTAINER_PLATFORM:-}"
 dockerfile="${FIRSTTRACE_DOCKERFILE:-Dockerfile}"
+platform_args=()
 build_args=()
+
+if [[ -n "${platform}" ]]; then
+  platform_args+=(--platform "${platform}")
+fi
 
 if [[ -n "${FIRSTTRACE_PACKAGE_TARBALL:-}" ]]; then
   build_args+=(--build-arg "FIRSTTRACE_PACKAGE_TARBALL=${FIRSTTRACE_PACKAGE_TARBALL}")
@@ -29,9 +34,9 @@ if [[ -n "${FIRSTTRACE_CONFIG_DEST:-}" ]]; then
 fi
 
 if docker buildx build --help 2>/dev/null | grep -q -- "--push"; then
-  docker buildx build --platform "${platform}" -f "${dockerfile}" "${build_args[@]}" -t "${image}" --push .
+  docker buildx build "${platform_args[@]}" -f "${dockerfile}" "${build_args[@]}" -t "${image}" --push .
 else
-  docker build --platform "${platform}" -f "${dockerfile}" "${build_args[@]}" -t "${image}" .
+  docker build "${platform_args[@]}" -f "${dockerfile}" "${build_args[@]}" -t "${image}" .
   docker push "${image}"
 fi
 

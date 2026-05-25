@@ -55,15 +55,17 @@ from the npm package, or `npm run oci:sync-secrets` from a source checkout.
    export FIRSTTRACE_PACKAGE_TARBALL="$(ls firsttrace-*.tgz | tail -n 1)"
    export FIRSTTRACE_CONFIG_FILE="firsttrace.oci.config.yaml"
    export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
-   export FIRSTTRACE_CONTAINER_PLATFORM="linux/amd64"
+   export FIRSTTRACE_CONTAINER_PLATFORM="linux/arm64" # Use linux/amd64 for CI.Standard.E4.Flex.
 
    ./deploy/oci/scripts/build-and-push.sh <region-key> <namespace> firsttrace latest
    ```
 
-   The script builds `linux/amd64` by default because OCI Container Instances
-   expose AMD shapes in some regions. Override with
-   `FIRSTTRACE_CONTAINER_PLATFORM=<platform>` only when your selected shape
-   supports that architecture.
+   The script builds the native builder architecture by default. Set
+   `FIRSTTRACE_CONTAINER_PLATFORM` to match the selected OCI Container Instance
+   shape: `linux/arm64` for `CI.Standard.A1.Flex`, or `linux/amd64` for
+   `CI.Standard.E4.Flex`. OCI Cloud Shell commonly runs on ARM, so use the A1
+   shape for the simplest Cloud Shell build path. Building AMD64 from an ARM
+   Cloud Shell needs a Docker Buildx builder with emulation, not plain Podman.
 
    The final image URL should look like:
 
@@ -153,6 +155,7 @@ s = s.replace('compartment_ocid = ""', f'compartment_ocid = "{os.environ["COMPAR
 s = s.replace('region = "us-ashburn-1"', f'region = "{os.environ["OCI_REGION"]}"')
 s = s.replace('project_name = "firsttrace"', f'project_name = "{os.environ["PROJECT_NAME"]}"')
 s = s.replace('container_image_url = ""', 'container_image_url = ""')
+s += '\nshape = "CI.Standard.A1.Flex"\n'
 p.write_text(s)
 PY
 
@@ -238,7 +241,7 @@ Build and push the image:
 
 ```bash
 cd ~/firsttrace
-export FIRSTTRACE_CONTAINER_PLATFORM="linux/amd64"
+export FIRSTTRACE_CONTAINER_PLATFORM="linux/arm64"
 export FIRSTTRACE_DOCKERFILE="deploy/oci/Dockerfile.package"
 export FIRSTTRACE_PACKAGE_TARBALL="firsttrace-package.tgz"
 export FIRSTTRACE_CONFIG_FILE="firsttrace.config.yaml"
