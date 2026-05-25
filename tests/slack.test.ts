@@ -592,16 +592,22 @@ describe("Slack result notification", () => {
       warnings: [],
     });
 
-    expect(rendered).toContain("Classification: `unknown`");
+    expect(rendered).toContain("Classification: `needs clarification`");
+    expect(rendered).toContain("Likely owner: `@project-docs`");
+    expect(rendered).toContain("Primary files: `README.md`");
     expect(rendered).not.toContain("Likely owners:");
-    expect(rendered).toContain("Evidence: README.md:1");
+    expect(rendered).not.toContain("Best fault-location lead");
+    expect(rendered).not.toContain("Evidence: README.md:1");
+    expect(rendered).toContain("*Evidence*");
+    expect(rendered).toContain("README.md: README matched the report.");
   });
 
-  it("renders AI debugging leads and implementer hints in Slack replies", () => {
+  it("renders compact AI debugging leads and implementer hints in Slack replies", () => {
     const rendered = renderSlackInvestigationReply({
       ai: {
         confidence: 0.82,
-        explanation: "The profile route is the strongest lead because its initial render can show empty state before data hydration completes.",
+        explanation:
+          "The profile route is the strongest lead because its initial render can show empty state before data hydration completes. The app context owns the readiness flags. Extra detail should not render.",
         implementerHints: [
           {
             citations: ["commit abc123"],
@@ -648,18 +654,40 @@ describe("Slack result notification", () => {
       warnings: [],
     });
 
+    const expected = [
+      "*FirstTrace investigation*",
+      "Classification: `likely bug`",
+      "Likely owner: `Dev Owner`",
+      "Primary files: `app/artists/[artistId]/page.tsx`",
+      "AI confidence: `0.82`",
+      "",
+      "*Likely cause*",
+      "The profile route is the strongest lead because its initial render can show empty state before data hydration completes. The app context owns the readiness flags.",
+      "",
+      "*Next checks*",
+      "1. Inspect `app/artists/[artistId]/page.tsx` first.",
+      "2. Route the first pass to Dev Owner.",
+      "3. Confirm: Does the blank state appear after a hard refresh or only client navigation?",
+      "",
+      "*Evidence*",
+      "1. Dev Owner - commit abc123, 2026-05-20: This recent commit changed the artist profile loading state.",
+      "2. Dev Owner, commit abc123456789, 2026-05-20: Changed the artist profile loading state.",
+      "3. app/artists/[artistId]/page.tsx: The route owns the artist profile loading branch and matches the blank-profile symptom.",
+    ].join("\n");
+
+    expect(rendered).toBe(expected);
     expect(rendered).not.toContain("Likely owners:");
     expect(rendered).toContain("*Likely cause*");
-    expect(rendered).toContain("*Best fault-location lead*");
-    expect(rendered).toContain("The route owns the artist profile loading branch");
-    expect(rendered.indexOf("*Likely cause*")).toBeLessThan(rendered.indexOf("*Best fault-location lead*"));
+    expect(rendered).not.toContain("*Best fault-location lead*");
+    expect(rendered).not.toContain("*Implementer / commit signals*");
+    expect(rendered.indexOf("*Next checks*")).toBeLessThan(rendered.indexOf("*Evidence*"));
     expect(rendered).not.toContain("*Why this is suspicious*");
-    expect(rendered).toContain("*Implementer / commit signals*");
     expect(rendered).toContain("Dev Owner");
     expect(rendered).toContain("2026-05-20");
-    expect(rendered).toContain("Inspect app/artists/[artistId]/page.tsx first.");
+    expect(rendered).not.toContain("@app-platform");
+    expect(rendered).toContain("Inspect `app/artists/[artistId]/page.tsx` first.");
     expect(rendered).toContain("Route the first pass to Dev Owner.");
-    expect(rendered).not.toContain("Open the artist profile route and check the loading branch.");
-    expect(rendered).toContain("Ask: Does the blank state appear");
+    expect(rendered).toContain("Confirm: Does the blank state appear");
+    expect(rendered).not.toContain("Evidence: app/artists/[artistId]/page.tsx:21");
   });
 });
