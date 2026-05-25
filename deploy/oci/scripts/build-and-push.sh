@@ -28,7 +28,7 @@ if [[ -n "${FIRSTTRACE_CONFIG_DEST:-}" ]]; then
   build_args+=(--build-arg "FIRSTTRACE_CONFIG_DEST=${FIRSTTRACE_CONFIG_DEST}")
 fi
 
-if docker buildx version >/dev/null 2>&1; then
+if docker buildx build --help 2>/dev/null | grep -q -- "--push"; then
   docker buildx build --platform "${platform}" -f "${dockerfile}" "${build_args[@]}" -t "${image}" --push .
 else
   docker build --platform "${platform}" -f "${dockerfile}" "${build_args[@]}" -t "${image}" .
