@@ -2,17 +2,19 @@ name: Package image
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - codex/backend-investigator-quality-loop
-    paths:
-      - .github/workflows/package-image.yml
-      - deploy/oci/Dockerfile.package
-      - firsttrace.wallspace.config.yaml
-      - package-lock.json
-      - package.json
-      - src/**
-      - tsconfig.json
+    inputs:
+      firsttrace_version:
+        description: FirstTrace npm version or dist-tag to install.
+        required: true
+        default: 0.1.0
+      config_file:
+        description: Config file in the repository checkout to copy into the image.
+        required: true
+        default: firsttrace.wallspace.config.yaml
+      image_tag:
+        description: Additional image tag to publish.
+        required: true
+        default: latest
 
 permissions:
   contents: read
@@ -26,26 +28,21 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build package tarball
-        run: npm pack
+      - name: Verify npm package exists
+        run: npm view "firsttrace@${{ inputs.firsttrace_version }}" version
 
       - name: Verify packaged Slack renderer
         run: |
           mkdir -p /tmp/firsttrace-package
-          tar -xzf firsttrace-0.1.0.tgz -C /tmp/firsttrace-package
+          npm pack "firsttrace@${{ inputs.firsttrace_version }}" --pack-destination /tmp/firsttrace-package
+          tar -xzf /tmp/firsttrace-package/firsttrace-*.tgz -C /tmp/firsttrace-package
           grep -q 'Likely owner' /tmp/firsttrace-package/package/dist/src/chat/slack/render.js
           grep -q 'Primary files' /tmp/firsttrace-package/package/dist/src/chat/slack/render.js
           ! grep -q 'Best fault-location lead' /tmp/firsttrace-package/package/dist/src/chat/slack/render.js
           ! grep -q 'Likely component' /tmp/firsttrace-package/package/dist/src/chat/slack/render.js
+
+      - name: Verify config file exists
+        run: test -f "${{ inputs.config_file }}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -66,10 +63,11 @@ jobs:
           push: true
           provenance: false
           tags: |
-            ghcr.io/${{ github.repository_owner }}/firsttrace:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/firsttrace:${{ inputs.image_tag }}
+            ghcr.io/${{ github.repository_owner }}/firsttrace:firsttrace-${{ inputs.firsttrace_version }}
             ghcr.io/${{ github.repository_owner }}/firsttrace:package-${{ github.run_number }}
           build-args: |
-            FIRSTTRACE_PACKAGE_TARBALL=firsttrace-0.1.0.tgz
-            FIRSTTRACE_CONFIG_FILE=firsttrace.wallspace.config.yaml
+            FIRSTTRACE_PACKAGE_SPEC=firsttrace@${{ inputs.firsttrace_version }}
+            FIRSTTRACE_CONFIG_FILE=${{ inputs.config_file }}
             FIRSTTRACE_CONFIG_DEST=firsttrace.wallspace.config.yaml
-            FIRSTTRACE_BUILD_REF=${{ github.sha }}
+            FIRSTTRACE_BUILD_REF=npm:firsttrace@${{ inputs.firsttrace_version }}:${{ github.sha }}

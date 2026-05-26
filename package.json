@@ -4,13 +4,24 @@
   "type": "module",
   "description": "Self-hosted bug localization for teams with private, internal, or public git repos.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/temaus91/firsttrace.git"
+  },
+  "bugs": {
+    "url": "https://github.com/temaus91/firsttrace/issues"
+  },
+  "homepage": "https://github.com/temaus91/firsttrace#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
   "bin": {
-    "firsttrace": "./dist/src/cli.js",
-    "firsttrace-http": "./dist/src/runtime/http-server.js",
-    "firsttrace-oci-sync-secrets": "./dist/src/oci/sync-secrets.js",
-    "firsttrace-worker": "./dist/src/runtime/worker-loop.js"
+    "firsttrace": "dist/src/cli.js",
+    "firsttrace-http": "dist/src/runtime/http-server.js",
+    "firsttrace-oci-sync-secrets": "dist/src/oci/sync-secrets.js",
+    "firsttrace-worker": "dist/src/runtime/worker-loop.js"
   },
   "exports": {
     ".": {

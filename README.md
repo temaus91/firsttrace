@@ -100,6 +100,40 @@ See [instructions.md](instructions.md) for the planned hosted setup workflow for
 companies that want FirstTrace connected to a private GitHub repo and a Slack
 triage channel.
 
+## Install As A Dependency
+
+For an external project or deployment wrapper, install FirstTrace from npm:
+
+```bash
+npm install firsttrace@0.1.0
+```
+
+The package provides:
+
+- CLI: `firsttrace`
+- standalone HTTP receiver: `firsttrace-http`
+- standalone worker loop: `firsttrace-worker`
+- OCI Vault secret sync: `firsttrace-oci-sync-secrets`
+- route/runtime exports for host apps that want to embed FirstTrace handlers
+
+OCI users should copy the deployment templates from the package into their own
+operations repo:
+
+```bash
+cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
+```
+
+Vercel or other Node hosts can import the route helpers directly:
+
+```ts
+import {
+  handleSlackEventsRequest,
+  handleInvestigationRequest,
+  handleJobStatusRequest,
+  handleWorkerRunOnceRequest,
+} from "firsttrace";
+```
+
 ## Local CLI
 
 Install the packaged CLI when you want to use FirstTrace from another project or
@@ -321,8 +355,14 @@ FirstTrace also ships a production OCI deployment path under
 Queue, Object Storage runtime markers, Vault/KMS, OCIR, Container Instances, API
 Gateway, and IAM policies. The same image runs a receiver container and a worker
 container. The OCI image should be built with `deploy/oci/Dockerfile.package`,
-which installs the packed `firsttrace` npm package and copies only the deployment
-config into the image.
+which installs `firsttrace@<version>` from npm and copies only the deployment
+config into the image. A user deploying from a separate operations repo can start
+with:
+
+```bash
+npm install firsttrace@0.1.0
+cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
+```
 
 The OCI runtime is selected with:
 
@@ -334,6 +374,7 @@ Runtime secrets should be stored in OCI Vault, not Terraform state. After the
 Terraform stack creates Vault/KMS, run:
 
 ```bash
+npm install firsttrace@0.1.0
 firsttrace-oci-sync-secrets
 ```
 

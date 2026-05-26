@@ -663,7 +663,7 @@ Why Queue plus Object Storage marker instead of a database:
 
 Implemented FirstTrace code changes:
 
-- package-based OCI image that installs the `firsttrace` npm package tarball and
+- package-based OCI image that installs `firsttrace@<version>` from npm and
   includes Node, git, and ripgrep so hosted investigations have the same search
   tools locally and in production
 - generic long-running HTTP server for non-Vercel runtimes:
@@ -819,8 +819,8 @@ team reuse its existing Vercel project, domains, auth posture, and operational
 habits while keeping FirstTrace provider logic reusable.
 
 Standalone deployment remains the fastest current validation path. OCI should use
-a package-based image built from the same npm artifact, while Vercel customers can
-embed FirstTrace route helpers into an existing app.
+a package-based image that installs the published npm package, while Vercel
+customers can embed FirstTrace route helpers into an existing app.
 
 Later packaging options:
 

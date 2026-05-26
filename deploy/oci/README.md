@@ -4,9 +4,9 @@ This directory contains the reusable OCI deployment path for FirstTrace. It is
 intended for real deployments, not a one-off environment.
 
 The preferred runtime image is package-based: `deploy/oci/Dockerfile.package`
-installs the `firsttrace` npm package tarball and copies one deployment config
-file into the image. OCI still runs Container Instances, but the image no longer
-needs the full FirstTrace source tree at runtime.
+installs `firsttrace@<version>` from npm and copies one deployment config file
+into the image. OCI still runs Container Instances, but the image does not need
+the full FirstTrace source tree at runtime.
 
 ## What Terraform Creates
 
@@ -21,16 +21,22 @@ needs the full FirstTrace source tree at runtime.
 
 The Terraform does not store real Slack, GitHub, or OpenAI secrets in state.
 Secrets are synced after the Vault exists by running `firsttrace-oci-sync-secrets`
-from the npm package, or `npm run oci:sync-secrets` from a source checkout.
+from the npm package.
 
 ## Deploy With OCI Resource Manager
 
-1. Prepare a FirstTrace package tarball and deployment config:
+1. Create an operations directory and install FirstTrace from npm:
 
    ```bash
-   npm pack
-   cp firsttrace.config.yaml firsttrace.oci.config.yaml
+   mkdir firsttrace-oci
+   cd firsttrace-oci
+   npm init -y
+   npm install firsttrace@0.1.0
+   cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
    ```
+
+   Then create `firsttrace.oci.config.yaml` in that directory. It should contain
+   your repositories, owners, and Slack channel config, but not secrets.
 
 2. Create a zip of `deploy/oci/terraform` and upload it as an OCI Resource
    Manager stack.
@@ -52,7 +58,7 @@ from the npm package, or `npm run oci:sync-secrets` from a source checkout.
 
    ```bash
    export FIRSTTRACE_DOCKERFILE="deploy/oci/Dockerfile.package"
-   export FIRSTTRACE_PACKAGE_TARBALL="$(ls firsttrace-*.tgz | tail -n 1)"
+   export FIRSTTRACE_PACKAGE_SPEC="firsttrace@0.1.0"
    export FIRSTTRACE_CONFIG_FILE="firsttrace.oci.config.yaml"
    export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
    export FIRSTTRACE_CONTAINER_PLATFORM="linux/arm64" # Use linux/amd64 for CI.Standard.E4.Flex.
@@ -74,10 +80,11 @@ from the npm package, or `npm run oci:sync-secrets` from a source checkout.
    ```
 
    If Cloud Shell is ARM but the target region has no `CI.Standard.A1.Flex`
-   capacity, build the package image with the repository workflow instead. The
-   included `.github/workflows/package-image.yml` workflow builds a Linux AMD64
-   image from the npm tarball and pushes it to GHCR. Trigger it from GitHub
-   Actions, then use the resulting image with an AMD64 Container Instance shape:
+   capacity, build the package image from a Linux AMD64 CI runner instead. This
+   repository includes `.github/workflows/package-image.yml` as an example: it
+   installs `firsttrace@<version>` from npm and pushes a Linux AMD64 image to
+   GHCR. Trigger it from GitHub Actions, then use the resulting image with an
+   AMD64 Container Instance shape:
 
    ```bash
    terraform apply -auto-approve \
@@ -85,7 +92,7 @@ from the npm package, or `npm run oci:sync-secrets` from a source checkout.
      -var='shape=CI.Standard.E4.Flex'
    ```
 
-   This keeps the deployed runtime package-based, but uses GitHub-hosted Docker
+   This keeps the deployed runtime npm-based, but uses GitHub-hosted Docker
    Buildx instead of relying on Cloud Shell cross-architecture emulation.
 
 6. Export the secret-sync outputs from Terraform, then sync local runtime
@@ -97,7 +104,7 @@ from the npm package, or `npm run oci:sync-secrets` from a source checkout.
    export OCI_VAULT_ID="<terraform output secret_sync_env.OCI_VAULT_ID>"
    export OCI_VAULT_KEY_ID="<terraform output secret_sync_env.OCI_VAULT_KEY_ID>"
 
-   npm run oci:sync-secrets
+   npx firsttrace-oci-sync-secrets
    ```
 
 7. Set `container_image_url` in the Resource Manager stack and apply again.
@@ -133,18 +140,14 @@ export FIRSTTRACE_VERSION="0.1.0"
 export IMAGE_TAG="${FIRSTTRACE_VERSION}"
 ```
 
-Prepare the package, Terraform files, image script, and config file. After
-FirstTrace is published to npm, `npm pack firsttrace@"$FIRSTTRACE_VERSION"` is
-enough. Before public publish, run `npm pack` from a release/source checkout and
-upload the resulting tarball instead.
+Prepare the Terraform files, image script, and config file from the npm package:
 
 ```bash
 mkdir -p ~/firsttrace
 cd ~/firsttrace
-npm pack firsttrace@"$FIRSTTRACE_VERSION"
-tar -xzf "firsttrace-${FIRSTTRACE_VERSION}.tgz" package/deploy/oci
-cp -R package/deploy/oci ./deploy/oci
-cp "firsttrace-${FIRSTTRACE_VERSION}.tgz" firsttrace-package.tgz
+npm init -y
+npm install "firsttrace@${FIRSTTRACE_VERSION}"
+cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
 ```
 
 Upload or create your deployment config as `~/firsttrace/firsttrace.config.yaml`.
@@ -258,9 +261,10 @@ Build and push the image:
 cd ~/firsttrace
 export FIRSTTRACE_CONTAINER_PLATFORM="linux/arm64"
 export FIRSTTRACE_DOCKERFILE="deploy/oci/Dockerfile.package"
-export FIRSTTRACE_PACKAGE_TARBALL="firsttrace-package.tgz"
+export FIRSTTRACE_PACKAGE_SPEC="firsttrace@${FIRSTTRACE_VERSION}"
 export FIRSTTRACE_CONFIG_FILE="firsttrace.config.yaml"
 export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
+export FIRSTTRACE_BUILD_REF="npm:firsttrace@${FIRSTTRACE_VERSION}"
 
 ./deploy/oci/scripts/build-and-push.sh \
   "$OCI_REGION_KEY" \
@@ -313,8 +317,7 @@ export OCI_VAULT_ID="$(terraform output -json secret_sync_env | jq -r '.OCI_VAUL
 export OCI_VAULT_KEY_ID="$(terraform output -json secret_sync_env | jq -r '.OCI_VAULT_KEY_ID')"
 
 cd ~/firsttrace
-npm install --prefix ~/firsttrace/tools ./firsttrace-package.tgz
-PATH="$HOME/firsttrace/tools/node_modules/.bin:$PATH" firsttrace-oci-sync-secrets
+npx firsttrace-oci-sync-secrets
 rm -f ~/firsttrace/.env.local ~/firsttrace.env.local
 ```
 

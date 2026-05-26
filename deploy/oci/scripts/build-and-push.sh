@@ -21,8 +21,8 @@ if [[ -n "${platform}" ]]; then
   platform_args+=(--platform "${platform}")
 fi
 
-if [[ -n "${FIRSTTRACE_PACKAGE_TARBALL:-}" ]]; then
-  build_args+=(--build-arg "FIRSTTRACE_PACKAGE_TARBALL=${FIRSTTRACE_PACKAGE_TARBALL}")
+if [[ -n "${FIRSTTRACE_PACKAGE_SPEC:-}" ]]; then
+  build_args+=(--build-arg "FIRSTTRACE_PACKAGE_SPEC=${FIRSTTRACE_PACKAGE_SPEC}")
 fi
 
 if [[ -n "${FIRSTTRACE_CONFIG_FILE:-}" ]]; then
@@ -31,6 +31,10 @@ fi
 
 if [[ -n "${FIRSTTRACE_CONFIG_DEST:-}" ]]; then
   build_args+=(--build-arg "FIRSTTRACE_CONFIG_DEST=${FIRSTTRACE_CONFIG_DEST}")
+fi
+
+if [[ -n "${FIRSTTRACE_BUILD_REF:-}" ]]; then
+  build_args+=(--build-arg "FIRSTTRACE_BUILD_REF=${FIRSTTRACE_BUILD_REF}")
 fi
 
 if docker buildx build --help 2>/dev/null | grep -q -- "--push"; then
