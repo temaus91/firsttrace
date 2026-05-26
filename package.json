@@ -1,6 +1,6 @@
 {
   "name": "firsttrace",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Self-hosted bug localization for teams with private, internal, or public git repos.",
   "license": "Apache-2.0",

@@ -5,7 +5,11 @@ export { handleInvestigationRequest, handleJobStatusRequest } from "./http/recei
 export { runVercelHandler, type VercelRequestLike, type VercelResponseLike } from "./http/vercel-adapter.js";
 export { handleWorkerRunOnceRequest } from "./http/worker.js";
 export { executeInvestigation } from "./investigation-runner.js";
-export { syncOciVaultSecretsFromEnv } from "./oci/sync-secrets.js";
+export {
+  syncOciVaultSecretsFromEnv,
+  syncOciVaultSecretsFromEnvFile,
+  syncOciVaultSecretsFromPrompt,
+} from "./oci/sync-secrets.js";
 export { createFirstTraceHttpServer, startFirstTraceHttpServer } from "./runtime/http-server.js";
 export { runWorkerLoop, startWorkerLoopFromEnv } from "./runtime/worker-loop.js";
 export type * from "./types.js";

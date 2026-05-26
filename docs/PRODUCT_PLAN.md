@@ -685,7 +685,8 @@ Implemented FirstTrace code changes:
   - no company-specific Slack channel names or repo names in core code
 - Terraform-first deployment under `deploy/oci` for OCI Resource Manager or
   local Terraform
-- Vault sync helper that imports runtime secrets without storing secret values in
+- Vault sync helper that can prompt interactively, read shell environment
+  secrets, or opt into an explicit env file without storing secret values in
   Terraform state
 
 OCI resources:
@@ -806,8 +807,8 @@ system without changing the investigation engine.
 
 ### Packaging and Deployment Direction
 
-The preferred customer installation path should become an npm package that can
-be embedded into an existing Vercel/Next.js application:
+The preferred customer installation path is an npm package that can be embedded
+into an existing Vercel/Next.js application:
 
 ```bash
 npm install firsttrace

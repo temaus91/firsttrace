@@ -105,7 +105,7 @@ triage channel.
 For an external project or deployment wrapper, install FirstTrace from npm:
 
 ```bash
-npm install firsttrace@0.1.0
+npm install firsttrace@0.1.1
 ```
 
 The package provides:
@@ -360,7 +360,7 @@ config into the image. A user deploying from a separate operations repo can star
 with:
 
 ```bash
-npm install firsttrace@0.1.0
+npm install firsttrace@0.1.1
 cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
 ```
 
@@ -374,8 +374,8 @@ Runtime secrets should be stored in OCI Vault, not Terraform state. After the
 Terraform stack creates Vault/KMS, run:
 
 ```bash
-npm install firsttrace@0.1.0
-firsttrace-oci-sync-secrets
+npm install firsttrace@0.1.1
+npx firsttrace-oci-sync-secrets --prompt
 ```
 
 Then set the Slack app Event Subscription request URL to the Terraform

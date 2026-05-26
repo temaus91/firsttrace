@@ -20,8 +20,10 @@ the full FirstTrace source tree at runtime.
 - API Gateway in front of the receiver
 
 The Terraform does not store real Slack, GitHub, or OpenAI secrets in state.
-Secrets are synced after the Vault exists by running `firsttrace-oci-sync-secrets`
-from the npm package.
+Secrets are created in OCI Vault after the Vault exists by running
+`firsttrace-oci-sync-secrets` from the npm package. Production setup should use
+interactive prompts or shell environment variables; `.env.local` is only a local
+development convenience.
 
 ## Deploy With OCI Resource Manager
 
@@ -31,7 +33,7 @@ from the npm package.
    mkdir firsttrace-oci
    cd firsttrace-oci
    npm init -y
-   npm install firsttrace@0.1.0
+   npm install firsttrace@0.1.1
    cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
    ```
 
@@ -58,7 +60,7 @@ from the npm package.
 
    ```bash
    export FIRSTTRACE_DOCKERFILE="deploy/oci/Dockerfile.package"
-   export FIRSTTRACE_PACKAGE_SPEC="firsttrace@0.1.0"
+   export FIRSTTRACE_PACKAGE_SPEC="firsttrace@0.1.1"
    export FIRSTTRACE_CONFIG_FILE="firsttrace.oci.config.yaml"
    export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
    export FIRSTTRACE_CONTAINER_PLATFORM="linux/arm64" # Use linux/amd64 for CI.Standard.E4.Flex.
@@ -95,8 +97,8 @@ from the npm package.
    This keeps the deployed runtime npm-based, but uses GitHub-hosted Docker
    Buildx instead of relying on Cloud Shell cross-architecture emulation.
 
-6. Export the secret-sync outputs from Terraform, then sync local runtime
-   secrets into OCI Vault:
+6. Export the secret-sync outputs from Terraform, then create runtime secrets in
+   OCI Vault:
 
    ```bash
    export OCI_COMPARTMENT_ID="<terraform output secret_sync_env.OCI_COMPARTMENT_ID>"
@@ -104,8 +106,12 @@ from the npm package.
    export OCI_VAULT_ID="<terraform output secret_sync_env.OCI_VAULT_ID>"
    export OCI_VAULT_KEY_ID="<terraform output secret_sync_env.OCI_VAULT_KEY_ID>"
 
-   npx firsttrace-oci-sync-secrets
+   npx firsttrace-oci-sync-secrets --prompt
    ```
+
+   The prompt hides secret values, can generate `FIRSTTRACE_RECEIVER_TOKEN`,
+   supports multiline `GITHUB_APP_PRIVATE_KEY`, and prints only which secrets
+   were synced.
 
 7. Set `container_image_url` in the Resource Manager stack and apply again.
 
@@ -136,7 +142,7 @@ export COMPARTMENT_OCID="<compartment_ocid>"
 export OCI_REGION="<oci-region>"        # Example: us-sanjose-1
 export OCI_REGION_KEY="<ocir-region-key>" # Example: sjc
 export PROJECT_NAME="firsttrace"
-export FIRSTTRACE_VERSION="0.1.0"
+export FIRSTTRACE_VERSION="0.1.1"
 export IMAGE_TAG="${FIRSTTRACE_VERSION}"
 ```
 
@@ -297,16 +303,9 @@ terraform apply -auto-approve \
 usage. Prefer `CI.Standard.A1.Flex` plus `linux/arm64` when Always Free capacity
 is available.
 
-Sync runtime secrets into OCI Vault. The sync command reads a local `.env` file;
-do not commit this file or place it in Terraform variables.
-
-In Cloud Shell, use **Cloud Shell menu -> Upload** to upload your local
-`.env.local` as `~/firsttrace.env.local`, then move it into place:
-
-```bash
-mv -f ~/firsttrace.env.local ~/firsttrace/.env.local
-chmod 600 ~/firsttrace/.env.local
-```
+Create runtime secrets in OCI Vault. The production path does not require a
+source checkout or `.env.local`; enter values interactively or provide them from
+the shell environment. Do not place secret values in Terraform variables.
 
 ```bash
 cd ~/firsttrace/deploy/oci/terraform
@@ -317,8 +316,29 @@ export OCI_VAULT_ID="$(terraform output -json secret_sync_env | jq -r '.OCI_VAUL
 export OCI_VAULT_KEY_ID="$(terraform output -json secret_sync_env | jq -r '.OCI_VAULT_KEY_ID')"
 
 cd ~/firsttrace
+npx firsttrace-oci-sync-secrets --prompt
+```
+
+If your automation already has secrets in the shell environment, use the default
+non-interactive mode instead:
+
+```bash
+export OPENAI_API_KEY="..."
+export OPENAI_MODEL_CHAT="gpt-5.4-mini"
+export FIRSTTRACE_RECEIVER_TOKEN="..."
+export SLACK_SIGNING_SECRET="..."
+export SLACK_BOT_TOKEN="..."
+export GITHUB_APP_ID="..."
+export GITHUB_APP_PRIVATE_KEY="..."
+export GITHUB_APP_INSTALLATION_ID="..."
+
 npx firsttrace-oci-sync-secrets
-rm -f ~/firsttrace/.env.local ~/firsttrace.env.local
+```
+
+For migration from an existing secret file, opt in explicitly:
+
+```bash
+npx firsttrace-oci-sync-secrets --env-file ./secrets.env
 ```
 
 If your Terraform CLI cannot read the object output directly, copy the values
