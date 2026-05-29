@@ -1,0 +1,31 @@
+repos:
+  - name: firsttrace
+    path: ..
+docs:
+  - README.md
+  - docs
+issue_exports: []
+owners:
+  - path: README.md
+    owner: "@project-docs"
+  - path: docs/**
+    owner: "@docs"
+chat:
+  provider: slack
+  channels:
+    - id: C0123456789
+      name: example-ai-triage
+      triggers:
+        - message
+        - app_mention
+        - reaction
+      response: thread
+      ai_enabled: false
+      data_classification: internal
+      include_thread_context: false
+      repositories:
+        - firsttrace
+search:
+  max_files: 10
+  max_commits: 8
+  max_evidence_per_file: 3

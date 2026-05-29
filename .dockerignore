@@ -1,0 +1,13 @@
+.env
+.env.*
+.firsttrace
+.git
+.github
+coverage
+dist
+node_modules
+npm-debug.log*
+deploy/oci/terraform/.terraform
+deploy/oci/terraform/*.tfstate
+deploy/oci/terraform/*.tfstate.*
+deploy/oci/terraform/terraform.tfvars
