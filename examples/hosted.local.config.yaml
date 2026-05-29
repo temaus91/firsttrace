@@ -21,6 +21,8 @@ chat:
         - reaction
       response: thread
       ai_enabled: false
+      data_classification: internal
+      include_thread_context: false
       repositories:
         - firsttrace
 search:

@@ -45,6 +45,7 @@ export const runWorkerOnce = async ({
       investigatorProvider: job.aiEnabled ? investigatorProviderFactory() : undefined,
       report: job.report,
       repoPreparation,
+      source: job.source,
     });
     const completed = await queue.complete(job.id, result);
     if (resultNotifier) {

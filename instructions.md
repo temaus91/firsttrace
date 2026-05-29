@@ -108,6 +108,15 @@ config:
 - top-level private channel messages: `message.groups` plus `groups:history`
 - emoji-triggered investigations: `reaction_added` plus `reactions:read`
 
+Keep `include_thread_context: false` unless the channel is approved to send full
+thread context to FirstTrace. Use `data_classification: restricted` for channels
+that must never call AI even if someone enables the runtime AI switch.
+AI calls also pass through a safety layer. The default
+`FIRSTTRACE_AI_SAFETY_MODE=redact` redacts common credentials and skips AI for
+PHI, PCI, legal/dispute, or customer production-data markers. Use
+`FIRSTTRACE_AI_DRY_RUN=true` to inspect the sanitized report path without
+calling the configured model provider.
+
 Configure Slack event subscriptions to the deployed receiver URL:
 
 ```text
@@ -326,6 +335,8 @@ chat:
         - primary-app
       response: thread
       ai_enabled: false
+      data_classification: internal
+      include_thread_context: false
 
 repos:
   - name: primary-app

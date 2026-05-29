@@ -563,6 +563,12 @@ Default Slack setup should be mention-only. Top-level message and reaction
 triggers stay independently configurable, but enabling them should be an
 explicit product decision because they require broader Slack history or reaction
 read scopes.
+Slack app mentions send only the explicit mention text by default; full thread
+context requires `include_thread_context: true`. Channel data classification is
+part of config, and `restricted` channels skip AI even when both AI gates are on.
+Before any model call, the AI safety layer redacts common credentials and skips
+AI for PHI, PCI, legal/dispute, and customer production-data markers. A dry-run
+mode can show the sanitized report path without calling the configured model.
 
 Limitations:
 

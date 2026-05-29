@@ -108,6 +108,8 @@ const tempConfigPath = (channel: Partial<SlackChannelConfig> = {}) => {
       `      name: ${channel.name ?? "company-ai-triage"}`,
       `      response: ${channel.response ?? "thread"}`,
       `      ai_enabled: ${channel.aiEnabled ?? true}`,
+      `      data_classification: ${channel.dataClassification ?? "internal"}`,
+      `      include_thread_context: ${channel.includeThreadContext ?? false}`,
       "      triggers:",
       ...(channel.triggers ?? ["app_mention", "message", "reaction"]).map((trigger) => `        - ${trigger}`),
     ].join("\n"),
@@ -457,8 +459,9 @@ describe("Slack event receiver", () => {
     });
   });
 
-  it("uses fetched thread context for app mentions inside threads", async () => {
+  it("does not fetch full thread context for app mentions unless the channel opts in", async () => {
     const queue = new FakeQueue();
+    let fetchCount = 0;
     const response = await handleSlackEventsRequest(
       signedSlackRequest({
         event: {
@@ -473,6 +476,43 @@ describe("Slack event receiver", () => {
       }),
       {
         config: loadConfig(tempConfigPath()),
+        nowSeconds,
+        queue,
+        signingSecret,
+        slackClient: {
+          async fetchMessageText() {
+            return undefined;
+          },
+          async fetchThreadMessages() {
+            fetchCount += 1;
+            return ["Checkout failed after retry", "<@U999999> investigate this"];
+          },
+          async postMessage() {},
+        },
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetchCount).toBe(0);
+    expect((await queue.list())[0]?.report).toBe("investigate this");
+  });
+
+  it("uses fetched thread context for app mentions when explicitly configured", async () => {
+    const queue = new FakeQueue();
+    const response = await handleSlackEventsRequest(
+      signedSlackRequest({
+        event: {
+          channel: "C0123456789",
+          text: "<@U999999> investigate this",
+          thread_ts: "1710000000.000100",
+          ts: "1710000000.000200",
+          type: "app_mention",
+          user: "U0123456789",
+        },
+        type: "event_callback",
+      }),
+      {
+        config: loadConfig(tempConfigPath({ includeThreadContext: true })),
         nowSeconds,
         queue,
         signingSecret,

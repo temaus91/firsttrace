@@ -319,10 +319,13 @@ export type SearchConfig = {
 };
 
 export type ChatTrigger = "app_mention" | "message" | "reaction";
+export type SlackDataClassification = "confidential" | "internal" | "restricted";
 
 export type SlackChannelConfig = {
   aiEnabled: boolean;
+  dataClassification: SlackDataClassification;
   id: string;
+  includeThreadContext: boolean;
   name?: string;
   repositories: string[];
   response: "thread" | "channel";

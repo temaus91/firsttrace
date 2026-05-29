@@ -82,9 +82,15 @@ const parsePayload = (body: string) => {
 
 const stripSlackMentions = (text: string) => text.replace(/<@[A-Z0-9]+>/g, "").replace(/\s+/g, " ").trim();
 
-const reportFromEventText = async (event: SlackEvent, slackClient?: SlackClient) => {
+const reportFromEventText = async (event: SlackEvent, channel: SlackChannelConfig, slackClient?: SlackClient) => {
   const fallback = stripSlackMentions(event.text ?? "");
-  if (!event.channel || !event.thread_ts || event.thread_ts === event.ts || !slackClient?.fetchThreadMessages) {
+  if (
+    !channel.includeThreadContext ||
+    !event.channel ||
+    !event.thread_ts ||
+    event.thread_ts === event.ts ||
+    !slackClient?.fetchThreadMessages
+  ) {
     return fallback;
   }
 
@@ -124,7 +130,7 @@ const normalizeSlackEvent = async (
     const channel = configuredChannel(config, channelId);
     if (!channel) return { ignored: true, reason: "Slack channel is not configured." };
     if (!channel.triggers.includes("app_mention")) return { ignored: true, reason: "Slack app mention trigger is disabled." };
-    const report = await reportFromEventText(event, slackClient);
+    const report = await reportFromEventText(event, channel, slackClient);
     if (!report) return { ignored: true, reason: "Slack app mention did not include report text." };
 
     return {

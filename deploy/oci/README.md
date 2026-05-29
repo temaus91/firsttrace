@@ -78,6 +78,11 @@ it does not require `OPENAI_API_KEY`.
    selected OCI region. If you use a dedicated OCI GenAI endpoint, also set
    `oci_genai_dedicated_endpoint_id`. Leave `ai_enabled = false` until the Slack
    channel config and data handling policy are approved for model calls.
+   FirstTrace also applies AI safety defaults at runtime:
+   `FIRSTTRACE_AI_SAFETY_MODE=redact` redacts common credentials and skips AI
+   for PHI, PCI, legal/dispute, and customer production-data markers. Set
+   `FIRSTTRACE_AI_DRY_RUN=true` during review if you want to inspect sanitized
+   AI input without calling OCI GenAI.
 
    For the strict production path, leave `enable_vault_secret_loading = true`
    and `oci_vault_secrets_required = true`. For a first bootstrap health check

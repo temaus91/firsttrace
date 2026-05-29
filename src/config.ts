@@ -1,7 +1,16 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { parse } from "yaml";
-import type { ArchiveRepoConfig, ChatConfig, ChatTrigger, FirstTraceConfig, OwnerRule, RepoConfig, SearchConfig } from "./types.js";
+import type {
+  ArchiveRepoConfig,
+  ChatConfig,
+  ChatTrigger,
+  FirstTraceConfig,
+  OwnerRule,
+  RepoConfig,
+  SearchConfig,
+  SlackDataClassification,
+} from "./types.js";
 
 type RawConfig = {
   chat?: unknown;
@@ -151,6 +160,7 @@ const searchFrom = (value: unknown): SearchConfig => {
 };
 
 const CHAT_TRIGGERS = new Set<ChatTrigger>(["app_mention", "message", "reaction"]);
+const SLACK_DATA_CLASSIFICATIONS = new Set<SlackDataClassification>(["confidential", "internal", "restricted"]);
 
 const chatTriggersFrom = (value: unknown, label: string): ChatTrigger[] => {
   const triggers = stringArray(value, label, ["app_mention"]);
@@ -159,6 +169,14 @@ const chatTriggersFrom = (value: unknown, label: string): ChatTrigger[] => {
     throw new Error(`${label} contains unsupported trigger: ${invalid}.`);
   }
   return triggers as ChatTrigger[];
+};
+
+const slackDataClassificationFrom = (value: unknown, label: string): SlackDataClassification => {
+  if (value === undefined) return "internal";
+  if (typeof value !== "string" || !SLACK_DATA_CLASSIFICATIONS.has(value as SlackDataClassification)) {
+    throw new Error(`${label} must be internal, confidential, or restricted.`);
+  }
+  return value as SlackDataClassification;
 };
 
 const chatFrom = (value: unknown): ChatConfig | undefined => {
@@ -186,10 +204,18 @@ const chatFrom = (value: unknown): ChatConfig | undefined => {
       if (channelItem.ai_enabled !== undefined && typeof channelItem.ai_enabled !== "boolean") {
         throw new Error(`chat.channels[${index}].ai_enabled must be a boolean when provided.`);
       }
+      if (channelItem.include_thread_context !== undefined && typeof channelItem.include_thread_context !== "boolean") {
+        throw new Error(`chat.channels[${index}].include_thread_context must be a boolean when provided.`);
+      }
 
       return {
         aiEnabled: channelItem.ai_enabled ?? false,
+        dataClassification: slackDataClassificationFrom(
+          channelItem.data_classification,
+          `chat.channels[${index}].data_classification`,
+        ),
         id: channelItem.id,
+        includeThreadContext: channelItem.include_thread_context ?? false,
         name: optionalString(channelItem.name, `chat.channels[${index}].name`),
         repositories: stringArray(channelItem.repositories, `chat.channels[${index}].repositories`),
         response,

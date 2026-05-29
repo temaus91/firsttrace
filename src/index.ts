@@ -12,6 +12,8 @@ export type { SetupCheck, SetupCheckLevel, SetupValidationOptions, SetupValidati
 export { createAiProviderFromEnv } from "./ai/provider-factory.js";
 export { createOciGenAiJsonClient } from "./ai/oci-genai-json-client.js";
 export type { OciGenAiJsonClient, OciGenAiJsonClientOptions } from "./ai/oci-genai-json-client.js";
+export { aiDryRunFromEnv, aiSafetyModeFromEnv, sanitizeReportForAi } from "./ai/safety.js";
+export type { AiSafetyMode, AiSafetyResult } from "./ai/safety.js";
 export { runHostedAccept } from "./hosted/accept.js";
 export type { HostedAcceptCheck, HostedAcceptOptions, HostedAcceptResult } from "./hosted/accept.js";
 export { handleInvestigationRequest, handleJobStatusRequest } from "./http/receiver.js";

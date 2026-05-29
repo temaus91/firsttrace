@@ -121,6 +121,8 @@ describe("config loading", () => {
         "        - app_mention",
         "      response: thread",
         "      ai_enabled: true",
+        "      data_classification: confidential",
+        "      include_thread_context: true",
         "      repositories:",
         "        - local-repo",
       ].join("\n"),
@@ -130,7 +132,9 @@ describe("config loading", () => {
       channels: [
         {
           aiEnabled: true,
+          dataClassification: "confidential",
           id: "C0123456789",
+          includeThreadContext: true,
           name: "company-ai-triage",
           repositories: ["local-repo"],
           response: "thread",

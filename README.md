@@ -323,6 +323,8 @@ chat:
         - app_mention
       response: thread
       ai_enabled: false
+      data_classification: internal
+      include_thread_context: false
       repositories:
         - example-app
 ```
@@ -331,6 +333,16 @@ Set `ai_enabled: true` only for channels approved to send reports to a model
 provider. Hosted Slack events also require `FIRSTTRACE_AI_ENABLED=true`; leaving
 that runtime switch unset keeps Slack triage deterministic even if a channel
 config is accidentally set to AI.
+Set `include_thread_context: true` only when the channel is approved to send
+full Slack thread context to the investigation job and AI provider. Channels
+with `data_classification: restricted` will skip AI even if both AI gates are
+enabled.
+
+AI safety defaults to `FIRSTTRACE_AI_SAFETY_MODE=redact`: common credentials are
+redacted before model calls, while PHI, PCI, legal/dispute, and customer
+production-data markers skip AI and return deterministic results with warnings.
+Use `FIRSTTRACE_AI_DRY_RUN=true` to verify the sanitized prompt path without
+calling the model provider.
 
 The Slack endpoint is:
 
