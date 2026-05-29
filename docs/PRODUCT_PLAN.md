@@ -28,6 +28,9 @@ triager could assemble one manually.
   internal systems.
 - **Runtime-portable:** Slack, Jira, GitHub, Supabase, Redis, OCI, and Vercel are
   adapters, not core assumptions.
+- **Multiple hosted backends now:** the project currently supports a
+  Vercel/Supabase hosted path and an OCI hosted path, while keeping the local
+  filesystem runtime for development and evals.
 - **Eval before integrations:** the core investigation engine should prove it
   can find useful files and owners before Slack or other chat integrations.
 - **Small trusted output:** a concise, grounded reply is better than a long,
@@ -449,8 +452,9 @@ Current capability:
   `run-once` endpoint for manual runs or cron-capable deployments
 
 Vercel and Supabase should be adapters, not assumptions in the core
-investigation logic. A future Docker, OCI, Kubernetes, Redis, or Postgres
-deployment should be able to reuse the same core worker.
+investigation logic. The OCI deployment path now reuses the same core worker;
+future Docker, Kubernetes, Redis, or Postgres deployments should follow the same
+adapter boundary.
 
 Limitations:
 
@@ -622,6 +626,13 @@ weakening the existing Vercel/Supabase path. The goal is side-by-side production
 one Slack app or channel can keep using Vercel/Supabase while another can use
 OCI, or a later router can select the runtime per channel/prefix.
 
+FirstTrace therefore currently has two hosted backend families:
+
+- Vercel/Supabase for teams that prefer the Vercel function plus Supabase queue
+  model.
+- OCI for teams that prefer OCI Queue, Container Instances, Object Storage,
+  Vault/KMS, OCIR, and API Gateway.
+
 Preferred OCI shape for the first implementation:
 
 ```text
@@ -712,13 +723,15 @@ Production validation plan:
 
 1. Deploy OCI receiver and worker container with `FIRSTTRACE_QUEUE_PROVIDER=oci`.
 2. Point the configured Slack app Event Subscription request URL to the OCI URL.
-3. Post the same bug report to Vercel/Supabase and OCI.
-4. Confirm OCI posts one processing reply and one final reply.
-5. Re-send the same Slack event payload and confirm dedupe suppresses duplicate
-   final replies.
-6. Stop the worker mid-job and confirm OCI Queue redelivers after visibility
-   timeout or moves to DLQ after configured attempts.
-7. Compare investigation quality and latency against Vercel/Supabase.
+3. Run `firsttrace hosted accept --backend oci` against the API Gateway base
+   URL and require the health endpoint to report `FIRSTTRACE_BUILD_REF` as
+   `npm:firsttrace@<version>`.
+4. Confirm the harness posts a Slack seed message, sends the same signed Slack
+   event twice, observes one processing reply and one final reply, and sees the
+   job reach `succeeded`.
+5. Confirm the acceptance-only temporary OCI Queue redelivery probe can claim,
+   abandon, reclaim, and delete a message without interrupting the real worker.
+6. Compare investigation quality and latency against Vercel/Supabase.
 
 ### Phase 10: Read-Only Agentic Investigator
 
@@ -1135,8 +1148,8 @@ features.
    Slack reply.
 3. Add the later `codex-cli` investigator adapter only after the built-in agent
    path is validated, using the same `OPENAI_MODEL_CHAT` value.
-4. Package FirstTrace for npm embedding and prove it inside the existing
-   Wallspace Vercel project after standalone validation succeeds.
+4. Keep the npm package deployment path validated with `firsttrace hosted
+   accept` for OCI and an equivalent live check for Vercel/Supabase.
 5. Add GitHub Issues, Vercel/Supabase, OCI, and work-item providers only through the
    generic provider interfaces.
 

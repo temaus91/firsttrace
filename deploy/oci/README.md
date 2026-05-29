@@ -33,7 +33,7 @@ development convenience.
    mkdir firsttrace-oci
    cd firsttrace-oci
    npm init -y
-   npm install firsttrace@0.1.1
+   npm install firsttrace@0.1.2
    cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
    ```
 
@@ -60,7 +60,8 @@ development convenience.
 
    ```bash
    export FIRSTTRACE_DOCKERFILE="deploy/oci/Dockerfile.package"
-   export FIRSTTRACE_PACKAGE_SPEC="firsttrace@0.1.1"
+   export FIRSTTRACE_PACKAGE_SPEC="firsttrace@0.1.2"
+   export FIRSTTRACE_BUILD_REF="npm:firsttrace@0.1.2"
    export FIRSTTRACE_CONFIG_FILE="firsttrace.oci.config.yaml"
    export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
    export FIRSTTRACE_CONTAINER_PLATFORM="linux/arm64" # Use linux/amd64 for CI.Standard.E4.Flex.
@@ -118,14 +119,29 @@ development convenience.
 8. Open the Slack app Event Subscriptions page and set the request URL to the
    `slack_events_url` Terraform output.
 
-9. Verify:
+9. Verify with the live acceptance harness:
 
    ```bash
-   curl "$(terraform output -raw health_url)"
+   export FIRSTTRACE_OCI_BASE_URL="$(terraform output -raw api_gateway_url)"
+   export SLACK_AI_TRIAGE_CHANNEL_ID="<your Slack channel id>"
+
+   # Use the same values that were synced to OCI Vault.
+   export FIRSTTRACE_RECEIVER_TOKEN="<receiver token>"
+   export SLACK_BOT_TOKEN="<Slack bot token>"
+   export SLACK_SIGNING_SECRET="<Slack signing secret>"
+
+   npx firsttrace hosted accept \
+     --backend oci \
+     --base-url "$FIRSTTRACE_OCI_BASE_URL" \
+     --config firsttrace.oci.config.yaml \
+     --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
+     --report "README deployment plan is unclear" \
+     --expected-build-ref "npm:firsttrace@0.1.2"
    ```
 
-   Then post a report in the configured Slack channel. FirstTrace should post
-   one processing reply and one final investigation reply in the same thread.
+   This posts a real Slack seed message, sends the same signed event to OCI
+   twice, confirms one processing reply and one final reply, checks the job
+   status endpoint, and proves OCI Queue redelivery with a temporary queue.
 
 ## Cloud Shell Setup Commands
 
@@ -142,7 +158,7 @@ export COMPARTMENT_OCID="<compartment_ocid>"
 export OCI_REGION="<oci-region>"        # Example: us-sanjose-1
 export OCI_REGION_KEY="<ocir-region-key>" # Example: sjc
 export PROJECT_NAME="firsttrace"
-export FIRSTTRACE_VERSION="0.1.1"
+export FIRSTTRACE_VERSION="0.1.2"
 export IMAGE_TAG="${FIRSTTRACE_VERSION}"
 ```
 
@@ -370,9 +386,10 @@ PY
 terraform apply -auto-approve
 ```
 
-Verify the deployed endpoints:
+Verify the deployed endpoints and run live acceptance:
 
 ```bash
+export FIRSTTRACE_OCI_BASE_URL="$(terraform output -raw api_gateway_url)"
 export HEALTH_URL="$(terraform output -raw health_url)"
 export SLACK_EVENTS_URL="$(terraform output -raw slack_events_url)"
 
@@ -381,7 +398,34 @@ printf 'Slack Events URL: %s\n' "$SLACK_EVENTS_URL"
 ```
 
 Set the Slack app Event Subscriptions request URL to `SLACK_EVENTS_URL`, save
-the Slack app config, and post a report in the configured channel.
+the Slack app config, then run the acceptance command from the npm package:
+
+```bash
+cd ~/firsttrace
+
+export SLACK_AI_TRIAGE_CHANNEL_ID="<your Slack channel id>"
+
+# Use the same values synced to OCI Vault. If you let the prompt generate
+# FIRSTTRACE_RECEIVER_TOKEN, store that value in your password manager or rerun
+# the secret sync with a known token before running acceptance.
+export FIRSTTRACE_RECEIVER_TOKEN="<receiver token>"
+export SLACK_BOT_TOKEN="<Slack bot token>"
+export SLACK_SIGNING_SECRET="<Slack signing secret>"
+
+npx firsttrace hosted accept \
+  --backend oci \
+  --base-url "$FIRSTTRACE_OCI_BASE_URL" \
+  --config firsttrace.config.yaml \
+  --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
+  --report "README deployment plan is unclear" \
+  --expected-build-ref "$FIRSTTRACE_BUILD_REF"
+```
+
+Expected result: health passes, Slack receives one processing reply and one
+final reply in the seed thread, the duplicate signed Slack event returns the
+same job id, the job reaches `succeeded`, and the temporary OCI Queue redelivery
+probe passes. The seed thread is left in the Slack channel; no `chat:delete`
+scope is required.
 
 ## Auth Token Troubleshooting
 

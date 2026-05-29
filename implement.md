@@ -56,9 +56,10 @@ Provider categories:
 - `OwnershipProvider`: YAML/globs now; CODEOWNERS and org ownership graph later.
 - `IssueProvider`: issue exports now; GitHub Issues, Jira, OCI, Linear later.
 - `AiProvider`: OpenAI now; Claude, Google AI, local model providers later.
-- `ChatProvider`: CLI now; Slack first later; Teams, Discord, email, API later.
-- `QueueProvider`: in-memory/filesystem first; Redis, Supabase, OCI Queue later.
-- `RuntimeProvider`: local process now; Docker, Vercel/Supabase, OCI, Kubernetes later.
+- `ChatProvider`: CLI and Slack now; Teams, Discord, email, API later.
+- `QueueProvider`: in-memory/filesystem, Supabase, and OCI Queue now; Redis later.
+- `RuntimeProvider`: local process, Vercel/Supabase, and OCI package image now;
+  Kubernetes later.
 - `OutputAdapter`: Markdown CLI now; chat replies, JSON API, dashboard later.
 
 Rules:

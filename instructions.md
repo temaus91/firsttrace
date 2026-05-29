@@ -7,10 +7,18 @@ Current implementation status: the local CLI, AI-assisted local investigation,
 eval runner, local worker runtime, local `submit` message adapter, hosted
 Vercel-compatible receiver/status handlers, Supabase-backed queue, and GitHub
 App repository provider, Slack Events provider, and hosted readiness verifier
-exist. Full live hosted deployment still requires a configured Slack app, Supabase
-project, GitHub App, and worker environment.
+exist. FirstTrace currently supports both a Vercel/Supabase hosted backend and
+an OCI hosted backend. This guide focuses on the Vercel/Supabase setup; OCI
+setup is documented in `deploy/oci/README.md`.
+
+Full live Vercel/Supabase deployment still requires a configured Slack app,
+Supabase project, GitHub App, and worker environment. Full live OCI deployment
+requires the same Slack/GitHub/AI configuration plus the OCI resources described
+in the OCI deployment guide.
 
 ## Target Workflow
+
+Vercel/Supabase hosted path:
 
 ```text
 Slack channel
@@ -21,14 +29,34 @@ Slack channel
   -> Slack thread reply
 ```
 
+OCI hosted path:
+
+```text
+Slack channel
+  -> OCI HTTPS receiver
+  -> OCI Queue
+  -> FirstTrace worker container
+  -> GitHub provider + AI provider
+  -> Slack thread reply
+```
+
 The setup should work for any company by changing only config values and
 environment secrets. Company names, Slack channels, GitHub repositories, and
 ownership mappings must not be hardcoded in FirstTrace source code.
 
 ## Prerequisites
 
+For the Vercel/Supabase path:
+
 - A Vercel project for the FirstTrace receiver/API service.
 - A Supabase project for job, status, and result storage.
+
+For the OCI path, use `deploy/oci/README.md` to create the OCI queue, runtime
+containers, Object Storage markers, Vault/KMS secrets, OCIR image, and public
+HTTPS entrypoint.
+
+For both hosted paths:
+
 - Slack workspace admin access.
 - GitHub organization or repository admin access for installing a GitHub App.
 - An AI provider API key, with OpenAI as the first supported provider.

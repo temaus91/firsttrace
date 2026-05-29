@@ -90,6 +90,16 @@ not care whether jobs come from Slack, Teams, Discord, a CLI, or a test fixture,
 and it should not care whether AI reasoning comes from OpenAI, Claude, Google AI,
 or a local model.
 
+Current runtime backend support:
+
+- **Vercel/Supabase:** Vercel-compatible HTTP handlers with Supabase-backed job
+  storage and worker processing.
+- **OCI:** OCI API Gateway or another HTTPS front door, OCI Container Instances,
+  OCI Queue, Object Storage runtime markers, OCI Vault/KMS, and OCIR package
+  images.
+- **Local/dev:** filesystem queue and local worker loop for development,
+  verification, and evals.
+
 ## Product Plan
 
 See [docs/PRODUCT_PLAN.md](docs/PRODUCT_PLAN.md) for the working build plan,
@@ -98,14 +108,15 @@ See [implement.md](implement.md) for implementation guidance meant for future
 engineering sessions.
 See [instructions.md](instructions.md) for the planned hosted setup workflow for
 companies that want FirstTrace connected to a private GitHub repo and a Slack
-triage channel.
+triage channel. That guide focuses on the Vercel/Supabase path; the OCI
+deployment guide lives under [deploy/oci](deploy/oci).
 
 ## Install As A Dependency
 
 For an external project or deployment wrapper, install FirstTrace from npm:
 
 ```bash
-npm install firsttrace@0.1.1
+npm install firsttrace@0.1.2
 ```
 
 The package provides:
@@ -315,6 +326,23 @@ The command uses a synthetic signed Slack event and a fake Slack notifier by
 default. Add `--live-slack-post` only when a real `SLACK_BOT_TOKEN` and
 configured Slack channel are available.
 
+Hosted acceptance for a deployed OCI backend:
+
+```bash
+firsttrace hosted accept \
+  --backend oci \
+  --base-url "$FIRSTTRACE_OCI_BASE_URL" \
+  --config firsttrace.config.yaml \
+  --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
+  --report "README deployment plan is unclear" \
+  --expected-build-ref "npm:firsttrace@0.1.2"
+```
+
+The acceptance command posts a real Slack seed message, sends the same signed
+Slack event to the deployed receiver twice, waits for exactly one processing
+reply and one final reply, checks the job status endpoint, and proves OCI Queue
+redelivery with a temporary queue.
+
 ## Hosted Deployment Setup
 
 Use this sequence to connect the full hosted path:
@@ -360,7 +388,7 @@ config into the image. A user deploying from a separate operations repo can star
 with:
 
 ```bash
-npm install firsttrace@0.1.1
+npm install firsttrace@0.1.2
 cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
 ```
 
@@ -374,9 +402,13 @@ Runtime secrets should be stored in OCI Vault, not Terraform state. After the
 Terraform stack creates Vault/KMS, run:
 
 ```bash
-npm install firsttrace@0.1.1
+npm install firsttrace@0.1.2
 npx firsttrace-oci-sync-secrets --prompt
 ```
+
+Keep the `FIRSTTRACE_RECEIVER_TOKEN`, `SLACK_BOT_TOKEN`, and
+`SLACK_SIGNING_SECRET` values available in your local shell or secret manager if
+you want to run `firsttrace hosted accept` from outside OCI.
 
 Then set the Slack app Event Subscription request URL to the Terraform
 `slack_events_url` output. See [deploy/oci/README.md](deploy/oci/README.md) for
@@ -518,9 +550,21 @@ firsttrace hosted verify \
   --report "README deployment plan is unclear"
 ```
 
+The OCI live acceptance command is:
+
+```bash
+firsttrace hosted accept \
+  --backend oci \
+  --base-url "$FIRSTTRACE_OCI_BASE_URL" \
+  --config firsttrace.config.yaml \
+  --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
+  --report "README deployment plan is unclear" \
+  --expected-build-ref "npm:firsttrace@0.1.2"
+```
+
 Next planned work:
 
-1. Run the live hosted deployment flow with real Slack, GitHub App, Supabase, and AI.
+1. Run live acceptance regularly for OCI and the Vercel/Supabase hosted path.
 2. Add GitHub Issues or another issue provider through the generic provider boundary.
 
 ## License

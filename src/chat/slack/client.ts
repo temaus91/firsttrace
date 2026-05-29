@@ -13,8 +13,16 @@ export type SlackMessageLookupInput = {
   ts: string;
 };
 
+export type SlackThreadMessage = {
+  botId?: string;
+  text?: string;
+  ts?: string;
+  user?: string;
+};
+
 export type SlackClient = {
   fetchMessageText(input: SlackMessageLookupInput): Promise<string | undefined>;
+  fetchThreadMessageDetails?(input: SlackMessageLookupInput): Promise<SlackThreadMessage[]>;
   fetchThreadMessages?(input: SlackMessageLookupInput): Promise<string[]>;
   postMessage(input: SlackPostMessageInput): Promise<SlackPostMessageResult | void>;
 };
@@ -41,6 +49,11 @@ export class SlackWebApiClient implements SlackClient {
   }
 
   async fetchThreadMessages({ channel, ts }: SlackMessageLookupInput): Promise<string[]> {
+    const messages = await this.fetchThreadMessageDetails({ channel, ts });
+    return messages.flatMap((message) => (message.text ? [message.text] : []));
+  }
+
+  async fetchThreadMessageDetails({ channel, ts }: SlackMessageLookupInput): Promise<SlackThreadMessage[]> {
     const params = new URLSearchParams({ channel, inclusive: "true", limit: "10", ts });
     const response = await this.fetchImpl(`https://slack.com/api/conversations.replies?${params.toString()}`, {
       headers: {
@@ -49,9 +62,16 @@ export class SlackWebApiClient implements SlackClient {
       method: "GET",
     });
     const body = (await assertSlackOk(response, "conversations.replies")) as {
-      messages?: Array<{ text?: string; ts?: string }>;
+      messages?: Array<{ bot_id?: string; text?: string; ts?: string; user?: string }>;
     };
-    return body.messages?.flatMap((message) => (message.text ? [message.text] : [])) ?? [];
+    return (
+      body.messages?.map((message) => ({
+        botId: message.bot_id,
+        text: message.text,
+        ts: message.ts,
+        user: message.user,
+      })) ?? []
+    );
   }
 
   async postMessage({ channel, text, threadTs }: SlackPostMessageInput): Promise<SlackPostMessageResult> {

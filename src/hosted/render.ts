@@ -1,4 +1,5 @@
 import type { HostedVerifyCheck, HostedVerifyResult } from "../types.js";
+import type { HostedAcceptCheck, HostedAcceptResult } from "./accept.js";
 
 const statusLabel = (status: HostedVerifyCheck["status"]) => status.toUpperCase();
 
@@ -26,6 +27,30 @@ export const renderHostedVerify = (result: HostedVerifyResult) =>
     result.slackReplyText ? `Captured Slack reply: ${result.slackReplyText.split("\n")[0]}` : "",
     "## Checks",
     checksText(result.checks),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+const acceptChecksText = (checks: HostedAcceptCheck[]) =>
+  checks.map((check) => `- ${check.status.toUpperCase()} ${check.name}: ${check.message}`).join("\n");
+
+export const renderHostedAccept = (result: HostedAcceptResult) =>
+  [
+    "# FirstTrace Hosted Acceptance",
+    `Status: ${result.passed ? "PASS" : "FAIL"}`,
+    `Backend: \`${result.backend}\``,
+    `Base URL: \`${result.baseUrl}\``,
+    result.buildRef ? `Build ref: \`${result.buildRef}\`` : "",
+    result.queueProvider ? `Queue provider: \`${result.queueProvider}\`` : "",
+    `Slack channel: \`${result.channelId}\``,
+    result.seedMessageTs ? `Slack seed thread: \`${result.seedMessageTs}\`` : "",
+    result.jobId ? `Job: \`${result.jobId}\`` : "",
+    result.jobStatus ? `Job status: \`${result.jobStatus}\`` : "",
+    result.processingReplyCount !== undefined ? `Processing replies: \`${result.processingReplyCount}\`` : "",
+    result.finalReplyCount !== undefined ? `Final replies: \`${result.finalReplyCount}\`` : "",
+    result.redelivery?.queueName ? `Redelivery probe queue: \`${result.redelivery.queueName}\`` : "",
+    "## Checks",
+    acceptChecksText(result.checks),
   ]
     .filter(Boolean)
     .join("\n\n");

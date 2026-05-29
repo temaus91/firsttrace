@@ -1,6 +1,6 @@
 {
   "name": "firsttrace",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Self-hosted bug localization for teams with private, internal, or public git repos.",
   "license": "Apache-2.0",
@@ -36,6 +36,10 @@
       "types": "./dist/src/chat/slack/render.d.ts",
       "import": "./dist/src/chat/slack/render.js"
     },
+    "./hosted/accept": {
+      "types": "./dist/src/hosted/accept.d.ts",
+      "import": "./dist/src/hosted/accept.js"
+    },
     "./http/receiver": {
       "types": "./dist/src/http/receiver.d.ts",
       "import": "./dist/src/http/receiver.js"
@@ -51,6 +55,10 @@
     "./oci/sync-secrets": {
       "types": "./dist/src/oci/sync-secrets.d.ts",
       "import": "./dist/src/oci/sync-secrets.js"
+    },
+    "./oci/queue-redelivery-probe": {
+      "types": "./dist/src/oci/queue-redelivery-probe.d.ts",
+      "import": "./dist/src/oci/queue-redelivery-probe.js"
     },
     "./runtime/http-server": {
       "types": "./dist/src/runtime/http-server.d.ts",

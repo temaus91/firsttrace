@@ -7,7 +7,8 @@ import { loadLocalEnv } from "./env.js";
 import { loadEvalCases } from "./eval/cases.js";
 import { renderEvalRun } from "./eval/render.js";
 import { runEval } from "./eval/runner.js";
-import { renderHostedVerify } from "./hosted/render.js";
+import { runHostedAccept } from "./hosted/accept.js";
+import { renderHostedAccept, renderHostedVerify } from "./hosted/render.js";
 import { createHostedVerifyQueue, runHostedVerify } from "./hosted/verify.js";
 import { executeInvestigation } from "./investigation-runner.js";
 import { createInvestigatorProviderFromEnv } from "./investigator/provider-factory.js";
@@ -20,17 +21,23 @@ import { runWorkerOnce } from "./worker/runner.js";
 
 type ParsedArgs = {
   ai: boolean;
+  backend?: string;
+  baseUrl?: string;
   casesPath?: string;
   channelId?: string;
   command?: string;
   configPath: string;
+  expectedBuildRef?: string;
+  gracePeriodMs?: number;
   help: boolean;
   hostedAction?: string;
   jobId?: string;
   liveSlackPost: boolean;
   once: boolean;
+  pollIntervalMs?: number;
   queueProvider?: string;
   report?: string;
+  timeoutMs?: number;
   workerAction?: string;
 };
 
@@ -42,21 +49,37 @@ const usage = () => `Usage:
   firsttrace submit --queue filesystem --config firsttrace.config.yaml --report "bug text"
   firsttrace submit --queue supabase --config firsttrace.config.yaml --report "bug text" --ai
   firsttrace hosted verify --config examples/hosted.local.config.yaml --queue filesystem --report "bug text"
+  firsttrace hosted accept --backend oci --base-url https://example.com --config firsttrace.config.yaml --channel C0123456789 --report "bug text" --expected-build-ref npm:firsttrace@0.1.2
   firsttrace worker enqueue --queue filesystem --config firsttrace.config.yaml --report "bug text"
   firsttrace worker run --once --queue filesystem
   firsttrace worker status --queue filesystem --job <job-id>
 
 Options:
   --ai              Run the configured investigator over the deterministic evidence.
+  --backend <name>  Hosted acceptance backend. Currently only oci.
+  --base-url <url>  Deployed hosted base URL for live acceptance.
   --cases <path>    Path to a FirstTrace eval cases YAML file.
   --channel <id>    Configured Slack channel id for hosted verification.
   --config <path>   Path to a FirstTrace YAML config. Defaults to firsttrace.config.yaml.
+  --expected-build-ref <value>
+                    Required build ref expected from /healthz during hosted acceptance.
+  --grace-period-ms <ms>
+                    Extra duplicate-reply wait after live acceptance sees the final reply.
   --job <id>        Worker job id for status lookup.
   --live-slack-post Post hosted verification results to Slack instead of using the fake notifier.
   --once            Process at most one queued job.
+  --poll-interval-ms <ms>
+                    Poll interval for hosted acceptance.
   --queue <name>    Queue provider: filesystem, supabase, or oci. Defaults to FIRSTTRACE_QUEUE_PROVIDER or filesystem.
   --report <text>   Bug report or feedback text to investigate.
+  --timeout-ms <ms> Timeout for hosted acceptance.
   --help            Show this message.`;
+
+const parsePositiveInt = (value: string, flag: string) => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`${flag} requires a non-negative integer.`);
+  return parsed;
+};
 
 const parseArgs = (argv: string[]): ParsedArgs => {
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -106,6 +129,20 @@ const parseArgs = (argv: string[]): ParsedArgs => {
       index += 1;
       continue;
     }
+    if (arg === "--backend") {
+      const value = argv[index + 1];
+      if (!value) throw new Error("--backend requires a name.");
+      parsed.backend = value;
+      index += 1;
+      continue;
+    }
+    if (arg === "--base-url") {
+      const value = argv[index + 1];
+      if (!value) throw new Error("--base-url requires a URL.");
+      parsed.baseUrl = value;
+      index += 1;
+      continue;
+    }
     if (arg === "--cases") {
       const value = argv[index + 1];
       if (!value) throw new Error("--cases requires a path.");
@@ -127,6 +164,27 @@ const parseArgs = (argv: string[]): ParsedArgs => {
       index += 1;
       continue;
     }
+    if (arg === "--expected-build-ref") {
+      const value = argv[index + 1];
+      if (!value) throw new Error("--expected-build-ref requires a value.");
+      parsed.expectedBuildRef = value;
+      index += 1;
+      continue;
+    }
+    if (arg === "--grace-period-ms") {
+      const value = argv[index + 1];
+      if (!value) throw new Error("--grace-period-ms requires a value.");
+      parsed.gracePeriodMs = parsePositiveInt(value, "--grace-period-ms");
+      index += 1;
+      continue;
+    }
+    if (arg === "--poll-interval-ms") {
+      const value = argv[index + 1];
+      if (!value) throw new Error("--poll-interval-ms requires a value.");
+      parsed.pollIntervalMs = parsePositiveInt(value, "--poll-interval-ms");
+      index += 1;
+      continue;
+    }
     if (arg === "--queue") {
       const value = argv[index + 1];
       if (!value) throw new Error("--queue requires a provider name.");
@@ -138,6 +196,13 @@ const parseArgs = (argv: string[]): ParsedArgs => {
       const value = argv[index + 1];
       if (!value) throw new Error("--report requires text.");
       parsed.report = value;
+      index += 1;
+      continue;
+    }
+    if (arg === "--timeout-ms") {
+      const value = argv[index + 1];
+      if (!value) throw new Error("--timeout-ms requires a value.");
+      parsed.timeoutMs = parsePositiveInt(value, "--timeout-ms");
       index += 1;
       continue;
     }
@@ -218,11 +283,39 @@ const main = async () => {
   const config = loadConfig(args.configPath);
 
   if (args.command === "hosted") {
-    if (args.hostedAction !== "verify") {
+    if (args.hostedAction !== "verify" && args.hostedAction !== "accept") {
       throw new Error(`Unknown or missing hosted action: ${args.hostedAction ?? "<none>"}`);
     }
     if (!args.report?.trim()) {
       throw new Error("Missing required --report.");
+    }
+    if (args.hostedAction === "accept") {
+      if (args.backend !== "oci") {
+        throw new Error("hosted accept currently requires --backend oci.");
+      }
+      if (!args.baseUrl?.trim()) {
+        throw new Error("hosted accept requires --base-url.");
+      }
+      if (!args.channelId?.trim()) {
+        throw new Error("hosted accept requires --channel.");
+      }
+      if (!args.expectedBuildRef?.trim()) {
+        throw new Error("hosted accept requires --expected-build-ref.");
+      }
+      const result = await runHostedAccept({
+        backend: "oci",
+        baseUrl: args.baseUrl,
+        channelId: args.channelId,
+        config,
+        expectedBuildRef: args.expectedBuildRef,
+        gracePeriodMs: args.gracePeriodMs,
+        pollIntervalMs: args.pollIntervalMs,
+        report: args.report,
+        timeoutMs: args.timeoutMs,
+      });
+      console.log(renderHostedAccept(result));
+      if (!result.passed) process.exit(1);
+      return;
     }
     const provider = queueProviderFrom(args.queueProvider);
     const result = await runHostedVerify({
