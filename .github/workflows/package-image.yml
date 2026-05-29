@@ -6,11 +6,15 @@ on:
       firsttrace_version:
         description: FirstTrace npm version or dist-tag to install.
         required: true
-        default: 0.1.1
+        default: 0.1.2
       config_file:
         description: Config file in the repository checkout to copy into the image.
         required: true
         default: firsttrace.wallspace.config.yaml
+      repos_dir:
+        description: Optional repository snapshot directory to copy to /app/repos.
+        required: true
+        default: repos
       image_tag:
         description: Additional image tag to publish.
         required: true
@@ -44,6 +48,17 @@ jobs:
       - name: Verify config file exists
         run: test -f "${{ inputs.config_file }}"
 
+      - name: Prepare repository snapshot directory
+        run: |
+          repos_dir="${{ inputs.repos_dir }}"
+          if [[ ! -d "${repos_dir}" ]]; then
+            repos_dir=".firsttrace-empty-repos"
+            rm -rf "${repos_dir}"
+            mkdir -p "${repos_dir}"
+            touch "${repos_dir}/.keep"
+          fi
+          echo "FIRSTTRACE_REPOS_DIR=${repos_dir}" >> "$GITHUB_ENV"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -70,4 +85,5 @@ jobs:
             FIRSTTRACE_PACKAGE_SPEC=firsttrace@${{ inputs.firsttrace_version }}
             FIRSTTRACE_CONFIG_FILE=${{ inputs.config_file }}
             FIRSTTRACE_CONFIG_DEST=firsttrace.wallspace.config.yaml
+            FIRSTTRACE_REPOS_DIR=${{ env.FIRSTTRACE_REPOS_DIR }}
             FIRSTTRACE_BUILD_REF=npm:firsttrace@${{ inputs.firsttrace_version }}:${{ github.sha }}

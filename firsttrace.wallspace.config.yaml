@@ -39,6 +39,8 @@ chat:
         - reaction
       response: thread
       ai_enabled: true
+      data_classification: internal
+      include_thread_context: false
       repositories:
         - wallspace
 search:
