@@ -312,6 +312,7 @@ export const runHostedVerify = async ({
       config: effectiveConfig,
       nowSeconds: Number(requestTimestamp),
       queue,
+      runtimeAiEnabled: aiEnabled,
       signingSecret: VERIFY_SIGNING_SECRET,
       slackClient: captureSlackClient,
     },

@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
-import { handleSlackEventsRequest } from "../src/chat/slack/events.js";
+import { handleSlackEventsRequest, runtimeAiEnabledFromEnv } from "../src/chat/slack/events.js";
 import { SlackJobResultNotifier } from "../src/chat/slack/notifier.js";
 import { renderSlackInvestigationReply } from "../src/chat/slack/render.js";
 import { createSlackSignature, verifySlackRequestSignature } from "../src/chat/slack/signature.js";
@@ -217,6 +217,7 @@ describe("Slack event receiver", () => {
         afterEnqueue: (job) => acceptedJobs.push(job),
         nowSeconds,
         queue,
+        runtimeAiEnabled: true,
         signingSecret,
       },
     );
@@ -237,6 +238,39 @@ describe("Slack event receiver", () => {
       },
     });
     expect(acceptedJobs.map((job) => job.id)).toEqual(["job-1"]);
+  });
+
+  it("requires the runtime AI gate in addition to channel ai_enabled", async () => {
+    expect(runtimeAiEnabledFromEnv({} as NodeJS.ProcessEnv)).toBe(false);
+    expect(runtimeAiEnabledFromEnv({ FIRSTTRACE_AI_ENABLED: "true" } as NodeJS.ProcessEnv)).toBe(true);
+
+    const queue = new FakeQueue();
+    const response = await handleSlackEventsRequest(
+      signedSlackRequest({
+        event: {
+          channel: "C0123456789",
+          text: "<@U999999> README deployment plan is unclear",
+          ts: "1710000000.000100",
+          type: "app_mention",
+          user: "U0123456789",
+        },
+        team_id: "T0123456789",
+        type: "event_callback",
+      }),
+      {
+        config: loadConfig(tempConfigPath({ aiEnabled: true })),
+        nowSeconds,
+        queue,
+        signingSecret,
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      aiEnabled: false,
+      warning: "Slack channel requested AI, but FIRSTTRACE_AI_ENABLED is not true.",
+    });
+    expect((await queue.list())[0]?.aiEnabled).toBe(false);
   });
 
   it("dedupes repeated Slack app mention, message, and reaction events", async () => {
@@ -300,6 +334,7 @@ describe("Slack event receiver", () => {
         config: loadConfig(tempConfigPath()),
         nowSeconds,
         queue,
+        runtimeAiEnabled: true,
         signingSecret,
         slackClient: item.slackClient,
       };

@@ -4,7 +4,7 @@ import { realpathSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { fileURLToPath } from "node:url";
 import { SlackWebApiClient } from "../chat/slack/client.js";
-import { handleSlackEventsRequest, loadSlackConfigFromPath } from "../chat/slack/events.js";
+import { handleSlackEventsRequest, loadSlackConfigFromPath, runtimeAiEnabledFromEnv } from "../chat/slack/events.js";
 import { createJobProgressNotifierFromEnv, createJobResultNotifierFromEnv } from "../chat/slack/notifier.js";
 import { loadLocalEnv } from "../env.js";
 import { createOciSlackNotifiersFromEnv } from "../oci/notifiers.js";
@@ -99,6 +99,7 @@ export const createFirstTraceHttpServer = async () => {
           await handleSlackEventsRequest(request, {
             config: loadSlackConfigFromPath(configPath),
             queue,
+            runtimeAiEnabled: runtimeAiEnabledFromEnv(),
             signingSecret: process.env.SLACK_SIGNING_SECRET,
             slackClient: slackClient(),
           }),

@@ -8,6 +8,7 @@ type SlackEventReceiverOptions = {
   config: FirstTraceConfig | (() => Awaitable<FirstTraceConfig>);
   nowSeconds?: number;
   queue: JobQueue | (() => Awaitable<JobQueue>);
+  runtimeAiEnabled?: boolean;
   signingSecret?: string;
   slackClient?: SlackClient;
 };
@@ -64,6 +65,9 @@ const resolveConfig = async (config: SlackEventReceiverOptions["config"]) =>
   typeof config === "function" ? config() : config;
 
 export const loadSlackConfigFromPath = (configPath: string) => () => loadConfig(configPath);
+
+export const runtimeAiEnabledFromEnv = (env: NodeJS.ProcessEnv = process.env) =>
+  (env.FIRSTTRACE_AI_ENABLED ?? "false").trim().toLowerCase() === "true";
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -238,8 +242,9 @@ export const handleSlackEventsRequest = async (
     if ("ignored" in normalized) return jsonResponse(200, normalized);
 
     const queue = await resolveQueue(options.queue);
+    const aiEnabled = normalized.channel.aiEnabled && Boolean(options.runtimeAiEnabled);
     const job = await queue.enqueue({
-      aiEnabled: normalized.channel.aiEnabled,
+      aiEnabled,
       configPath: config.configPath,
       dedupeKey: slackDedupeKey(eventPayload, normalized),
       report: normalized.report,
@@ -259,10 +264,14 @@ export const handleSlackEventsRequest = async (
     }
 
     return jsonResponse(200, {
+      aiEnabled,
       jobId: job.id,
       ok: true,
       status: job.status,
       trigger: normalized.trigger,
+      warning: normalized.channel.aiEnabled && !options.runtimeAiEnabled
+        ? "Slack channel requested AI, but FIRSTTRACE_AI_ENABLED is not true."
+        : undefined,
     });
   } catch (error) {
     return jsonResponse(400, { error: (error as Error).message });

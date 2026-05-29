@@ -303,14 +303,17 @@ chat:
     - id: C0123456789
       name: company-ai-triage
       triggers:
-        - message
         - app_mention
-        - reaction
       response: thread
-      ai_enabled: true
+      ai_enabled: false
       repositories:
         - example-app
 ```
+
+Set `ai_enabled: true` only for channels approved to send reports to a model
+provider. Hosted Slack events also require `FIRSTTRACE_AI_ENABLED=true`; leaving
+that runtime switch unset keeps Slack triage deterministic even if a channel
+config is accidentally set to AI.
 
 The Slack endpoint is:
 

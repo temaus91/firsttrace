@@ -208,6 +208,7 @@ FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false
 CRON_SECRET=
 FIRSTTRACE_GITHUB_CACHE_ROOT=
 FIRSTTRACE_AI_PROVIDER=openai
+FIRSTTRACE_AI_ENABLED=false
 FIRSTTRACE_INVESTIGATOR=agent
 FIRSTTRACE_MODEL_CHAT=gpt-5.4-mini
 OPENAI_API_KEY=
@@ -302,7 +303,7 @@ chat:
       repositories:
         - primary-app
       response: thread
-      ai_enabled: true
+      ai_enabled: false
 
 repos:
   - name: primary-app

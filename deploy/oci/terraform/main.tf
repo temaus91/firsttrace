@@ -7,6 +7,7 @@ locals {
 
   runtime_enabled = trimspace(var.container_image_url) != ""
   runtime_env = {
+    FIRSTTRACE_AI_ENABLED                    = tostring(var.ai_enabled)
     FIRSTTRACE_AI_PROVIDER                   = var.ai_provider
     FIRSTTRACE_CONFIG_PATH                    = var.config_path
     FIRSTTRACE_MODEL_CHAT                     = var.ai_model

@@ -65,6 +65,12 @@ variable "ai_provider" {
   }
 }
 
+variable "ai_enabled" {
+  description = "Allow hosted Slack-originated jobs to call the selected AI provider when channel config also sets ai_enabled: true."
+  type        = bool
+  default     = false
+}
+
 variable "ai_model" {
   description = "Chat model id used by the selected AI provider. For OCI GenAI, choose a model available in the configured region."
   type        = string

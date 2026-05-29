@@ -53,12 +53,14 @@ it does not require `OPENAI_API_KEY`.
    project_name = firsttrace
    ai_provider = oci-genai
    ai_model = openai.gpt-oss-120b
+   ai_enabled = false
    container_image_url = ""
    ```
 
    Pick an `ai_model` that is approved for your tenancy and available in the
    selected OCI region. If you use a dedicated OCI GenAI endpoint, also set
-   `oci_genai_dedicated_endpoint_id`.
+   `oci_genai_dedicated_endpoint_id`. Leave `ai_enabled = false` until the Slack
+   channel config and data handling policy are approved for model calls.
 
    For the strict production path, leave `enable_vault_secret_loading = true`
    and `oci_vault_secrets_required = true`. For a first bootstrap health check
@@ -366,6 +368,8 @@ The default OCI stack uses `FIRSTTRACE_AI_PROVIDER=oci-genai` and
 `ai_model` in `terraform.tfvars` or Resource Manager to a model available in
 your selected OCI region. If you intentionally use direct OpenAI instead, set
 `ai_provider = "openai"` and add `OPENAI_API_KEY` to `runtime_secret_names`.
+Hosted Slack events only enqueue AI jobs when both Terraform `ai_enabled = true`
+and the Slack channel config has `ai_enabled: true`.
 When `oci_vault_secrets_required = false`, the runtime logs a warning for a
 missing Vault secret and keeps booting so infrastructure smoke tests can run.
 

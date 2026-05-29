@@ -19,6 +19,7 @@ config_path = "firsttrace.config.yaml"
 # selected OCI region, or set ai_provider = "openai" and add OPENAI_API_KEY to
 # runtime_secret_names when direct OpenAI API use is intentional.
 ai_provider = "oci-genai"
+ai_enabled  = false
 ai_model    = "openai.gpt-oss-120b"
 
 # Use only when you deploy a dedicated OCI GenAI endpoint.
