@@ -548,6 +548,9 @@ Current capability:
   in config
 - validate a minimal Slack app manifest profile so new installs can start with
   only `app_mentions:read`, `chat:write`, and the `app_mention` event
+- run `firsttrace doctor` to validate config loading, local repository paths,
+  Slack receiver/reply env, GitHub materialization credentials, and AI provider
+  availability before deployment
 
 Required environment variables for hosted Slack:
 

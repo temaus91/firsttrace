@@ -262,6 +262,15 @@ directory for GitHub clones.
 Before the full Slack app is wired, test the generic hosted receiver directly:
 
 ```bash
+firsttrace doctor --config examples/minimal.local.config.yaml
+```
+
+This catches missing local repository snapshots, missing Slack signing secrets,
+unavailable Slack replies, missing GitHub credentials, and AI provider gaps
+before deployment. Deterministic investigation remains available when AI
+credentials are missing unless `--ai` or hosted Slack AI is explicitly enabled.
+
+```bash
 curl -X POST "$FIRSTTRACE_BASE_URL/api/investigations" \
   -H "authorization: Bearer $FIRSTTRACE_RECEIVER_TOKEN" \
   -H "content-type: application/json" \

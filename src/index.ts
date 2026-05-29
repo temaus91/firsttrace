@@ -7,6 +7,8 @@ export {
 export type { SlackManifestCheck, SlackManifestCheckLevel, SlackManifestProfile } from "./chat/slack/manifest-validator.js";
 export { renderSlackInvestigationReply } from "./chat/slack/render.js";
 export { loadConfig } from "./config.js";
+export { renderSetupValidation, validateFirstTraceSetup } from "./diagnostics/setup-validation.js";
+export type { SetupCheck, SetupCheckLevel, SetupValidationOptions, SetupValidationResult } from "./diagnostics/setup-validation.js";
 export { createAiProviderFromEnv } from "./ai/provider-factory.js";
 export { createOciGenAiJsonClient } from "./ai/oci-genai-json-client.js";
 export type { OciGenAiJsonClient, OciGenAiJsonClientOptions } from "./ai/oci-genai-json-client.js";

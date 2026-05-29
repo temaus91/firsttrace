@@ -8,6 +8,7 @@ import {
   type SlackManifestProfile,
 } from "./chat/slack/manifest-validator.js";
 import { loadConfig } from "./config.js";
+import { renderSetupValidation, validateFirstTraceSetup } from "./diagnostics/setup-validation.js";
 import { loadLocalEnv } from "./env.js";
 import { loadEvalCases } from "./eval/cases.js";
 import { renderEvalRun } from "./eval/render.js";
@@ -51,6 +52,7 @@ type ParsedArgs = {
 
 const usage = () => `Usage:
   firsttrace investigate --config firsttrace.config.yaml --report "bug text"
+  firsttrace doctor --config firsttrace.config.yaml
   firsttrace investigate --config firsttrace.config.yaml --report "bug text" --ai
   firsttrace eval --config firsttrace.config.yaml --cases evals/example.yaml
   firsttrace eval --config firsttrace.config.yaml --cases evals/example.yaml --ai
@@ -252,6 +254,7 @@ const main = async () => {
   }
   if (
     args.command !== "investigate" &&
+    args.command !== "doctor" &&
     args.command !== "eval" &&
     args.command !== "hosted" &&
     args.command !== "slack" &&
@@ -274,6 +277,16 @@ const main = async () => {
     });
     console.log(renderSlackManifestChecks(checks));
     if (checks.some((item) => item.level === "ERROR")) process.exit(1);
+    return;
+  }
+
+  if (args.command === "doctor") {
+    const result = validateFirstTraceSetup({
+      aiRequested: args.ai,
+      configPath: args.configPath,
+    });
+    console.log(renderSetupValidation(result));
+    if (!result.passed) process.exit(1);
     return;
   }
 

@@ -72,7 +72,9 @@ const reposFrom = (value: unknown, configDir: string): RepoConfig[] => {
 
       const repoPath = path.resolve(configDir, item.path);
       if (!existsSync(repoPath) || !statSync(repoPath).isDirectory()) {
-        throw new Error(`repos[${index}].path does not exist or is not a directory: ${repoPath}`);
+        throw new Error(
+          `repos[${index}].path for local repo "${item.name}" does not exist or is not a directory: ${repoPath}`,
+        );
       }
 
       return { name: item.name, path: repoPath, provider: "local" };

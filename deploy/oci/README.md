@@ -46,6 +46,17 @@ it does not require `OPENAI_API_KEY`.
    `provider: archive` and an `archive_command` that populates
    `FIRSTTRACE_ARCHIVE_REPO_PATH`.
 
+   Before building the image, run the setup validator from the same operations
+   directory:
+
+   ```bash
+   npx firsttrace doctor --config firsttrace.oci.config.yaml
+   ```
+
+   The validator fails on missing config/repo paths and unavailable Slack
+   receivers, warns when Slack replies or AI are not configured, and fails AI
+   checks only when `--ai` or hosted Slack AI is explicitly enabled.
+
 2. Create a zip of `deploy/oci/terraform` and upload it as an OCI Resource
    Manager stack.
 

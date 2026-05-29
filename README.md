@@ -368,6 +368,15 @@ existing queued job instead of creating duplicate investigations.
 Hosted readiness verification:
 
 ```bash
+firsttrace doctor --config examples/minimal.local.config.yaml
+```
+
+`doctor` validates that the config loads, local repository paths exist, Slack
+receiver/reply environment variables are present when Slack is configured, and
+the selected AI provider is available when AI is requested. Missing AI credentials
+are a warning unless `--ai` is passed or Slack-originated AI is enabled.
+
+```bash
 firsttrace hosted verify \
   --config examples/hosted.local.config.yaml \
   --queue filesystem \

@@ -1,0 +1,25 @@
+repos:
+  - name: example-frontend
+    provider: local
+    path: repos/example-frontend
+docs:
+  - README.md
+issue_exports: []
+owners:
+  - path: "**/*"
+    owner: "@team"
+chat:
+  provider: slack
+  channels:
+    - id: CPLACEHOLDER
+      name: triage-test
+      triggers:
+        - app_mention
+      response: thread
+      ai_enabled: false
+      repositories:
+        - example-frontend
+search:
+  max_files: 20
+  max_commits: 10
+  max_evidence_per_file: 4

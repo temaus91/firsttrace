@@ -40,6 +40,10 @@
       "types": "./dist/src/chat/slack/render.d.ts",
       "import": "./dist/src/chat/slack/render.js"
     },
+    "./diagnostics/setup-validation": {
+      "types": "./dist/src/diagnostics/setup-validation.d.ts",
+      "import": "./dist/src/diagnostics/setup-validation.js"
+    },
     "./hosted/accept": {
       "types": "./dist/src/hosted/accept.d.ts",
       "import": "./dist/src/hosted/accept.js"
