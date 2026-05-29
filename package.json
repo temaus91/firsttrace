@@ -106,6 +106,7 @@
     "@vercel/functions": "^3.6.0",
     "dotenv": "^17.4.2",
     "oci-common": "^2.132.0",
+    "oci-generativeaiinference": "^2.132.0",
     "oci-objectstorage": "^2.132.0",
     "oci-queue": "^2.132.0",
     "oci-secrets": "^2.132.0",

@@ -59,7 +59,8 @@ For both hosted paths:
 
 - Slack workspace admin access.
 - GitHub organization or repository admin access for installing a GitHub App.
-- An AI provider API key, with OpenAI as the first supported provider.
+- AI provider access. Use `OPENAI_API_KEY` for direct OpenAI deployments, or
+  OCI IAM/resource-principal access for `FIRSTTRACE_AI_PROVIDER=oci-genai`.
 
 ## 1. Create the Slack Triage Channel
 
@@ -208,8 +209,8 @@ CRON_SECRET=
 FIRSTTRACE_GITHUB_CACHE_ROOT=
 FIRSTTRACE_AI_PROVIDER=openai
 FIRSTTRACE_INVESTIGATOR=agent
+FIRSTTRACE_MODEL_CHAT=gpt-5.4-mini
 OPENAI_API_KEY=
-OPENAI_MODEL_CHAT=gpt-5.4-mini
 SLACK_BOT_TOKEN=
 SLACK_SIGNING_SECRET=
 GITHUB_APP_ID=
@@ -280,7 +281,8 @@ organization:
 
 investigator:
   provider_env: FIRSTTRACE_INVESTIGATOR
-  model_env: OPENAI_MODEL_CHAT
+  ai_provider_env: FIRSTTRACE_AI_PROVIDER
+  model_env: FIRSTTRACE_MODEL_CHAT
 
 runtime:
   provider: vercel

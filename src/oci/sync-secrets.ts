@@ -8,8 +8,6 @@ import { parse as parseDotenv } from "dotenv";
 import { createOciAuthProvider } from "./auth.js";
 
 const DEFAULT_SECRET_NAMES = [
-  "OPENAI_API_KEY",
-  "OPENAI_MODEL_CHAT",
   "FIRSTTRACE_RECEIVER_TOKEN",
   "SLACK_SIGNING_SECRET",
   "SLACK_BOT_TOKEN",
@@ -20,6 +18,7 @@ const DEFAULT_SECRET_NAMES = [
 
 const REQUIRED_OCI_ENV_NAMES = ["OCI_COMPARTMENT_ID", "OCI_REGION", "OCI_VAULT_ID", "OCI_VAULT_KEY_ID"] as const;
 const DEFAULT_MODEL = "gpt-5.4-mini";
+const DEFAULT_OCI_MODEL = "openai.gpt-oss-120b";
 
 export type OciSyncSecretsArgs = {
   envFile?: string;
@@ -245,9 +244,12 @@ const promptSecretValue = async (
 ) => {
   if (env[name]?.trim()) return env[name];
 
-  if (name === "OPENAI_MODEL_CHAT") {
-    const value = await promptLine(rl, `${name} (${DEFAULT_MODEL}): `, { output });
-    return value.trim() || DEFAULT_MODEL;
+  if (name === "OPENAI_MODEL_CHAT" || name === "FIRSTTRACE_MODEL_CHAT") {
+    const defaultModel = name === "FIRSTTRACE_MODEL_CHAT" && env.FIRSTTRACE_AI_PROVIDER === "oci-genai"
+      ? DEFAULT_OCI_MODEL
+      : DEFAULT_MODEL;
+    const value = await promptLine(rl, `${name} (${defaultModel}): `, { output });
+    return value.trim() || defaultModel;
   }
 
   if (name === "FIRSTTRACE_RECEIVER_TOKEN") {
@@ -295,7 +297,14 @@ export const collectPromptSecretValues = async (
     writeLine(output, "Review:");
     for (const name of secretNamesFromEnv(env)) {
       const value = values[name]?.trim();
-      const display = name === "OPENAI_MODEL_CHAT" || name.endsWith("_ID") ? value || "missing" : value ? "set" : "missing";
+      const display = name === "FIRSTTRACE_AI_PROVIDER" ||
+        name === "FIRSTTRACE_MODEL_CHAT" ||
+        name === "OPENAI_MODEL_CHAT" ||
+        name.endsWith("_ID")
+        ? value || "missing"
+        : value
+          ? "set"
+          : "missing";
       writeLine(output, `${name.padEnd(32)} ${display}`);
     }
     writeLine(output);

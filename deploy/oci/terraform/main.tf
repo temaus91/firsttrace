@@ -7,10 +7,14 @@ locals {
 
   runtime_enabled = trimspace(var.container_image_url) != ""
   runtime_env = {
+    FIRSTTRACE_AI_PROVIDER                   = var.ai_provider
     FIRSTTRACE_CONFIG_PATH                    = var.config_path
+    FIRSTTRACE_MODEL_CHAT                     = var.ai_model
     FIRSTTRACE_QUEUE_PROVIDER                 = "oci"
     FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER = "false"
     FIRSTTRACE_WORKER_IDLE_DELAY_MS           = "1000"
+    OCI_COMPARTMENT_ID                        = local.compartment_id
+    OCI_GENAI_DEDICATED_ENDPOINT_ID           = var.oci_genai_dedicated_endpoint_id
     OCI_OBJECTSTORAGE_BUCKET                  = oci_objectstorage_bucket.state.name
     OCI_OBJECTSTORAGE_NAMESPACE               = data.oci_objectstorage_namespace.current.namespace
     OCI_QUEUE_ID                              = oci_queue_queue.jobs.id
@@ -164,6 +168,7 @@ resource "oci_identity_policy" "runtime" {
     "Allow dynamic-group ${oci_identity_dynamic_group.runtime.name} to read buckets in compartment id ${local.compartment_id} where target.bucket.name='${oci_objectstorage_bucket.state.name}'",
     "Allow dynamic-group ${oci_identity_dynamic_group.runtime.name} to manage objects in compartment id ${local.compartment_id} where target.bucket.name='${oci_objectstorage_bucket.state.name}'",
     "Allow dynamic-group ${oci_identity_dynamic_group.runtime.name} to read secret-bundles in compartment id ${local.compartment_id}",
+    "Allow dynamic-group ${oci_identity_dynamic_group.runtime.name} to use generative-ai-family in compartment id ${local.compartment_id}",
   ]
 }
 

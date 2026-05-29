@@ -19,11 +19,12 @@ the full FirstTrace source tree at runtime.
 - Container Instance with a receiver container and worker container
 - API Gateway in front of the receiver
 
-The Terraform does not store real Slack, GitHub, or OpenAI secrets in state.
+The Terraform does not store real Slack or GitHub secrets in state.
 Secrets are created in OCI Vault after the Vault exists by running
 `firsttrace-oci-sync-secrets` from the npm package. Production setup should use
 interactive prompts or shell environment variables; `.env.local` is only a local
-development convenience.
+development convenience. The default OCI deployment uses OCI Generative AI, so
+it does not require `OPENAI_API_KEY`.
 
 ## Deploy With OCI Resource Manager
 
@@ -50,8 +51,14 @@ development convenience.
    compartment_ocid
    region
    project_name = firsttrace
+   ai_provider = oci-genai
+   ai_model = openai.gpt-oss-120b
    container_image_url = ""
    ```
+
+   Pick an `ai_model` that is approved for your tenancy and available in the
+   selected OCI region. If you use a dedicated OCI GenAI endpoint, also set
+   `oci_genai_dedicated_endpoint_id`.
 
 4. Apply once. This creates the base infrastructure and OCIR repository.
 
@@ -339,8 +346,6 @@ If your automation already has secrets in the shell environment, use the default
 non-interactive mode instead:
 
 ```bash
-export OPENAI_API_KEY="..."
-export OPENAI_MODEL_CHAT="gpt-5.4-mini"
 export FIRSTTRACE_RECEIVER_TOKEN="..."
 export SLACK_SIGNING_SECRET="..."
 export SLACK_BOT_TOKEN="..."
@@ -350,6 +355,12 @@ export GITHUB_APP_INSTALLATION_ID="..."
 
 npx firsttrace-oci-sync-secrets
 ```
+
+The default OCI stack uses `FIRSTTRACE_AI_PROVIDER=oci-genai` and
+`FIRSTTRACE_MODEL_CHAT` from Terraform variables, not Vault. Set
+`ai_model` in `terraform.tfvars` or Resource Manager to a model available in
+your selected OCI region. If you intentionally use direct OpenAI instead, set
+`ai_provider = "openai"` and add `OPENAI_API_KEY` to `runtime_secret_names`.
 
 For migration from an existing secret file, opt in explicitly:
 
@@ -475,8 +486,6 @@ for example `~/.oci/config` plus `OCI_CONFIG_PROFILE`.
 These are loaded from OCI Vault at startup when present:
 
 ```text
-OPENAI_API_KEY
-OPENAI_MODEL_CHAT
 FIRSTTRACE_RECEIVER_TOKEN
 SLACK_SIGNING_SECRET
 SLACK_BOT_TOKEN
@@ -485,9 +494,11 @@ GITHUB_APP_PRIVATE_KEY
 GITHUB_APP_INSTALLATION_ID
 ```
 
-Optional runtime tuning values such as `FIRSTTRACE_AI_PROVIDER` and
-`FIRSTTRACE_INVESTIGATOR` use code defaults when omitted. Add them to
-`runtime_secret_names` only when you also create matching Vault secrets.
+Provider/runtime tuning values such as `FIRSTTRACE_AI_PROVIDER` and
+`FIRSTTRACE_MODEL_CHAT` are supplied as Terraform container environment
+variables by default. Add optional values such as `FIRSTTRACE_INVESTIGATOR` or
+direct-OpenAI `OPENAI_API_KEY` to `runtime_secret_names` only when you also
+create matching Vault secrets.
 
 Use the GitHub App values for production repositories. `GITHUB_TOKEN` is only a
 fallback for local or personal deployments; add it to `runtime_secret_names` only

@@ -39,7 +39,30 @@ variable "config_path" {
 variable "runtime_secret_names" {
   description = "Comma-separated Vault secret names the runtime must load. Add optional tuning env vars here only when you also create matching Vault secrets."
   type        = string
-  default     = "OPENAI_API_KEY,OPENAI_MODEL_CHAT,FIRSTTRACE_RECEIVER_TOKEN,SLACK_SIGNING_SECRET,SLACK_BOT_TOKEN,GITHUB_APP_ID,GITHUB_APP_PRIVATE_KEY,GITHUB_APP_INSTALLATION_ID"
+  default     = "FIRSTTRACE_RECEIVER_TOKEN,SLACK_SIGNING_SECRET,SLACK_BOT_TOKEN,GITHUB_APP_ID,GITHUB_APP_PRIVATE_KEY,GITHUB_APP_INSTALLATION_ID"
+}
+
+variable "ai_provider" {
+  description = "AI model provider. Use oci-genai for OCI-native model inference, or openai for direct OpenAI API use."
+  type        = string
+  default     = "oci-genai"
+
+  validation {
+    condition     = contains(["oci-genai", "openai"], var.ai_provider)
+    error_message = "ai_provider must be oci-genai or openai."
+  }
+}
+
+variable "ai_model" {
+  description = "Chat model id used by the selected AI provider. For OCI GenAI, choose a model available in the configured region."
+  type        = string
+  default     = "openai.gpt-oss-120b"
+}
+
+variable "oci_genai_dedicated_endpoint_id" {
+  description = "Optional OCI GenAI dedicated endpoint OCID. Leave empty to use on-demand serving with ai_model."
+  type        = string
+  default     = ""
 }
 
 variable "vcn_cidr" {

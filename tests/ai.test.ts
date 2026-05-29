@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { buildAiReasonerRequest } from "../src/ai/evidence.js";
 import { groundAiResult } from "../src/ai/grounding.js";
-import { createAiProviderFromEnv, DEFAULT_OPENAI_MODEL } from "../src/ai/provider-factory.js";
+import {
+  aiModelProviderFromEnv,
+  createAiProviderFromEnv,
+  DEFAULT_OPENAI_MODEL,
+  resolveChatModelFromEnv,
+} from "../src/ai/provider-factory.js";
 import { createInvestigatorProviderFromEnv } from "../src/investigator/provider-factory.js";
 import type { InvestigationResult } from "../src/types.js";
 
@@ -107,6 +112,58 @@ describe("AI provider support", () => {
 
     expect(agent.model).toBe("custom-model");
     expect(evidence.model).toBe("custom-model");
+  });
+
+  it("uses FIRSTTRACE_MODEL_CHAT as the provider-neutral model selector", () => {
+    expect(resolveChatModelFromEnv({
+      FIRSTTRACE_MODEL_CHAT: "shared-model",
+      OPENAI_MODEL_CHAT: "legacy-model",
+    })).toBe("shared-model");
+
+    const provider = createInvestigatorProviderFromEnv({
+      FIRSTTRACE_MODEL_CHAT: "shared-model",
+      OPENAI_API_KEY: "test-key",
+    });
+    expect(provider.model).toBe("shared-model");
+  });
+
+  it("supports OCI GenAI without requiring OPENAI_API_KEY", () => {
+    const env = {
+      FIRSTTRACE_AI_PROVIDER: "oracle-genai",
+      FIRSTTRACE_INVESTIGATOR: "agent",
+      FIRSTTRACE_MODEL_CHAT: "openai.gpt-oss-120b",
+      OCI_COMPARTMENT_ID: "ocid1.compartment.oc1..test",
+      OCI_REGION: "us-chicago-1",
+    };
+
+    expect(aiModelProviderFromEnv(env)).toBe("oci-genai");
+    const agent = createInvestigatorProviderFromEnv(env);
+    const evidence = createInvestigatorProviderFromEnv({
+      ...env,
+      FIRSTTRACE_AI_PROVIDER: "oci",
+      FIRSTTRACE_INVESTIGATOR: "evidence",
+    });
+
+    expect(agent.name).toBe("agent");
+    expect(agent.model).toBe("openai.gpt-oss-120b");
+    expect(evidence.name).toBe("evidence");
+    expect(evidence.model).toBe("openai.gpt-oss-120b");
+  });
+
+  it("fails clearly when OCI GenAI model or compartment config is missing", () => {
+    expect(() =>
+      createInvestigatorProviderFromEnv({
+        FIRSTTRACE_AI_PROVIDER: "oci-genai",
+        OCI_COMPARTMENT_ID: "ocid1.compartment.oc1..test",
+      }),
+    ).toThrow("FIRSTTRACE_MODEL_CHAT or OCI_GENAI_MODEL_ID is required");
+
+    expect(() =>
+      createInvestigatorProviderFromEnv({
+        FIRSTTRACE_AI_PROVIDER: "oci-genai",
+        FIRSTTRACE_MODEL_CHAT: "openai.gpt-oss-120b",
+      }),
+    ).toThrow("OCI_COMPARTMENT_ID is required");
   });
 
   it("recognizes codex-cli as a future investigator adapter", async () => {

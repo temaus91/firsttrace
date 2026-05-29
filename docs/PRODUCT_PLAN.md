@@ -201,8 +201,8 @@ Phase 1 providers are deliberately simple:
 
 Future phases add:
 
-- read-only FirstTrace agent provider first, powered by OpenAI and
-  `OPENAI_MODEL_CHAT`
+- read-only FirstTrace agent provider first, powered by a pluggable model
+  provider and `FIRSTTRACE_MODEL_CHAT`
 - later `codex-cli` investigator adapter using the same model and the same
   structured result contract
 - fixture issue provider for evals
@@ -304,20 +304,24 @@ Current capability:
 
 Local configuration:
 
-- `OPENAI_API_KEY` from `.env.local` or the shell
-- `OPENAI_MODEL_CHAT` from `.env.local` or the shell for the existing completed
-  reasoner path
-- `FIRSTTRACE_AI_PROVIDER=openai` by default
+- `FIRSTTRACE_AI_PROVIDER=openai|oci-genai`; `openai` uses direct OpenAI API
+  credentials, while `oci-genai` uses OCI Generative AI with OCI auth
+- `FIRSTTRACE_MODEL_CHAT` from `.env.local` or the shell as the provider-neutral
+  model selector
+- `OPENAI_API_KEY` only when `FIRSTTRACE_AI_PROVIDER=openai`
+- `OPENAI_MODEL_CHAT` remains as a legacy OpenAI-specific alias
 - `FIRSTTRACE_INVESTIGATOR=agent|evidence|codex-cli`, with `agent` as the
   default when `--ai` is enabled
 - explicit opt-in through `--ai`
 
 Planned model direction:
 
-- move the default `OPENAI_MODEL_CHAT` value from `gpt-4o-mini` to
-  `gpt-5.4-mini`
-- use `OPENAI_MODEL_CHAT` as the shared model selector for `agent`, `evidence`,
-  and later `codex-cli`
+- keep `FIRSTTRACE_MODEL_CHAT` as the shared model selector for `agent`,
+  `evidence`, and later `codex-cli`
+- keep `OPENAI_MODEL_CHAT=gpt-5.4-mini` as a compatibility default for direct
+  OpenAI runs
+- use OCI GenAI models such as `openai.gpt-oss-120b` for OCI-hosted deployments
+  where direct OpenAI API use is not allowed
 - avoid cross-model benchmarking for now; compare investigation modes, not model
   families
 
@@ -706,7 +710,7 @@ OCI resources:
 - OCI Container Registry for the FirstTrace image
 - OCI Container Instances or a small Compute VM for receiver/worker containers
 - OCI Object Storage bucket for dedupe/processing/final markers
-- OCI Vault for Slack, GitHub, OpenAI, and receiver secrets
+- OCI Vault for Slack, GitHub, receiver, and optional direct-OpenAI secrets
 - OCI API Gateway for a public HTTPS Slack Events URL
 
 OCI account plan:
@@ -755,8 +759,10 @@ one fixed evidence bundle.
 
 Target behavior:
 
-- use `OPENAI_MODEL_CHAT=gpt-5.4-mini` for production validation
+- use `FIRSTTRACE_MODEL_CHAT` for production validation across model providers
 - do not add a separate model env var for agent mode
+- support `FIRSTTRACE_AI_PROVIDER=oci-genai` for OCI deployments where direct
+  OpenAI API use is not allowed
 - add an investigator mode such as `FIRSTTRACE_INVESTIGATOR=agent`
 - keep the existing evidence mode available as a fallback, for example
   `FIRSTTRACE_INVESTIGATOR=evidence`
@@ -776,6 +782,29 @@ Non-goals for this phase:
 - no dependency on `codex-cli`
 - no benchmark against `gpt-5.3-codex`
 
+### Phase 10B: OCI GenAI Model Provider
+
+Add OCI Generative AI as a first-class model provider for teams that cannot send
+repository evidence to the direct OpenAI API.
+
+Target behavior:
+
+- `FIRSTTRACE_AI_PROVIDER=oci-genai` works for both `FIRSTTRACE_INVESTIGATOR=agent`
+  and `FIRSTTRACE_INVESTIGATOR=evidence`
+- OCI deployments use OCI IAM/resource-principal authentication through the OCI
+  SDK, not `OPENAI_API_KEY`
+- `FIRSTTRACE_MODEL_CHAT` selects the model for all providers; OCI deployments
+  can use an approved OCI model such as `openai.gpt-oss-120b` or a dedicated
+  endpoint model
+- Terraform passes provider/model runtime config directly and keeps only real
+  secrets in OCI Vault
+- the OCI runtime dynamic group has permission to call OCI Generative AI in the
+  configured compartment
+
+This is an alternative to direct OpenAI API keys, not a replacement for the
+future `codex-cli` adapter. `codex-cli` is an investigation harness/runtime;
+OCI GenAI is the model service the existing FirstTrace agent can call.
+
 ### Later: Codex CLI Investigator Adapter
 
 After the built-in FirstTrace agent is working, add `codex-cli` as an optional
@@ -785,14 +814,14 @@ investigator adapter:
 FIRSTTRACE_INVESTIGATOR=codex-cli
 ```
 
-This adapter should use the same `OPENAI_MODEL_CHAT` value and the same
+This adapter should use the same `FIRSTTRACE_MODEL_CHAT` value and the same
 structured result contract as the built-in agent. The comparison should be about
 execution harness quality:
 
 ```text
-FirstTrace agent + OPENAI_MODEL_CHAT=gpt-5.4-mini
+FirstTrace agent + FIRSTTRACE_MODEL_CHAT=<approved model>
 vs
-codex-cli adapter + OPENAI_MODEL_CHAT=gpt-5.4-mini
+codex-cli adapter + FIRSTTRACE_MODEL_CHAT=<approved model>
 ```
 
 Do not introduce a separate `gpt-5.3-codex` benchmark path at this stage.
@@ -916,17 +945,17 @@ Useful metrics:
 Near-term evals should compare:
 
 ```text
-evidence mode + OPENAI_MODEL_CHAT=gpt-5.4-mini
+evidence mode + FIRSTTRACE_MODEL_CHAT=<approved model>
 vs
-FirstTrace agent mode + OPENAI_MODEL_CHAT=gpt-5.4-mini
+FirstTrace agent mode + FIRSTTRACE_MODEL_CHAT=<approved model>
 ```
 
 Later evals may compare:
 
 ```text
-FirstTrace agent mode + OPENAI_MODEL_CHAT=gpt-5.4-mini
+FirstTrace agent mode + FIRSTTRACE_MODEL_CHAT=<approved model>
 vs
-codex-cli mode + OPENAI_MODEL_CHAT=gpt-5.4-mini
+codex-cli mode + FIRSTTRACE_MODEL_CHAT=<approved model>
 ```
 
 Do not add a `gpt-5.3-codex` benchmark until there is a specific customer or
@@ -1142,12 +1171,12 @@ features.
 
 ## Immediate Next Steps
 
-1. Implement Phase 10 read-only agentic investigator with
-   `OPENAI_MODEL_CHAT=gpt-5.4-mini`.
+1. Validate Phase 10 read-only agentic investigator with
+   `FIRSTTRACE_MODEL_CHAT=<approved model>`.
 2. Rerun live hosted validation from configured Slack channel to agent-generated
    Slack reply.
 3. Add the later `codex-cli` investigator adapter only after the built-in agent
-   path is validated, using the same `OPENAI_MODEL_CHAT` value.
+   path is validated, using the same `FIRSTTRACE_MODEL_CHAT` value.
 4. Keep the npm package deployment path validated with `firsttrace hosted
    accept` for OCI and an equivalent live check for Vercel/Supabase.
 5. Add GitHub Issues, Vercel/Supabase, OCI, and work-item providers only through the

@@ -48,8 +48,6 @@ describe("OCI secret sync CLI helpers", () => {
 
   it("uses production runtime secret names by default and honors overrides", () => {
     expect(secretNamesFromEnv({} as NodeJS.ProcessEnv)).toEqual([
-      "OPENAI_API_KEY",
-      "OPENAI_MODEL_CHAT",
       "FIRSTTRACE_RECEIVER_TOKEN",
       "SLACK_SIGNING_SECRET",
       "SLACK_BOT_TOKEN",
@@ -87,8 +85,6 @@ describe("OCI secret sync CLI helpers", () => {
 
     const promise = collectPromptSecretValues(env, { input, output });
     for (const line of [
-      "sk-test",
-      "",
       "",
       "signing-secret",
       "xoxb-test",
@@ -107,8 +103,6 @@ describe("OCI secret sync CLI helpers", () => {
 
     const values = await promise;
 
-    expect(values.OPENAI_API_KEY).toBe("sk-test");
-    expect(values.OPENAI_MODEL_CHAT).toBe("gpt-5.4-mini");
     expect(values.FIRSTTRACE_RECEIVER_TOKEN).toMatch(/^[A-Za-z0-9_-]{40,}$/);
     expect(values.SLACK_SIGNING_SECRET).toBe("signing-secret");
     expect(values.SLACK_BOT_TOKEN).toBe("xoxb-test");
@@ -120,7 +114,6 @@ describe("OCI secret sync CLI helpers", () => {
     const rendered = chunks.join("");
     expect(rendered).toContain("FirstTrace OCI secret setup");
     expect(rendered).toContain("Generated FIRSTTRACE_RECEIVER_TOKEN.");
-    expect(rendered).not.toContain("sk-test");
     expect(rendered).not.toContain("signing-secret");
     expect(rendered).not.toContain("xoxb-test");
     expect(rendered).not.toContain("private-body");

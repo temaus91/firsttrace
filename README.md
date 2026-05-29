@@ -78,7 +78,7 @@ flowchart TD
   Agent --> Git["Git Provider<br/>local/internal repos or GitHub"]
   Agent --> Issues["Issue Provider<br/>GitHub Issues, Jira, OCI, fixtures"]
   Agent --> Owners["Ownership Provider<br/>CODEOWNERS or YAML"]
-  Agent --> AI["AI Provider<br/>OpenAI now, Claude/Google/local later"]
+  Agent --> AI["AI Provider<br/>OpenAI, OCI GenAI, or approved model"]
 
   Agent --> Evidence["Ranked Evidence + Citations"]
   Evidence --> Worker
@@ -87,8 +87,8 @@ flowchart TD
 
 The product is intentionally runtime-portable. The core investigation engine should
 not care whether jobs come from Slack, Teams, Discord, a CLI, or a test fixture,
-and it should not care whether AI reasoning comes from OpenAI, Claude, Google AI,
-or a local model.
+and it should not care whether AI reasoning comes from direct OpenAI, OCI GenAI,
+Claude, Google AI, or a local model.
 
 Current runtime backend support:
 
@@ -167,11 +167,14 @@ jobs, and post worker results back to Slack threads when `SLACK_BOT_TOKEN` is
 configured. The hosted verification runner can exercise that receiver -> queue
 -> worker -> notifier path locally before real Slack, GitHub, and Supabase
 credentials are ready.
-The CLI always gathers deterministic evidence first. OpenAI is only called when
-`--ai` is passed. By default, `--ai` runs the read-only FirstTrace investigation
-agent with `OPENAI_MODEL_CHAT=gpt-5.4-mini`; set `FIRSTTRACE_INVESTIGATOR=evidence`
-to use the older one-shot evidence-bundle reasoner. `FIRSTTRACE_INVESTIGATOR=codex-cli`
-is reserved for a later adapter and is not implemented yet.
+The CLI always gathers deterministic evidence first. A model provider is only
+called when `--ai` is passed. By default, `--ai` runs the read-only FirstTrace
+investigation agent with `FIRSTTRACE_AI_PROVIDER=openai` and
+`FIRSTTRACE_MODEL_CHAT=gpt-5.4-mini`; set `FIRSTTRACE_INVESTIGATOR=evidence` to
+use the older one-shot evidence-bundle reasoner. `FIRSTTRACE_AI_PROVIDER=oci-genai`
+uses OCI Generative AI through OCI authentication instead of direct OpenAI API
+credentials. `FIRSTTRACE_INVESTIGATOR=codex-cli` is reserved for a later adapter
+and is not implemented yet.
 
 ```bash
 firsttrace investigate \
@@ -184,6 +187,19 @@ Optional AI-assisted run:
 ```bash
 cp .env.example .env.local
 # Fill in OPENAI_API_KEY in .env.local.
+firsttrace investigate \
+  --config firsttrace.config.yaml \
+  --report "README deployment plan is unclear" \
+  --ai
+```
+
+OCI GenAI-assisted run:
+
+```bash
+FIRSTTRACE_AI_PROVIDER=oci-genai \
+FIRSTTRACE_MODEL_CHAT=openai.gpt-oss-120b \
+OCI_COMPARTMENT_ID=ocid1.compartment.oc1..replace \
+OCI_REGION=us-chicago-1 \
 firsttrace investigate \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear" \
@@ -424,7 +440,7 @@ FirstTrace v0 should stay small:
 - optional GitHub provider for public or private GitHub repos
 - issue/work-item provider support for GitHub Issues, Jira, OCI, or fixtures
 - ownership lookup via `CODEOWNERS` or `firsttrace.owners.yaml`
-- investigator provider support, with OpenAI-backed `agent` mode first
+- investigator provider support, with OpenAI and OCI GenAI-backed `agent` mode
 - thread reply with citations
 - eval runner for historical bugs
 

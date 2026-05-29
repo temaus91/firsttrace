@@ -14,3 +14,12 @@ project_name     = "firsttrace"
 container_image_url = ""
 
 config_path = "firsttrace.config.yaml"
+
+# OCI-native AI inference. Override ai_model with a model available in your
+# selected OCI region, or set ai_provider = "openai" and add OPENAI_API_KEY to
+# runtime_secret_names when direct OpenAI API use is intentional.
+ai_provider = "oci-genai"
+ai_model    = "openai.gpt-oss-120b"
+
+# Use only when you deploy a dedicated OCI GenAI endpoint.
+oci_genai_dedicated_endpoint_id = ""
