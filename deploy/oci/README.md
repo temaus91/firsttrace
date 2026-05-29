@@ -39,7 +39,7 @@ it does not require `OPENAI_API_KEY`.
    mkdir firsttrace-oci
    cd firsttrace-oci
    npm init -y
-   npm install firsttrace@0.1.2
+   npm install firsttrace@0.1.4
    cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
    ```
 
@@ -134,8 +134,8 @@ it does not require `OPENAI_API_KEY`.
 
    ```bash
    export FIRSTTRACE_DOCKERFILE="deploy/oci/Dockerfile.package"
-   export FIRSTTRACE_PACKAGE_SPEC="firsttrace@0.1.2"
-   export FIRSTTRACE_BUILD_REF="npm:firsttrace@0.1.2"
+   export FIRSTTRACE_PACKAGE_SPEC="firsttrace@0.1.4"
+   export FIRSTTRACE_BUILD_REF="npm:firsttrace@0.1.4"
    export FIRSTTRACE_CONFIG_FILE="firsttrace.oci.config.yaml"
    export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
    export FIRSTTRACE_REPOS_DIR="repos" # Optional local repo snapshots copied to /app/repos.
@@ -231,7 +231,7 @@ it does not require `OPENAI_API_KEY`.
      --config firsttrace.oci.config.yaml \
      --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
      --report "README deployment plan is unclear" \
-     --expected-build-ref "npm:firsttrace@0.1.2"
+     --expected-build-ref "npm:firsttrace@0.1.4"
    ```
 
    This posts a real Slack seed message, sends the same signed event to OCI
@@ -253,7 +253,7 @@ export COMPARTMENT_OCID="<compartment_ocid>"
 export OCI_REGION="<oci-region>"        # Example: us-sanjose-1
 export OCI_REGION_KEY="<ocir-region-key>" # Example: sjc
 export PROJECT_NAME="firsttrace"
-export FIRSTTRACE_VERSION="0.1.2"
+export FIRSTTRACE_VERSION="0.1.4"
 export IMAGE_TAG="${FIRSTTRACE_VERSION}"
 ```
 
@@ -415,9 +415,9 @@ terraform apply -auto-approve \
 usage. Prefer `CI.Standard.A1.Flex` plus `linux/arm64` when Always Free capacity
 is available.
 
-Create runtime secrets in OCI Vault. The production path does not require a
-source checkout or `.env.local`; enter values interactively or provide them from
-the shell environment. Do not place secret values in Terraform variables.
+Create runtime secrets in OCI Vault. The production path reads values
+interactively or from the shell environment. Do not place secret values in
+Terraform variables.
 
 ```bash
 cd ~/firsttrace/deploy/oci/terraform
@@ -536,9 +536,9 @@ npx firsttrace hosted accept \
 Expected result: health passes, Slack receives one processing reply and one
 final reply in the seed thread, the duplicate signed Slack event returns the
 same job id, the job reaches `succeeded`, and the temporary OCI Queue redelivery
-probe passes. This validates the live Slack-to-OCI-Queue-to-worker path without
-requiring a FirstTrace source checkout on the deployed runtime. The seed thread
-is left in the Slack channel; no `chat:delete` scope is required.
+probe passes. This validates the live Slack-to-OCI-Queue-to-worker path on the
+npm package runtime. The seed thread is left in the Slack channel; no
+`chat:delete` scope is required.
 
 ## Auth Token Troubleshooting
 

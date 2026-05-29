@@ -5,8 +5,10 @@ import { runOciQueueRedeliveryProbe, type OciRedeliveryProbeResult } from "../oc
 
 type EnvRecord = Record<string, string | undefined>;
 type FetchLike = typeof fetch;
+type HostedAcceptTrigger = "app_mention" | "message";
 
 export type HostedAcceptStatus = "passed" | "failed";
+export type HostedAcceptBackend = "oci" | "vercel-supabase";
 
 export type HostedAcceptCheck = {
   message: string;
@@ -15,7 +17,7 @@ export type HostedAcceptCheck = {
 };
 
 export type HostedAcceptResult = {
-  backend: "oci";
+  backend: HostedAcceptBackend;
   baseUrl: string;
   buildRef?: string;
   channelId: string;
@@ -36,7 +38,7 @@ export type HostedAcceptSlackClient = {
 };
 
 export type HostedAcceptOptions = {
-  backend: "oci";
+  backend: HostedAcceptBackend;
   baseUrl: string;
   channelId: string;
   config: FirstTraceConfig;
@@ -68,6 +70,18 @@ const requiredEnv = (env: EnvRecord, names: string[]) => {
   if (missing.length) throw new Error(`Missing required environment variables: ${missing.join(", ")}.`);
 };
 
+const requiredEnvForBackend = (backend: HostedAcceptBackend, env: EnvRecord) => {
+  const common = ["SLACK_BOT_TOKEN", "SLACK_SIGNING_SECRET", "FIRSTTRACE_RECEIVER_TOKEN"];
+  requiredEnv(env, backend === "oci" ? [...common, "OCI_COMPARTMENT_ID"] : common);
+};
+
+const expectedQueueProvider = (backend: HostedAcceptBackend) => {
+  if (backend === "oci") return "oci";
+  if (backend === "vercel-supabase") return "supabase";
+  const exhaustive: never = backend;
+  return exhaustive;
+};
+
 const urlFor = (baseUrl: string, pathname: string) => new URL(pathname, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
 
 const parseJsonResponse = async <T>(response: Response, action: string): Promise<T> => {
@@ -87,13 +101,12 @@ const parseJsonResponse = async <T>(response: Response, action: string): Promise
   return body as T;
 };
 
-const configuredSlackChannel = (config: FirstTraceConfig, channelId: string) => {
+const configuredSlackChannel = (config: FirstTraceConfig, channelId: string): HostedAcceptTrigger => {
   const channel = config.chat?.provider === "slack" ? config.chat.channels.find((item) => item.id === channelId) : undefined;
   if (!channel) throw new Error(`Config does not define Slack channel ${channelId}.`);
-  if (!channel.triggers.includes("message")) {
-    throw new Error(`Slack channel ${channelId} must enable the message trigger for live acceptance.`);
-  }
-  return channel;
+  if (channel.triggers.includes("message")) return "message";
+  if (channel.triggers.includes("app_mention")) return "app_mention";
+  throw new Error(`Slack channel ${channelId} must enable the message or app_mention trigger for live acceptance.`);
 };
 
 const createSyntheticSlackBody = ({
@@ -101,23 +114,40 @@ const createSyntheticSlackBody = ({
   report,
   seedMessageTs,
   teamId,
+  trigger,
 }: {
   channelId: string;
   report: string;
   seedMessageTs: string;
   teamId: string;
-}) =>
-  JSON.stringify({
+  trigger: HostedAcceptTrigger;
+}) => {
+  const event =
+    trigger === "app_mention"
+      ? {
+          channel: channelId,
+          text: `<@UFIRSTTRACEBOT> ${report}`,
+          thread_ts: seedMessageTs,
+          ts: seedMessageTs,
+          type: "app_mention",
+          user: "UFIRSTTRACEACCEPT",
+        }
+      : {
+          channel: channelId,
+          text: report,
+          ts: seedMessageTs,
+          type: "message",
+          user: "UFIRSTTRACEACCEPT",
+        };
+
+  return JSON.stringify({
     event: {
-      channel: channelId,
-      text: report,
-      ts: seedMessageTs,
-      type: "message",
-      user: "UFIRSTTRACEACCEPT",
+      ...event,
     },
     team_id: teamId,
     type: "event_callback",
   });
+};
 
 const signedSlackHeaders = (signingSecret: string, timestamp: string, body: string) => ({
   "content-type": "application/json",
@@ -197,10 +227,9 @@ export const runHostedAccept = async ({
   };
 
   try {
-    if (backend !== "oci") throw new Error(`Unsupported hosted acceptance backend: ${backend}.`);
-    requiredEnv(env, ["SLACK_BOT_TOKEN", "SLACK_SIGNING_SECRET", "FIRSTTRACE_RECEIVER_TOKEN", "OCI_COMPARTMENT_ID"]);
-    configuredSlackChannel(config, channelId);
-    checks.push(passed("Configuration", `Using Slack channel ${channelId}.`));
+    requiredEnvForBackend(backend, env);
+    const trigger = configuredSlackChannel(config, channelId);
+    checks.push(passed("Configuration", `Using Slack channel ${channelId} with ${trigger} trigger.`));
 
     const health = await parseJsonResponse<{
       buildRef?: string;
@@ -211,13 +240,14 @@ export const runHostedAccept = async ({
     result.buildRef = health.buildRef;
     result.queueProvider = health.queueProvider;
     if (!health.ok) throw new Error("Health endpoint did not return ok=true.");
-    if (health.queueProvider !== "oci") {
+    const expectedProvider = expectedQueueProvider(backend);
+    if (health.queueProvider !== expectedProvider) {
       throw new Error(`Health endpoint reported queueProvider=${health.queueProvider ?? "<missing>"}.`);
     }
     if (health.buildRef !== expectedBuildRef) {
       throw new Error(`Health endpoint reported buildRef=${health.buildRef ?? "<missing>"}, expected ${expectedBuildRef}.`);
     }
-    checks.push(passed("Health endpoint", `OCI deployment reports ${health.buildRef}.`));
+    checks.push(passed("Health endpoint", `${backend} deployment reports ${health.buildRef}.`));
 
     const effectiveSlackClient = slackClient ?? new SlackWebApiClient(env.SLACK_BOT_TOKEN!);
     const seedText = `[FirstTrace acceptance ${new Date().toISOString()}] ${report}`;
@@ -232,6 +262,7 @@ export const runHostedAccept = async ({
       report,
       seedMessageTs: seed.ts,
       teamId: env.SLACK_TEAM_ID?.trim() || "TACCEPTANCE",
+      trigger,
     });
     const firstEvent = await postSignedSlackEvent({
       baseUrl,
@@ -298,13 +329,17 @@ export const runHostedAccept = async ({
     }
     checks.push(passed("Duplicate reply guard", "No duplicate processing or final replies appeared after grace period."));
 
-    result.redelivery = await redeliveryProbe();
-    checks.push(
-      passed(
-        "OCI Queue redelivery",
-        `Temporary queue ${result.redelivery.queueName ?? result.redelivery.queueId ?? "<unknown>"} redelivered the abandoned message.`,
-      ),
-    );
+    if (backend === "oci") {
+      result.redelivery = await redeliveryProbe();
+      checks.push(
+        passed(
+          "OCI Queue redelivery",
+          `Temporary queue ${result.redelivery.queueName ?? result.redelivery.queueId ?? "<unknown>"} redelivered the abandoned message.`,
+        ),
+      );
+    } else {
+      checks.push(passed("Queue redelivery", "Skipped: Vercel/Supabase acceptance uses Supabase job status."));
+    }
   } catch (error) {
     checks.push(failed("Acceptance failure", (error as Error).message));
   }

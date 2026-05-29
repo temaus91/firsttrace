@@ -81,7 +81,7 @@ const passingThread: SlackThreadMessage[] = [
 ];
 
 const createFetch = ({
-  buildRef = "npm:firsttrace@0.1.2",
+  buildRef = "npm:firsttrace@0.1.4",
   duplicateJobId = "job-1",
   jobStatuses = ["succeeded"],
   queueProvider = "oci",
@@ -124,7 +124,7 @@ describe("hosted acceptance runner", () => {
       channelId: "C0123456789",
       config: writeConfig(),
       env,
-      expectedBuildRef: "npm:firsttrace@0.1.2",
+      expectedBuildRef: "npm:firsttrace@0.1.4",
       fetchImpl,
       gracePeriodMs: 0,
       pollIntervalMs: 0,
@@ -155,6 +155,102 @@ describe("hosted acceptance runner", () => {
     expect(rendered).not.toContain("xoxb-secret");
   });
 
+  it("passes a fake Vercel/Supabase acceptance flow without OCI redelivery", async () => {
+    const { calls, fetchImpl } = createFetch({
+      buildRef: "npm:firsttrace@0.1.4",
+      queueProvider: "supabase",
+    });
+    let redeliveryCalls = 0;
+    const result = await runHostedAccept({
+      backend: "vercel-supabase",
+      baseUrl: "https://firsttrace.example.com",
+      channelId: "C0123456789",
+      config: writeConfig(),
+      env: {
+        FIRSTTRACE_RECEIVER_TOKEN: "receiver-secret",
+        SLACK_BOT_TOKEN: "xoxb-secret",
+        SLACK_SIGNING_SECRET: "signing-secret",
+        SLACK_TEAM_ID: "T0123456789",
+      },
+      expectedBuildRef: "npm:firsttrace@0.1.4",
+      fetchImpl,
+      gracePeriodMs: 0,
+      pollIntervalMs: 0,
+      redeliveryProbe: async () => {
+        redeliveryCalls += 1;
+        throw new Error("redelivery should not run for Vercel/Supabase");
+      },
+      report: "README deployment plan is unclear",
+      slackClient: new FakeSlack([passingThread, passingThread]),
+      timeoutMs: 1_000,
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.queueProvider).toBe("supabase");
+    expect(result.redelivery).toBeUndefined();
+    expect(redeliveryCalls).toBe(0);
+    expect(calls.filter((call) => call.pathname === "/api/slack/events")).toHaveLength(2);
+  });
+
+  it("uses app_mention acceptance events when the channel only enables app mentions", async () => {
+    const { calls, fetchImpl } = createFetch({
+      buildRef: "npm:firsttrace@0.1.4",
+      queueProvider: "supabase",
+    });
+    const result = await runHostedAccept({
+      backend: "vercel-supabase",
+      baseUrl: "https://firsttrace.example.com",
+      channelId: "C0123456789",
+      config: writeConfig(["app_mention"]),
+      env: {
+        FIRSTTRACE_RECEIVER_TOKEN: "receiver-secret",
+        SLACK_BOT_TOKEN: "xoxb-secret",
+        SLACK_SIGNING_SECRET: "signing-secret",
+        SLACK_TEAM_ID: "T0123456789",
+      },
+      expectedBuildRef: "npm:firsttrace@0.1.4",
+      fetchImpl,
+      gracePeriodMs: 0,
+      pollIntervalMs: 0,
+      report: "README deployment plan is unclear",
+      slackClient: new FakeSlack([passingThread, passingThread]),
+      timeoutMs: 1_000,
+    });
+
+    const firstSlackEvent = calls.find((call) => call.pathname === "/api/slack/events");
+    const body = JSON.parse(firstSlackEvent?.body ?? "{}") as { event?: { text?: string; type?: string } };
+    expect(result.passed).toBe(true);
+    expect(body.event).toMatchObject({
+      text: "<@UFIRSTTRACEBOT> README deployment plan is unclear",
+      type: "app_mention",
+    });
+  });
+
+  it("fails Vercel/Supabase acceptance when health does not report Supabase", async () => {
+    const { fetchImpl } = createFetch({
+      buildRef: "npm:firsttrace@0.1.4",
+      queueProvider: "oci",
+    });
+    const result = await runHostedAccept({
+      backend: "vercel-supabase",
+      baseUrl: "https://firsttrace.example.com",
+      channelId: "C0123456789",
+      config: writeConfig(),
+      env: {
+        FIRSTTRACE_RECEIVER_TOKEN: "receiver-secret",
+        SLACK_BOT_TOKEN: "xoxb-secret",
+        SLACK_SIGNING_SECRET: "signing-secret",
+      },
+      expectedBuildRef: "npm:firsttrace@0.1.4",
+      fetchImpl,
+      report: "README deployment plan is unclear",
+      slackClient: new FakeSlack([passingThread]),
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.checks.at(-1)?.message).toContain("queueProvider=oci");
+  });
+
   it("fails clearly when required acceptance environment is missing", async () => {
     const result = await runHostedAccept({
       backend: "oci",
@@ -162,7 +258,7 @@ describe("hosted acceptance runner", () => {
       channelId: "C0123456789",
       config: writeConfig(),
       env: {},
-      expectedBuildRef: "npm:firsttrace@0.1.2",
+      expectedBuildRef: "npm:firsttrace@0.1.4",
       report: "README deployment plan is unclear",
       slackClient: new FakeSlack([passingThread]),
     });
@@ -184,21 +280,21 @@ describe("hosted acceptance runner", () => {
       channelId: "C0123456789",
       config: writeConfig(),
       env,
-      expectedBuildRef: "npm:firsttrace@0.1.2",
+      expectedBuildRef: "npm:firsttrace@0.1.4",
       fetchImpl,
       report: "README deployment plan is unclear",
       slackClient: new FakeSlack([passingThread]),
     });
 
     expect(result.passed).toBe(false);
-    expect(result.checks.at(-1)?.message).toContain("expected npm:firsttrace@0.1.2");
+    expect(result.checks.at(-1)?.message).toContain("expected npm:firsttrace@0.1.4");
   });
 
   it("fails when duplicate Slack events produce different jobs", async () => {
     let eventCount = 0;
     const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(input.toString());
-      if (url.pathname === "/healthz") return json({ buildRef: "npm:firsttrace@0.1.2", ok: true, queueProvider: "oci" });
+      if (url.pathname === "/healthz") return json({ buildRef: "npm:firsttrace@0.1.4", ok: true, queueProvider: "oci" });
       if (url.pathname === "/api/slack/events") {
         eventCount += 1;
         return json({ jobId: `job-${eventCount}`, ok: true, status: "queued" });
@@ -212,7 +308,7 @@ describe("hosted acceptance runner", () => {
       channelId: "C0123456789",
       config: writeConfig(),
       env,
-      expectedBuildRef: "npm:firsttrace@0.1.2",
+      expectedBuildRef: "npm:firsttrace@0.1.4",
       fetchImpl,
       report: "README deployment plan is unclear",
       slackClient: new FakeSlack([passingThread]),
@@ -230,7 +326,7 @@ describe("hosted acceptance runner", () => {
       channelId: "C0123456789",
       config: writeConfig(),
       env,
-      expectedBuildRef: "npm:firsttrace@0.1.2",
+      expectedBuildRef: "npm:firsttrace@0.1.4",
       fetchImpl,
       pollIntervalMs: 0,
       report: "README deployment plan is unclear",
@@ -255,7 +351,7 @@ describe("hosted acceptance runner", () => {
       channelId: "C0123456789",
       config: writeConfig(),
       env,
-      expectedBuildRef: "npm:firsttrace@0.1.2",
+      expectedBuildRef: "npm:firsttrace@0.1.4",
       fetchImpl,
       pollIntervalMs: 0,
       report: "README deployment plan is unclear",
@@ -267,20 +363,20 @@ describe("hosted acceptance runner", () => {
     expect(result.checks.at(-1)?.message).toContain("ended as failed");
   });
 
-  it("requires the configured Slack channel to support message events", async () => {
+  it("requires the configured Slack channel to support message or app mention events", async () => {
     const result = await runHostedAccept({
       backend: "oci",
       baseUrl: "https://firsttrace.example.com",
       channelId: "C0123456789",
-      config: writeConfig(["app_mention"]),
+      config: writeConfig(["reaction"]),
       env,
-      expectedBuildRef: "npm:firsttrace@0.1.2",
+      expectedBuildRef: "npm:firsttrace@0.1.4",
       report: "README deployment plan is unclear",
       slackClient: new FakeSlack([passingThread]),
     });
 
     expect(result.passed).toBe(false);
-    expect(result.checks.at(-1)?.message).toContain("must enable the message trigger");
+    expect(result.checks.at(-1)?.message).toContain("must enable the message or app_mention trigger");
   });
 });
 

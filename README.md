@@ -106,9 +106,9 @@ See [docs/PRODUCT_PLAN.md](docs/PRODUCT_PLAN.md) for the working build plan,
 core architecture, eval strategy, runtime adapter strategy, and open questions.
 See [implement.md](implement.md) for implementation guidance meant for future
 engineering sessions.
-See [instructions.md](instructions.md) for the planned hosted setup workflow for
-companies that want FirstTrace connected to a private GitHub repo and a Slack
-triage channel. That guide focuses on the Vercel/Supabase path; the OCI
+See [instructions.md](instructions.md) for the npm-first hosted setup workflow
+for companies that want FirstTrace connected to a private GitHub repo and a
+Slack triage channel. That guide focuses on the Vercel/Supabase path; the OCI
 deployment guide lives under [deploy/oci](deploy/oci).
 
 ## Install As A Dependency
@@ -116,7 +116,7 @@ deployment guide lives under [deploy/oci](deploy/oci).
 For an external project or deployment wrapper, install FirstTrace from npm:
 
 ```bash
-npm install firsttrace@0.1.2
+npm install firsttrace@0.1.4
 ```
 
 The package provides:
@@ -125,24 +125,34 @@ The package provides:
 - standalone HTTP receiver: `firsttrace-http`
 - standalone worker loop: `firsttrace-worker`
 - OCI Vault secret sync: `firsttrace-oci-sync-secrets`
-- route/runtime exports for host apps that want to embed FirstTrace handlers
+- Vercel route exports and deployment templates for npm-wrapper deployments
+- OCI deployment templates for package-based container deployments
 
-OCI users should copy the deployment templates from the package into their own
-operations repo:
+Vercel/Supabase users create a small operations wrapper and copy the packaged
+template:
+
+```bash
+mkdir firsttrace-vercel
+cd firsttrace-vercel
+npm init -y
+npm install firsttrace@0.1.4
+cp -R node_modules/firsttrace/deploy/vercel/* .
+cp node_modules/firsttrace/deploy/vercel/gitignore.template .gitignore
+npm install
+```
+
+The wrapper imports only from the published `firsttrace` package. Apply the
+packaged Supabase migrations with the Supabase CLI, apply the packaged Vercel
+Terraform, deploy with `npx vercel@latest --prod`, and run:
+
+```bash
+npx firsttrace hosted accept --backend vercel-supabase ...
+```
+
+OCI users copy the OCI deployment template from the package:
 
 ```bash
 cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
-```
-
-Vercel or other Node hosts can import the route helpers directly:
-
-```ts
-import {
-  handleSlackEventsRequest,
-  handleInvestigationRequest,
-  handleJobStatusRequest,
-  handleWorkerRunOnceRequest,
-} from "firsttrace";
 ```
 
 The npm-based OCI path has been validated from a clean operations directory:
@@ -158,10 +168,6 @@ deployment wrapper:
 ```bash
 npm install -g firsttrace
 ```
-
-When working from this source checkout, run `npm install` first and use
-`npm run firsttrace -- ...` as the development equivalent of the `firsttrace`
-commands below.
 
 The CLI supports deterministic investigation, optional AI reasoning, evals, a
 local worker runtime, a local `submit` message adapter, hosted queue selection
@@ -190,8 +196,7 @@ firsttrace investigate \
 Optional AI-assisted run:
 
 ```bash
-cp .env.example .env.local
-# Fill in OPENAI_API_KEY in .env.local.
+export OPENAI_API_KEY="<openai-api-key>"
 firsttrace investigate \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear" \
@@ -413,18 +418,20 @@ firsttrace hosted accept \
   --config firsttrace.config.yaml \
   --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
   --report "README deployment plan is unclear" \
-  --expected-build-ref "npm:firsttrace@0.1.2"
+  --expected-build-ref "npm:firsttrace@0.1.4"
 ```
 
 The acceptance command posts a real Slack seed message, sends the same signed
 Slack event to the deployed receiver twice, waits for exactly one processing
 reply and one final reply, checks the job status endpoint, and proves OCI Queue
 redelivery with a temporary queue. This is the production acceptance path for the
-OCI backend.
+OCI backend. For Vercel/Supabase, acceptance uses the configured `message`
+trigger when present and falls back to `app_mention`.
 
 ## Hosted Deployment Setup
 
-Use this sequence to connect the full hosted path:
+Use this sequence to connect the full Vercel/Supabase hosted path from the npm
+package:
 
 1. Create or choose a Slack triage channel and note the channel id.
 2. Register the backend service with your organization's identity or service
@@ -439,23 +446,28 @@ Use this sequence to connect the full hosted path:
    off by default; FirstTrace is built for hosted Slack Events delivery.
 4. Install the Slack app, copy `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET`,
    and invite the bot to the triage channel.
-5. Create a Supabase project and apply every file in `supabase/migrations/` in
-   order, including the dedupe migration.
-6. Store `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
-   `FIRSTTRACE_QUEUE_PROVIDER=supabase`, `FIRSTTRACE_RECEIVER_TOKEN`, and
-   `FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false`.
-7. Configure repositories with either a read-only GitHub App
+5. Create a small operations wrapper, install `firsttrace@0.1.4`, and copy
+   `node_modules/firsttrace/deploy/vercel` into that wrapper.
+6. Create a Supabase project and apply every packaged migration from
+   `node_modules/firsttrace/supabase/migrations` with the Supabase CLI.
+7. Apply the packaged Vercel Terraform under `deploy/vercel/terraform` to
+   create/configure the Vercel project and production environment variables.
+8. Store `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+   `FIRSTTRACE_QUEUE_PROVIDER=supabase`, `FIRSTTRACE_RECEIVER_TOKEN`,
+   `FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false`, and
+   `FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.4` in Vercel.
+9. Configure repositories with either a read-only GitHub App
    (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`) or
    local validation `GITHUB_TOKEN`.
-8. Run `hosted verify` locally with `--queue supabase`; add
-   `--live-slack-post` after Slack env is present.
-9. Deploy the API to a public HTTPS host. On Vercel, the Slack endpoint can use
+10. Deploy the wrapper with `npx vercel@latest --prod`. The Slack endpoint uses Vercel
    background processing to run one worker pass after Slack has been
    acknowledged. Keep the protected worker endpoint,
    `GET|POST /api/worker/run-once`, available for manual repair runs or
    cron on plans that support the desired frequency.
-10. Set Slack Event Subscriptions to
+11. Set Slack Event Subscriptions to
    `https://<host>/api/slack/events`.
+12. Run `firsttrace hosted accept --backend vercel-supabase` against the public
+    Vercel URL.
 
 Vercel is not required for local end-to-end verification. It is needed only when
 Slack itself must call the public `/api/slack/events` endpoint. Vercel worker
@@ -474,7 +486,7 @@ config into the image. A user deploying from a separate operations repo can star
 with:
 
 ```bash
-npm install firsttrace@0.1.2
+npm install firsttrace@0.1.4
 cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
 ```
 
@@ -488,7 +500,7 @@ Runtime secrets should be stored in OCI Vault, not Terraform state. After the
 Terraform stack creates Vault/KMS, run:
 
 ```bash
-npm install firsttrace@0.1.2
+npm install firsttrace@0.1.4
 npx firsttrace-oci-sync-secrets --prompt
 ```
 
@@ -559,11 +571,12 @@ The eval runner should answer:
 Teams should be able to bring their own infrastructure:
 
 - **Local/dev:** in-memory queue or Redis
-- **Vercel/Supabase path:** Vercel receiver + Supabase Queue + worker process
+- **Vercel/Supabase path:** npm wrapper + Vercel receiver + Supabase Queue +
+  worker process
 - **Generic open-source path:** Docker Compose + Redis or Postgres
 - **OCI path:** OCI Container Instances or OKE + OCI Queue + OCI Vault. The
   recommended OCI runtime is a Docker/OCI image that installs the `firsttrace`
-  npm package, not a full source checkout.
+  npm package.
 
 Queue and runtime should be adapters:
 
@@ -645,13 +658,25 @@ firsttrace hosted accept \
   --config firsttrace.config.yaml \
   --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
   --report "README deployment plan is unclear" \
-  --expected-build-ref "npm:firsttrace@0.1.2"
+  --expected-build-ref "npm:firsttrace@0.1.4"
+```
+
+The Vercel/Supabase live acceptance command is:
+
+```bash
+firsttrace hosted accept \
+  --backend vercel-supabase \
+  --base-url "$FIRSTTRACE_VERCEL_BASE_URL" \
+  --config firsttrace.config.yaml \
+  --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
+  --report "README deployment plan is unclear" \
+  --expected-build-ref "npm:firsttrace@0.1.4"
 ```
 
 Next planned work:
 
-1. Run OCI live acceptance before release or infrastructure changes.
-2. Add an equivalent live acceptance pass for the Vercel/Supabase hosted path.
+1. Deploy the npm-wrapper Vercel/Supabase backend and run live acceptance.
+2. Run OCI live acceptance before OCI release or infrastructure changes.
 3. Add GitHub Issues or another issue provider through the generic provider boundary.
 
 ## License

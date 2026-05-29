@@ -13,3 +13,7 @@ deploy/oci/terraform/.terraform/
 deploy/oci/terraform/terraform.tfstate
 deploy/oci/terraform/terraform.tfstate.*
 deploy/oci/terraform/terraform.tfvars
+deploy/vercel/terraform/.terraform/
+deploy/vercel/terraform/terraform.tfstate
+deploy/vercel/terraform/terraform.tfstate.*
+deploy/vercel/terraform/terraform.tfvars

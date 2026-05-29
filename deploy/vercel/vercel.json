@@ -1,0 +1,18 @@
+{
+  "functions": {
+    "api/slack/events.js": {
+      "includeFiles": "firsttrace.config.yaml",
+      "maxDuration": 60
+    },
+    "api/worker/run-once.js": {
+      "includeFiles": "firsttrace.config.yaml",
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/healthz",
+      "destination": "/api/health"
+    }
+  ]
+}

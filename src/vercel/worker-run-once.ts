@@ -1,15 +1,15 @@
-import { loadLocalEnv } from "../../src/env.js";
-import { createHostedWorkerRunOptions } from "../../src/hosted/worker-runtime.js";
-import { runVercelHandler, type VercelRequestLike, type VercelResponseLike } from "../../src/http/vercel-adapter.js";
-import { handleWorkerRunOnceRequest } from "../../src/http/worker.js";
-
-loadLocalEnv();
+import { createHostedWorkerRunOptions } from "../hosted/worker-runtime.js";
+import { runVercelHandler, type VercelRequestLike, type VercelResponseLike } from "../http/vercel-adapter.js";
+import { handleWorkerRunOnceRequest } from "../http/worker.js";
 
 export const config = {
   maxDuration: 60,
 };
 
-export default async function handler(request: VercelRequestLike, response?: VercelResponseLike): Promise<Response | void> {
+export default async function handler(
+  request: VercelRequestLike,
+  response?: VercelResponseLike,
+): Promise<Response | void> {
   const workerOptions = await createHostedWorkerRunOptions();
   return runVercelHandler(request, response, (webRequest) => handleWorkerRunOnceRequest(webRequest, {
     cronSecret: process.env.CRON_SECRET,

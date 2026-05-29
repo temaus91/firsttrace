@@ -59,7 +59,8 @@ const usage = () => `Usage:
   firsttrace submit --queue filesystem --config firsttrace.config.yaml --report "bug text"
   firsttrace submit --queue supabase --config firsttrace.config.yaml --report "bug text" --ai
   firsttrace hosted verify --config examples/hosted.local.config.yaml --queue filesystem --report "bug text"
-  firsttrace hosted accept --backend oci --base-url https://example.com --config firsttrace.config.yaml --channel C0123456789 --report "bug text" --expected-build-ref npm:firsttrace@0.1.2
+  firsttrace hosted accept --backend oci --base-url https://example.com --config firsttrace.config.yaml --channel C0123456789 --report "bug text" --expected-build-ref npm:firsttrace@0.1.4
+  firsttrace hosted accept --backend vercel-supabase --base-url https://example.com --config firsttrace.config.yaml --channel C0123456789 --report "bug text" --expected-build-ref npm:firsttrace@0.1.4
   firsttrace slack validate-manifest --profile slack-minimal --manifest slack-app-manifest.yaml
   firsttrace worker enqueue --queue filesystem --config firsttrace.config.yaml --report "bug text"
   firsttrace worker run --once --queue filesystem
@@ -67,7 +68,7 @@ const usage = () => `Usage:
 
 Options:
   --ai              Run the configured investigator over the deterministic evidence.
-  --backend <name>  Hosted acceptance backend. Currently only oci.
+  --backend <name>  Hosted acceptance backend: oci or vercel-supabase.
   --base-url <url>  Deployed hosted base URL for live acceptance.
   --cases <path>    Path to a FirstTrace eval cases YAML file.
   --channel <id>    Configured Slack channel id for hosted verification.
@@ -351,8 +352,8 @@ const main = async () => {
       throw new Error("Missing required --report.");
     }
     if (args.hostedAction === "accept") {
-      if (args.backend !== "oci") {
-        throw new Error("hosted accept currently requires --backend oci.");
+      if (args.backend !== "oci" && args.backend !== "vercel-supabase") {
+        throw new Error("hosted accept requires --backend oci or --backend vercel-supabase.");
       }
       if (!args.baseUrl?.trim()) {
         throw new Error("hosted accept requires --base-url.");
@@ -364,7 +365,7 @@ const main = async () => {
         throw new Error("hosted accept requires --expected-build-ref.");
       }
       const result = await runHostedAccept({
-        backend: "oci",
+        backend: args.backend,
         baseUrl: args.baseUrl,
         channelId: args.channelId,
         config,

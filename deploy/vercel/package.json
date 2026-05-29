@@ -1,0 +1,16 @@
+{
+  "name": "firsttrace-vercel-runtime",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "accept": "firsttrace hosted accept --backend vercel-supabase --base-url \"$FIRSTTRACE_VERCEL_BASE_URL\" --config firsttrace.config.yaml --channel \"$SLACK_AI_TRIAGE_CHANNEL_ID\" --report \"README deployment plan is unclear\" --expected-build-ref \"$FIRSTTRACE_BUILD_REF\"",
+    "deploy": "npx vercel@latest --prod",
+    "vercel-build": "node -e \"console.log('FirstTrace Vercel wrapper build')\""
+  },
+  "dependencies": {
+    "firsttrace": "0.1.4"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}

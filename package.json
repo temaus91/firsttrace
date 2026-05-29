@@ -1,6 +1,6 @@
 {
   "name": "firsttrace",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "type": "module",
   "description": "Self-hosted bug localization for teams with private, internal, or public git repos.",
   "license": "Apache-2.0",
@@ -80,6 +80,26 @@
       "types": "./dist/src/runtime/worker-loop.d.ts",
       "import": "./dist/src/runtime/worker-loop.js"
     },
+    "./vercel/health": {
+      "types": "./dist/src/vercel/health.d.ts",
+      "import": "./dist/src/vercel/health.js"
+    },
+    "./vercel/investigations": {
+      "types": "./dist/src/vercel/investigations.d.ts",
+      "import": "./dist/src/vercel/investigations.js"
+    },
+    "./vercel/jobs": {
+      "types": "./dist/src/vercel/jobs.d.ts",
+      "import": "./dist/src/vercel/jobs.js"
+    },
+    "./vercel/slack-events": {
+      "types": "./dist/src/vercel/slack-events.d.ts",
+      "import": "./dist/src/vercel/slack-events.js"
+    },
+    "./vercel/worker-run-once": {
+      "types": "./dist/src/vercel/worker-run-once.d.ts",
+      "import": "./dist/src/vercel/worker-run-once.js"
+    },
     "./worker/queue-factory": {
       "types": "./dist/src/worker/queue-factory.d.ts",
       "import": "./dist/src/worker/queue-factory.js"
@@ -96,6 +116,11 @@
     "deploy/oci/scripts/**",
     "deploy/oci/terraform/*.tf",
     "deploy/oci/terraform/*.example",
+    "deploy/vercel/**",
+    "!deploy/vercel/terraform/.terraform/**",
+    "!deploy/vercel/terraform/terraform.tfstate",
+    "!deploy/vercel/terraform/terraform.tfstate.*",
+    "!deploy/vercel/terraform/terraform.tfvars",
     "supabase/migrations/**"
   ],
   "engines": {

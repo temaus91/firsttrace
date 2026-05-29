@@ -96,7 +96,7 @@ Completed:
 
 Next:
 
-1. Add equivalent live acceptance for the Vercel/Supabase backend.
+1. Deploy the npm-wrapper Vercel/Supabase backend and run live acceptance.
 2. Keep OCI acceptance running before releases or infrastructure changes.
 3. Later: provider expansion.
    - Additional git providers, chat providers, queue providers, runtime
@@ -198,9 +198,14 @@ Hosted workflow details:
   Slack seed message, sends a duplicate signed event, expects one processing
   reply and one final reply, checks job completion, and probes OCI Queue
   redelivery with a temporary queue.
+- Deployed Vercel/Supabase validation uses
+  `hosted accept --backend vercel-supabase`; it posts a real Slack seed message,
+  sends a duplicate signed event, expects one processing reply and one final
+  reply, checks job completion, and validates health/build metadata.
 - Phase 9A can pass with blocked optional live checks. OCI live acceptance is
-  complete; the Vercel/Supabase backend still needs an equivalent live acceptance
-  result before it should be treated as equally validated.
+  complete; the Vercel/Supabase backend still needs a fresh live acceptance
+  result from an npm-wrapper deployment before it should be treated as equally
+  validated.
 
 npm packaging details:
 
@@ -212,6 +217,13 @@ npm packaging details:
 - `deploy/oci/Dockerfile.package` installs `firsttrace@<version>`, copies the
   deployment config and optional repo snapshots, and exposes the standalone HTTP
   receiver.
+- Vercel/Supabase deployments should copy `deploy/vercel` from the npm package
+  into a small operations wrapper. The wrapper imports only package exports such
+  as `firsttrace/vercel/slack-events`, `firsttrace/vercel/jobs`, and
+  `firsttrace/vercel/worker-run-once`.
+- Vercel project/environment setup belongs in the packaged Terraform template;
+  Supabase schema setup belongs in package-provided migrations applied with the
+  Supabase CLI.
 - Secrets belong in the host secret manager, such as OCI Vault or Vercel
   environment variables, not in Terraform state or committed config.
 

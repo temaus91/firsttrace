@@ -32,4 +32,9 @@ export { CommandArchiveRepoMaterializer } from "./repositories/archive-materiali
 export { createFirstTraceHttpServer, startFirstTraceHttpServer } from "./runtime/http-server.js";
 export { runWorkerLoop, startWorkerLoopFromEnv } from "./runtime/worker-loop.js";
 export type * from "./types.js";
+export { default as handleVercelHealthRequest } from "./vercel/health.js";
+export { default as handleVercelInvestigationRequest } from "./vercel/investigations.js";
+export { default as handleVercelJobStatusRequest } from "./vercel/jobs.js";
+export { default as handleVercelSlackEventsRequest } from "./vercel/slack-events.js";
+export { default as handleVercelWorkerRunOnceRequest } from "./vercel/worker-run-once.js";
 export { createJobQueue, queueProviderFrom } from "./worker/queue-factory.js";

@@ -1,0 +1,31 @@
+organization:
+  name: ExampleCo
+
+repos:
+  - name: example-app
+    provider: github
+    owner: exampleco
+    repo: example-app
+    default_branch: main
+
+docs:
+  - README.md
+  - docs
+
+issue_exports: []
+
+owners:
+  - path: README.md
+    owner: "Example Owner"
+
+chat:
+  provider: slack
+  channels:
+    - id: C0123456789
+      name: ai-triage
+      triggers:
+        - app_mention
+      response: thread
+      ai_enabled: true
+      repositories:
+        - example-app

@@ -1,6 +1,7 @@
 import path from "node:path";
 import { tmpdir } from "node:os";
-import { createJobResultNotifierFromEnv } from "../chat/slack/notifier.js";
+import { createJobProgressNotifierFromEnv, createJobResultNotifierFromEnv } from "../chat/slack/notifier.js";
+import { createOciSlackNotifiersFromEnv } from "../oci/notifiers.js";
 import { GitHubArchiveRepoMaterializer } from "../repositories/github-materializer.js";
 import { runWorkerOnce, type RunWorkerOnceOptions } from "../worker/runner.js";
 import { createJobQueue } from "../worker/queue-factory.js";
@@ -10,12 +11,24 @@ export const hostedQueueProviderFromEnv = () => process.env.FIRSTTRACE_QUEUE_PRO
 export const hostedGitHubCacheRootFromEnv = () =>
   process.env.FIRSTTRACE_GITHUB_CACHE_ROOT ?? path.join(tmpdir(), "firsttrace", "github");
 
-export const createHostedWorkerRunOptions = (): RunWorkerOnceOptions => ({
-  queue: createJobQueue(hostedQueueProviderFromEnv()).queue,
-  repoPreparation: {
-    githubMaterializer: new GitHubArchiveRepoMaterializer({ cacheRoot: hostedGitHubCacheRootFromEnv() }),
-  },
-  resultNotifier: createJobResultNotifierFromEnv(),
-});
+export const createHostedWorkerRunOptions = async (): Promise<RunWorkerOnceOptions> => {
+  const queueProvider = hostedQueueProviderFromEnv();
+  const notifiers =
+    queueProvider === "oci"
+      ? await createOciSlackNotifiersFromEnv()
+      : {
+          progressNotifier: createJobProgressNotifierFromEnv(),
+          resultNotifier: createJobResultNotifierFromEnv(),
+        };
 
-export const runHostedWorkerOnceFromEnv = () => runWorkerOnce(createHostedWorkerRunOptions());
+  return {
+    progressNotifier: notifiers.progressNotifier,
+    queue: createJobQueue(queueProvider).queue,
+    repoPreparation: {
+      githubMaterializer: new GitHubArchiveRepoMaterializer({ cacheRoot: hostedGitHubCacheRootFromEnv() }),
+    },
+    resultNotifier: notifiers.resultNotifier,
+  };
+};
+
+export const runHostedWorkerOnceFromEnv = async () => runWorkerOnce(await createHostedWorkerRunOptions());

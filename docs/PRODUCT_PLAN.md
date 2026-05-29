@@ -10,7 +10,7 @@ high level; this plan describes what to build and in what order.
 
 ## Current Validation Status
 
-- `firsttrace@0.1.2` is published on npm and is the preferred reusable install
+- `firsttrace@0.1.4` is published on npm and is the preferred reusable install
   artifact for new deployments.
 - The OCI backend has passed a clean npm-install acceptance flow: a fresh
   operations directory installed the package, copied the packaged Terraform and
@@ -19,8 +19,9 @@ high level; this plan describes what to build and in what order.
 - OCI live acceptance currently verifies health/build metadata, real Slack event
   delivery, exactly one processing reply, exactly one final reply, duplicate
   Slack event dedupe, worker completion, and OCI Queue redelivery.
-- The Vercel/Supabase backend remains supported, but it needs an equivalent live
-  acceptance pass before it should be considered equally validated.
+- The Vercel/Supabase backend remains supported through an npm-wrapper Vercel
+  template plus Supabase migrations. Its reusable live acceptance command exists;
+  a fresh production acceptance run is the next validation step.
 
 ## Product Thesis
 
@@ -448,7 +449,7 @@ The implemented Phase 6 flow adds a hosted backend path for teams that want
 FirstTrace to run as a dedicated service:
 
 ```text
-Vercel Receiver -> Supabase Queue/Database -> Worker Process -> Result Store
+npm wrapper on Vercel -> Supabase Queue/Database -> Worker Process -> Result Store
 ```
 
 Current capability:
@@ -462,6 +463,10 @@ Current capability:
   - `POST /api/investigations`
   - `GET /api/jobs?id=<job-id>`
   - `GET|POST /api/worker/run-once`
+- package exports for ready-made Vercel handlers and a packaged
+  `deploy/vercel` wrapper template
+- Vercel Terraform template for project/runtime environment setup
+- package-provided Supabase migrations applied with the Supabase CLI
 - required bearer auth through `FIRSTTRACE_RECEIVER_TOKEN`, unless
   `FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=true` is explicitly set for local
   development
@@ -599,7 +604,7 @@ Limitations:
   broader Slack event subscriptions than the default app-mention path
 - channel repository routing is parsed and preserved, but repository subset
   filtering is deferred until multi-repo hosted deployment needs it
-- Vercel/Supabase still needs an equivalent live Slack acceptance pass; OCI has
+- Vercel/Supabase now has a reusable live Slack acceptance command; OCI has
   passed the live Slack path through `hosted accept`
 
 The investigation engine should remain chat-agnostic so Teams, Discord, Linear,
@@ -637,10 +642,10 @@ Limitations:
 - local readiness can pass while optional live checks remain blocked
 - `hosted verify` is a local readiness command; deployed backends should use
   `hosted accept`
-- live Vercel/Supabase processing still needs a dedicated Supabase project with
-  all FirstTrace migrations applied before the Supabase path can be accepted
+- live Vercel/Supabase processing still needs a fresh acceptance run against a
+  deployed npm-wrapper project with all FirstTrace migrations applied
 
-### Phase 9B: Live Hosted Verification - OCI Complete, Vercel/Supabase Pending
+### Phase 9B: Live Hosted Verification - OCI Complete, Vercel/Supabase Harness Ready
 
 Prove the full hosted workflow for a generic company setup:
 
@@ -655,8 +660,9 @@ configured Slack channel
 ```
 
 This phase is complete for the OCI backend through `firsttrace hosted accept`.
-The equivalent Vercel/Supabase live acceptance path is still pending. Each
-backend should verify:
+The Vercel/Supabase backend now has the same acceptance shape through
+`firsttrace hosted accept --backend vercel-supabase`; the remaining work is to
+run it against a fresh npm-wrapper Vercel deployment. Each backend should verify:
 
 - a configured Slack channel can submit a bug report without CLI access
 - an unconfigured channel is ignored or receives a safe denial
@@ -911,21 +917,23 @@ system without changing the investigation engine.
 
 ### Packaging and Deployment Direction
 
-The preferred customer installation path is an npm package that can be embedded
-into an existing Vercel/Next.js application:
+The preferred customer installation path is an npm package plus a small
+operations wrapper:
 
 ```bash
-npm install firsttrace
+npm install firsttrace@0.1.4
 ```
 
-The host app should import stable FirstTrace route helpers for Slack events,
-generic investigation submission, job status, and worker execution. That lets a
-team reuse its existing Vercel project, domains, auth posture, and operational
-habits while keeping FirstTrace provider logic reusable.
+Vercel/Supabase deployments should copy `node_modules/firsttrace/deploy/vercel`
+into their own operations repository. That wrapper imports stable FirstTrace
+route helpers for Slack events, generic investigation submission, job status,
+health, and worker execution from the npm package. Supabase schema is applied
+from `node_modules/firsttrace/supabase/migrations` with the Supabase CLI, while
+Vercel project/env setup is managed by the packaged Terraform template.
 
-Standalone deployment remains the fastest current validation path. OCI should use
-a package-based image that installs the published npm package, while Vercel
-customers can embed FirstTrace route helpers into an existing app.
+OCI deployments should use a package-based image that installs the published npm
+package and copies only deployment config. Both hosted backends should therefore
+run from npm artifacts.
 
 Later packaging options:
 
@@ -1029,7 +1037,7 @@ Some provider paths require live credentials or a dedicated external project, so
 they should stay tracked explicitly until they are tested end to end. These
 checks should use local ignored config files and environment secrets only.
 
-### Supabase Queue Live Test - Not Yet Complete
+### Vercel/Supabase Live Acceptance - Harness Ready
 
 Current status:
 
@@ -1037,18 +1045,20 @@ Current status:
 - unit tests cover Supabase row mapping, RPC claim behavior, status lookup, and
   receiver behavior through fakes
 - filesystem queue smoke tests pass
-- no current Vercel/Supabase live acceptance result is recorded in this repo
-- live Supabase queue processing should be accepted only after a dedicated
-  FirstTrace Supabase project or database has all FirstTrace migrations applied
-  in order
+- `firsttrace hosted accept --backend vercel-supabase` verifies health/build
+  metadata, Slack dedupe, one processing reply, one final reply, and job success
+- no current fresh npm-wrapper Vercel/Supabase live acceptance result is
+  recorded in this repo
+- live Supabase queue processing should be accepted only after the deployed
+  wrapper has all packaged FirstTrace migrations applied in order
 
 Prerequisites:
 
 - a dedicated Supabase project or database for FirstTrace runtime state
-- all migrations in `supabase/migrations/` applied in order, including
+- all packaged migrations applied in order, including
   `0001_firsttrace_jobs.sql`, `0002_firsttrace_job_dedupe.sql`, and
   `0003_firsttrace_claim_next_empty.sql`
-- `.env.local` values:
+- local acceptance environment values:
   - `SUPABASE_URL`
   - `SUPABASE_SERVICE_ROLE_KEY`
   - `FIRSTTRACE_QUEUE_PROVIDER=supabase`
@@ -1137,7 +1147,7 @@ Expected result:
 - investigation returns file and commit evidence from the GitHub repo
 - owner rules from the config are applied to returned files
 
-### Slack Hosted Event Live Test - Complete For OCI, Pending For Vercel/Supabase
+### Slack Hosted Event Live Test - Complete For OCI, Harness Ready For Vercel/Supabase
 
 Current status:
 
@@ -1150,7 +1160,8 @@ Current status:
   client
 - OCI live acceptance verifies real Slack Events delivery and `chat.postMessage`
   through the deployed API Gateway and worker
-- Vercel/Supabase still needs an equivalent live hosted acceptance pass
+- Vercel/Supabase has the equivalent `hosted accept --backend vercel-supabase`
+  command and still needs a fresh live pass against the npm-wrapper deployment
 
 Prerequisites:
 
@@ -1234,9 +1245,10 @@ features.
 
 ## Immediate Next Steps
 
-1. Keep the npm package deployment path validated with `firsttrace hosted
-   accept --backend oci` before release or infrastructure changes.
-2. Add the equivalent live acceptance check for the Vercel/Supabase hosted path.
+1. Deploy the npm-wrapper Vercel/Supabase backend and run `firsttrace hosted
+   accept --backend vercel-supabase`.
+2. Keep the OCI package deployment path validated with `firsttrace hosted accept
+   --backend oci` before OCI release or infrastructure changes.
 3. Continue improving compact Slack reply quality with real reports and eval
    cases, especially owner/file localization.
 4. Add the later `codex-cli` investigator adapter only after the built-in agent

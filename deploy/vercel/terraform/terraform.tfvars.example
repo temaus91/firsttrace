@@ -1,0 +1,23 @@
+vercel_team_id = ""
+project_name   = "firsttrace"
+
+production_environment = {
+  FIRSTTRACE_AI_ENABLED         = "true"
+  FIRSTTRACE_AI_PROVIDER        = "openai"
+  FIRSTTRACE_GITHUB_CACHE_ROOT  = "/tmp/firsttrace/github"
+  FIRSTTRACE_INVESTIGATOR       = "agent"
+  FIRSTTRACE_MODEL_CHAT         = "gpt-5.4-mini"
+}
+
+production_secrets = {
+  CRON_SECRET                 = "replace"
+  FIRSTTRACE_RECEIVER_TOKEN   = "replace"
+  GITHUB_APP_ID               = "replace"
+  GITHUB_APP_INSTALLATION_ID  = "replace"
+  GITHUB_APP_PRIVATE_KEY      = "replace"
+  OPENAI_API_KEY              = "replace"
+  SLACK_BOT_TOKEN             = "replace"
+  SLACK_SIGNING_SECRET        = "replace"
+  SUPABASE_SERVICE_ROLE_KEY   = "replace"
+  SUPABASE_URL                = "replace"
+}

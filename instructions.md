@@ -1,21 +1,12 @@
 # FirstTrace Hosted Setup Instructions
 
-This guide describes the target hosted setup for a company that wants FirstTrace
-connected to a private GitHub repository and a Slack triage channel.
+This guide describes the npm-first hosted setup for a company that wants
+FirstTrace connected to a private GitHub repository and a Slack triage channel.
 
-Current implementation status: the local CLI, AI-assisted local investigation,
-eval runner, local worker runtime, local `submit` message adapter, hosted
-Vercel-compatible receiver/status handlers, Supabase-backed queue, and GitHub
-App repository provider, Slack Events provider, and hosted readiness verifier
-exist. FirstTrace currently supports both a Vercel/Supabase hosted backend and
-an OCI hosted backend. The OCI path has passed live acceptance from a clean npm
-package install. This guide focuses on the Vercel/Supabase setup; OCI setup is
-documented in `deploy/oci/README.md`.
-
-Full live Vercel/Supabase deployment still requires a configured Slack app,
-Supabase project, GitHub App, and worker environment. Full live OCI deployment
-for a new organization requires the same Slack/GitHub/AI configuration plus the
-OCI resources described in the OCI deployment guide.
+FirstTrace supports both a Vercel/Supabase hosted backend and an OCI hosted
+backend. Both deployment paths start from the published npm package. This guide
+focuses on the Vercel/Supabase setup; OCI setup is documented in
+`deploy/oci/README.md`.
 
 ## Target Workflow
 
@@ -23,7 +14,7 @@ Vercel/Supabase hosted path:
 
 ```text
 Slack channel
-  -> Vercel receiver
+  -> npm wrapper on Vercel
   -> Supabase job queue
   -> FirstTrace worker
   -> GitHub provider + AI provider
@@ -49,8 +40,12 @@ ownership mappings must not be hardcoded in FirstTrace source code.
 
 For the Vercel/Supabase path:
 
-- A Vercel project for the FirstTrace receiver/API service.
+- A small operations wrapper that depends on `firsttrace` from npm.
+- A Vercel project for the wrapper's receiver/API service.
 - A Supabase project for job, status, and result storage.
+- The Supabase CLI for applying packaged migrations.
+- Terraform for creating/configuring the Vercel project and production
+  environment variables.
 
 For the OCI path, use `deploy/oci/README.md` to create the OCI queue, runtime
 containers, Object Storage markers, Vault/KMS secrets, OCIR image, and public
@@ -124,7 +119,8 @@ PHI, PCI, legal/dispute, or customer production-data markers. Use
 `FIRSTTRACE_AI_DRY_RUN=true` to inspect the sanitized report path without
 calling the configured model provider.
 
-Configure Slack event subscriptions to the deployed receiver URL:
+After deployment, configure Slack event subscriptions to the deployed receiver
+URL:
 
 ```text
 https://your-firsttrace-service.example.com/api/slack/events
@@ -199,14 +195,49 @@ The token must have read access to the configured repository. Prefer the GitHub
 App path for hosted deployments because it can be limited to only the
 repositories FirstTrace should inspect.
 
-## 4. Create the Supabase Project
+## 4. Create the Vercel/Supabase Wrapper
+
+Create a small operations directory, install FirstTrace from npm, and copy the
+packaged Vercel template:
+
+```bash
+mkdir firsttrace-vercel
+cd firsttrace-vercel
+npm init -y
+npm install firsttrace@0.1.4
+cp -R node_modules/firsttrace/deploy/vercel/* .
+cp node_modules/firsttrace/deploy/vercel/gitignore.template .gitignore
+npm install
+```
+
+Edit `firsttrace.config.yaml` in the wrapper with the Slack channel id, GitHub
+repository, and ownership routing for your organization. Do not put secrets in
+that file.
+
+The copied template contains Vercel API routes that import from the npm package:
+
+```text
+api/slack/events.js
+api/investigations.js
+api/jobs.js
+api/worker/run-once.js
+api/health.js
+```
+
+It also contains `public/.gitkeep`, so API-only Vercel builds have a public
+output directory.
+
+## 5. Create the Supabase Project
 
 Use Supabase to store investigation jobs, job status, attempts, and results.
 
-Apply all FirstTrace migrations in order from:
+Apply all packaged FirstTrace migrations in order with the Supabase CLI:
 
-```text
-supabase/migrations/
+```bash
+mkdir -p supabase/migrations
+cp node_modules/firsttrace/supabase/migrations/*.sql supabase/migrations/
+supabase link --project-ref "<supabase-project-ref>"
+supabase db push
 ```
 
 This creates `firsttrace_jobs`, enables row level security, and adds the
@@ -225,18 +256,43 @@ SUPABASE_SERVICE_ROLE_KEY=
 The service role key should only be available to trusted backend and worker
 processes. It should not be exposed to browsers, Slack clients, or public config.
 
-## 5. Deploy the Vercel Backend
+## 6. Create the Vercel Project And Environment
 
-Deploy the FirstTrace receiver/API service to Vercel and configure environment
-variables for the selected providers:
+Use the packaged Terraform in the wrapper to create or configure the Vercel
+project and production environment:
+
+```bash
+export VERCEL_API_TOKEN="<vercel-token>"
+cd terraform
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Edit `terraform.tfvars`. Store secret values only in `production_secrets`;
+Terraform state and `terraform.tfvars` should be treated as secret material.
+
+```bash
+terraform init
+terraform fmt -check
+terraform validate
+terraform apply
+cd ..
+```
+
+The Terraform defaults include:
 
 ```text
-FIRSTTRACE_CONFIG_PATH=
 FIRSTTRACE_QUEUE_PROVIDER=supabase
-FIRSTTRACE_RECEIVER_TOKEN=
+FIRSTTRACE_CONFIG_PATH=firsttrace.config.yaml
 FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false
+FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.4
+FIRSTTRACE_SLACK_REPLY_FORMAT=compact-v1
+```
+
+Configure these provider secrets in `production_secrets`:
+
+```text
+FIRSTTRACE_RECEIVER_TOKEN=
 CRON_SECRET=
-FIRSTTRACE_GITHUB_CACHE_ROOT=
 FIRSTTRACE_AI_PROVIDER=openai
 FIRSTTRACE_AI_ENABLED=false
 FIRSTTRACE_INVESTIGATOR=agent
@@ -261,10 +317,25 @@ configured, dedupe Slack retries before creating duplicate jobs, create a
 Supabase-backed job, and return quickly. The worker should process the job
 asynchronously and post the result back through the chat provider.
 
-For standalone Vercel deployments, the Slack endpoint can schedule one hosted
-worker pass with Vercel background processing after the event has been
-acknowledged. Keep a protected worker endpoint available for manual repair runs
-or for cron on plans that support the desired frequency:
+## 7. Deploy The Vercel Wrapper
+
+Link the wrapper directory to the Terraform-created project and deploy:
+
+```bash
+npx vercel@latest link --yes --project "$(terraform -chdir=terraform output -raw project_name)"
+npx vercel@latest --prod
+```
+
+Set the Slack app Event Subscription request URL to:
+
+```text
+https://<your-vercel-host>/api/slack/events
+```
+
+The Slack endpoint schedules one hosted worker pass with Vercel background
+processing after the event has been acknowledged. Keep a protected worker
+endpoint available for manual repair runs or for cron on plans that support the
+desired frequency:
 
 ```text
 GET|POST /api/worker/run-once
@@ -276,39 +347,32 @@ Manual repair runs can call the same endpoint with either `CRON_SECRET` or
 left unset so the worker uses `/tmp` instead of the read-only deployment
 directory for GitHub clones.
 
-Before the full Slack app is wired, test the generic hosted receiver directly:
+Before Slack is wired, test the generic hosted receiver directly:
 
-```bash
-firsttrace doctor --config examples/minimal.local.config.yaml
-```
-
-This catches missing local repository snapshots, missing Slack signing secrets,
-unavailable Slack replies, missing GitHub credentials, and AI provider gaps
-before deployment. Deterministic investigation remains available when AI
-credentials are missing unless `--ai` or hosted Slack AI is explicitly enabled.
-
-```bash
 curl -X POST "$FIRSTTRACE_BASE_URL/api/investigations" \
   -H "authorization: Bearer $FIRSTTRACE_RECEIVER_TOKEN" \
   -H "content-type: application/json" \
   -d '{"report":"README deployment plan is unclear","aiEnabled":false}'
 ```
 
-Before live external services are ready, test the hosted orchestration path
-locally:
+Run live acceptance from the wrapper directory:
 
 ```bash
-npm run firsttrace -- hosted verify \
-  --config examples/hosted.local.config.yaml \
-  --queue filesystem \
-  --report "README deployment plan is unclear"
+npx firsttrace hosted accept \
+  --backend vercel-supabase \
+  --base-url "$FIRSTTRACE_VERCEL_BASE_URL" \
+  --config firsttrace.config.yaml \
+  --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
+  --report "README deployment plan is unclear" \
+  --expected-build-ref "npm:firsttrace@0.1.4"
 ```
 
-This sends a synthetic signed Slack event through the receiver, enqueues a job,
-runs the worker once, and captures the Slack reply with a fake notifier. It does
-not prove live Slack, GitHub App, or Supabase connectivity.
+Acceptance posts a seed Slack message, sends the same signed Slack event twice,
+requires the duplicate event to resolve to the same job id, polls job status,
+and requires exactly one processing reply and one final Slack reply. It uses the
+configured `message` trigger when present and falls back to `app_mention`.
 
-## 6. Configure FirstTrace
+## 8. Configure FirstTrace
 
 Use a config file to connect providers, repositories, channels, triggers, and
 ownership routing.
@@ -372,7 +436,7 @@ search:
 All values above are examples. A real deployment should use the company's own
 Slack channel id, repository owner/name, ownership paths, and provider choices.
 
-## 7. Expected User Flow
+## 9. Expected User Flow
 
 1. A user posts a bug report in the configured Slack triage channel.
 2. Slack sends the event to the FirstTrace receiver.
@@ -389,6 +453,9 @@ three implementer/commit/file evidence signals.
 ## Verification Checklist
 
 - `hosted verify --queue filesystem` passes with the generic local example.
+- For Vercel/Supabase deployments,
+  `firsttrace hosted accept --backend vercel-supabase` passes against the
+  deployed Vercel URL.
 - For OCI deployments, `firsttrace hosted accept --backend oci` passes against
   the deployed API Gateway URL.
 - Slack event URL is verified successfully.
