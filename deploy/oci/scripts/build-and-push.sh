@@ -17,6 +17,15 @@ dockerfile="${FIRSTTRACE_DOCKERFILE:-Dockerfile}"
 platform_args=()
 build_args=()
 container_runtime="${CONTAINER_RUNTIME:-docker}"
+repos_dir="${FIRSTTRACE_REPOS_DIR:-repos}"
+empty_repos_dir=""
+
+cleanup() {
+  if [[ -n "${empty_repos_dir}" ]]; then
+    rm -rf "${empty_repos_dir}"
+  fi
+}
+trap cleanup EXIT
 
 if [[ -n "${platform}" ]]; then
   platform_args+=(--platform "${platform}")
@@ -33,6 +42,16 @@ fi
 if [[ -n "${FIRSTTRACE_CONFIG_DEST:-}" ]]; then
   build_args+=(--build-arg "FIRSTTRACE_CONFIG_DEST=${FIRSTTRACE_CONFIG_DEST}")
 fi
+
+if [[ ! -d "${repos_dir}" ]]; then
+  empty_repos_dir=".firsttrace-empty-repos"
+  rm -rf "${empty_repos_dir}"
+  mkdir -p "${empty_repos_dir}"
+  touch "${empty_repos_dir}/.keep"
+  repos_dir="${empty_repos_dir}"
+fi
+
+build_args+=(--build-arg "FIRSTTRACE_REPOS_DIR=${repos_dir}")
 
 if [[ -n "${FIRSTTRACE_BUILD_REF:-}" ]]; then
   build_args+=(--build-arg "FIRSTTRACE_BUILD_REF=${FIRSTTRACE_BUILD_REF}")

@@ -45,6 +45,10 @@ it does not require `OPENAI_API_KEY`.
    internal source systems that are easier to export as archives, use
    `provider: archive` and an `archive_command` that populates
    `FIRSTTRACE_ARCHIVE_REPO_PATH`.
+   `deploy/oci/Dockerfile.package` always creates `/app/repos`; set
+   `FIRSTTRACE_REPOS_DIR=repos` before the image build to copy local repository
+   snapshots into that path. If the directory is absent, the build script copies
+   an empty placeholder so GitHub/archive-only configs still build.
 
    Before building the image, run the setup validator from the same operations
    directory:
@@ -129,6 +133,7 @@ it does not require `OPENAI_API_KEY`.
    export FIRSTTRACE_BUILD_REF="npm:firsttrace@0.1.2"
    export FIRSTTRACE_CONFIG_FILE="firsttrace.oci.config.yaml"
    export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
+   export FIRSTTRACE_REPOS_DIR="repos" # Optional local repo snapshots copied to /app/repos.
    export FIRSTTRACE_CONTAINER_PLATFORM="linux/arm64" # Use linux/amd64 for CI.Standard.E4.Flex.
    export CONTAINER_RUNTIME="docker" # Or podman.
 
@@ -371,6 +376,7 @@ export FIRSTTRACE_DOCKERFILE="deploy/oci/Dockerfile.package"
 export FIRSTTRACE_PACKAGE_SPEC="firsttrace@${FIRSTTRACE_VERSION}"
 export FIRSTTRACE_CONFIG_FILE="firsttrace.config.yaml"
 export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
+export FIRSTTRACE_REPOS_DIR="repos"
 export FIRSTTRACE_BUILD_REF="npm:firsttrace@${FIRSTTRACE_VERSION}"
 
 ./deploy/oci/scripts/build-and-push.sh \

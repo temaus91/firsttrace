@@ -574,6 +574,9 @@ Socket Mode off by default. Enterprise installs may need a generic backend
 service-registration step before Slack is connected; FirstTrace docs should list
 the usual app name, owner, public URL, event URL, data classification, and auth
 metadata without making organization-specific assumptions.
+The OCI package image always creates `/app/repos`, and the build script can copy
+`FIRSTTRACE_REPOS_DIR` there for local snapshot deployments while still allowing
+GitHub/archive-only images to build with an empty placeholder.
 
 Limitations:
 
