@@ -82,6 +82,12 @@ code.
 
 ## 2. Create the Slack App
 
+If your organization requires backend registration before connecting an app to
+Slack, register FirstTrace in the relevant service catalog first. Keep this
+organization-neutral: application name, service owner, public base URL, Slack
+event/callback URL, OAuth or resource-server requirements if any, data
+classification, and whether end-user login is involved.
+
 Create a Slack app for FirstTrace and install it into the workspace.
 
 Recommended initial bot scopes:
@@ -125,7 +131,8 @@ https://your-firsttrace-service.example.com/api/slack/events
 
 Slack requires a public HTTPS receiver for real workspace events. Local
 verification can still exercise the same receiver code with a synthetic signed
-Slack event before Vercel or another host is connected.
+Slack event before OCI, Vercel, or another host is connected. Socket Mode is not
+required for FirstTrace and should stay off by default for hosted deployments.
 
 FirstTrace also exposes the generic hosted receiver:
 

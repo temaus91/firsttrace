@@ -9,11 +9,15 @@ import {
 } from "../src/chat/slack/manifest-validator.js";
 
 const manifest = ({
+  requestUrl,
   scopes = ["app_mentions:read", "chat:write"],
   events = ["app_mention"],
+  socketModeEnabled = false,
 }: {
+  requestUrl?: string;
   scopes?: string[];
   events?: string[];
+  socketModeEnabled?: boolean;
 } = {}) => ({
   oauth_config: {
     scopes: {
@@ -21,7 +25,9 @@ const manifest = ({
     },
   },
   settings: {
+    socket_mode_enabled: socketModeEnabled,
     event_subscriptions: {
+      request_url: requestUrl,
       bot_events: events,
     },
   },
@@ -66,6 +72,20 @@ describe("Slack manifest validator", () => {
       "reactions:read enables broader message/reaction access; require explicit opt-in outside slack-minimal.",
       "message.channels is an advanced trigger and should not be enabled in slack-minimal.",
       "reaction_added is an advanced trigger and should not be enabled in slack-minimal.",
+    ]);
+  });
+
+  it("warns for local Slack request URLs and Socket Mode in hosted profile", () => {
+    const checks = validateSlackManifest(
+      manifest({
+        requestUrl: "http://localhost:8787/api/slack/events",
+        socketModeEnabled: true,
+      }),
+    );
+
+    expect(messages(checks, "WARN")).toEqual([
+      "Slack request_url should be a public HTTPS hosted endpoint, not a local URL.",
+      "Socket Mode is not required for hosted FirstTrace deployments and should be off by default.",
     ]);
   });
 

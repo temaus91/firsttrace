@@ -32,6 +32,19 @@ const botEventsFromManifest = (manifest: unknown) => {
   return stringArray(subscriptions.bot_events);
 };
 
+const requestUrlFromManifest = (manifest: unknown) => {
+  const root = asRecord(manifest);
+  const settings = asRecord(root.settings);
+  const subscriptions = asRecord(settings.event_subscriptions);
+  return typeof subscriptions.request_url === "string" ? subscriptions.request_url : undefined;
+};
+
+const socketModeEnabledFromManifest = (manifest: unknown) => {
+  const root = asRecord(manifest);
+  const settings = asRecord(root.settings);
+  return settings.socket_mode_enabled === true;
+};
+
 const check = (level: SlackManifestCheckLevel, message: string): SlackManifestCheck => ({ level, message });
 
 export const validateSlackManifest = (
@@ -44,6 +57,7 @@ export const validateSlackManifest = (
 
   const scopes = botScopesFromManifest(manifest);
   const events = botEventsFromManifest(manifest);
+  const requestUrl = requestUrlFromManifest(manifest);
   const checks: SlackManifestCheck[] = [];
 
   for (const required of ["app_mentions:read", "chat:write"]) {
@@ -83,6 +97,22 @@ export const validateSlackManifest = (
 
   if (!events.includes("app_mention")) {
     checks.push(check("ERROR", "app_mention bot event is required for the slack-minimal profile."));
+  }
+
+  if (requestUrl) {
+    const normalizedUrl = requestUrl.toLowerCase();
+    if (
+      normalizedUrl.startsWith("http://") ||
+      normalizedUrl.includes("localhost") ||
+      normalizedUrl.includes("127.0.0.1") ||
+      normalizedUrl.includes("[::1]")
+    ) {
+      checks.push(check("WARN", "Slack request_url should be a public HTTPS hosted endpoint, not a local URL."));
+    }
+  }
+
+  if (socketModeEnabledFromManifest(manifest)) {
+    checks.push(check("WARN", "Socket Mode is not required for hosted FirstTrace deployments and should be off by default."));
   }
 
   return checks;

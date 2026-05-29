@@ -57,6 +57,11 @@ it does not require `OPENAI_API_KEY`.
    receivers, warns when Slack replies or AI are not configured, and fails AI
    checks only when `--ai` or hosted Slack AI is explicitly enabled.
 
+   If your organization requires service catalog or backend identity
+   registration before Slack is connected, register the OCI deployment with the
+   application name, owner, public API Gateway URL, Slack Events URL, data
+   classification, and any OAuth/resource-server requirement.
+
 2. Create a zip of `deploy/oci/terraform` and upload it as an OCI Resource
    Manager stack.
 
@@ -196,7 +201,8 @@ it does not require `OPENAI_API_KEY`.
    ```
 
 9. Open the Slack app Event Subscriptions page and set the request URL to the
-   `slack_events_url` Terraform output.
+   `slack_events_url` Terraform output. Leave Socket Mode off; FirstTrace uses
+   hosted HTTPS Slack Events delivery on OCI.
 
 10. Verify with the live acceptance harness:
 

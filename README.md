@@ -421,29 +421,34 @@ redelivery with a temporary queue.
 Use this sequence to connect the full hosted path:
 
 1. Create or choose a Slack triage channel and note the channel id.
-2. Create a Slack app with the minimal bot scopes `chat:write` and
+2. Register the backend service with your organization's identity or service
+   catalog if required. Typical values are application name, owner, public base
+   URL, Slack event URL, OAuth/resource-server requirements, data
+   classification, and whether end-user login is involved.
+3. Create a Slack app with the minimal bot scopes `chat:write` and
    `app_mentions:read`, subscribe to the `app_mention` bot event, and run
    `firsttrace slack validate-manifest --profile slack-minimal --manifest <path>`.
    Add message or reaction trigger scopes only after explicitly opting into
-   those triggers in config.
-3. Install the Slack app, copy `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET`,
+   those triggers in config. Use a public HTTPS request URL and keep Socket Mode
+   off by default; FirstTrace is built for hosted Slack Events delivery.
+4. Install the Slack app, copy `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET`,
    and invite the bot to the triage channel.
-4. Create a Supabase project and apply every file in `supabase/migrations/` in
+5. Create a Supabase project and apply every file in `supabase/migrations/` in
    order, including the dedupe migration.
-5. Store `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+6. Store `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
    `FIRSTTRACE_QUEUE_PROVIDER=supabase`, `FIRSTTRACE_RECEIVER_TOKEN`, and
    `FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false`.
-6. Configure repositories with either a read-only GitHub App
+7. Configure repositories with either a read-only GitHub App
    (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`) or
    local validation `GITHUB_TOKEN`.
-7. Run `hosted verify` locally with `--queue supabase`; add
+8. Run `hosted verify` locally with `--queue supabase`; add
    `--live-slack-post` after Slack env is present.
-8. Deploy the API to a public HTTPS host. On Vercel, the Slack endpoint can use
+9. Deploy the API to a public HTTPS host. On Vercel, the Slack endpoint can use
    background processing to run one worker pass after Slack has been
    acknowledged. Keep the protected worker endpoint,
    `GET|POST /api/worker/run-once`, available for manual repair runs or
    cron on plans that support the desired frequency.
-9. Set Slack Event Subscriptions to
+10. Set Slack Event Subscriptions to
    `https://<host>/api/slack/events`.
 
 Vercel is not required for local end-to-end verification. It is needed only when

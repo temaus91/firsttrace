@@ -569,6 +569,11 @@ part of config, and `restricted` channels skip AI even when both AI gates are on
 Before any model call, the AI safety layer redacts common credentials and skips
 AI for PHI, PCI, legal/dispute, and customer production-data markers. A dry-run
 mode can show the sanitized report path without calling the configured model.
+Hosted Slack deployments should use a public HTTPS Events request URL with
+Socket Mode off by default. Enterprise installs may need a generic backend
+service-registration step before Slack is connected; FirstTrace docs should list
+the usual app name, owner, public URL, event URL, data classification, and auth
+metadata without making organization-specific assumptions.
 
 Limitations:
 
