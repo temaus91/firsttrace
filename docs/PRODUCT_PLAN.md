@@ -546,6 +546,8 @@ Current capability:
   is configured
 - keep channel names, channel ids, trigger behavior, AI opt-in, and repo routing
   in config
+- validate a minimal Slack app manifest profile so new installs can start with
+  only `app_mentions:read`, `chat:write`, and the `app_mention` event
 
 Required environment variables for hosted Slack:
 
@@ -553,6 +555,11 @@ Required environment variables for hosted Slack:
 SLACK_SIGNING_SECRET
 SLACK_BOT_TOKEN
 ```
+
+Default Slack setup should be mention-only. Top-level message and reaction
+triggers stay independently configurable, but enabling them should be an
+explicit product decision because they require broader Slack history or reaction
+read scopes.
 
 Limitations:
 

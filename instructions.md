@@ -84,15 +84,29 @@ code.
 
 Create a Slack app for FirstTrace and install it into the workspace.
 
-Recommended initial scopes:
+Recommended initial bot scopes:
 
 - `chat:write`
-- `channels:read`
-- `channels:history`
 - `app_mentions:read`
-- `groups:read` if the triage channel is private
-- `groups:history` if the triage channel is private
-- `reactions:read` if emoji-triggered investigations are enabled
+
+Recommended initial bot event subscription:
+
+- `app_mention`
+
+Validate the Slack app manifest before installing or changing it:
+
+```bash
+firsttrace slack validate-manifest \
+  --profile slack-minimal \
+  --manifest slack-app-manifest.yaml
+```
+
+Add broader scopes only when the matching trigger is explicitly enabled in
+config:
+
+- top-level public channel messages: `message.channels` plus `channels:history`
+- top-level private channel messages: `message.groups` plus `groups:history`
+- emoji-triggered investigations: `reaction_added` plus `reactions:read`
 
 Configure Slack event subscriptions to the deployed receiver URL:
 
@@ -111,9 +125,8 @@ POST https://your-firsttrace-service.example.com/api/investigations
 GET  https://your-firsttrace-service.example.com/api/jobs?id=<job-id>
 ```
 
-Recommended initial event subscriptions:
+Optional advanced event subscriptions:
 
-- `app_mention`
 - `message.channels` for public triage channels
 - `message.groups` for private triage channels
 - `reaction_added` if emoji-triggered investigations are enabled

@@ -143,10 +143,21 @@ it does not require `OPENAI_API_KEY`.
 
 7. Set `container_image_url` in the Resource Manager stack and apply again.
 
-8. Open the Slack app Event Subscriptions page and set the request URL to the
+8. Configure the Slack app with the minimal profile: bot scopes
+   `app_mentions:read` and `chat:write`, bot event `app_mention`, and no
+   message/reaction trigger scopes unless those triggers are explicitly enabled
+   in `firsttrace.oci.config.yaml`. Validate the app manifest before saving:
+
+   ```bash
+   npx firsttrace slack validate-manifest \
+     --profile slack-minimal \
+     --manifest slack-app-manifest.yaml
+   ```
+
+9. Open the Slack app Event Subscriptions page and set the request URL to the
    `slack_events_url` Terraform output.
 
-9. Verify with the live acceptance harness:
+10. Verify with the live acceptance harness:
 
    ```bash
    export FIRSTTRACE_OCI_BASE_URL="$(terraform output -raw api_gateway_url)"
@@ -433,7 +444,15 @@ printf 'Slack Events URL: %s\n' "$SLACK_EVENTS_URL"
 ```
 
 Set the Slack app Event Subscriptions request URL to `SLACK_EVENTS_URL`, save
-the Slack app config, then run the acceptance command from the npm package:
+the Slack app config, and validate the manifest if you changed scopes or events:
+
+```bash
+npx firsttrace slack validate-manifest \
+  --profile slack-minimal \
+  --manifest slack-app-manifest.yaml
+```
+
+Then run the acceptance command from the npm package:
 
 ```bash
 cd ~/firsttrace

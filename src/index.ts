@@ -1,4 +1,10 @@
 export { handleSlackEventsRequest, loadSlackConfigFromPath } from "./chat/slack/events.js";
+export {
+  renderSlackManifestChecks,
+  validateSlackManifest,
+  validateSlackManifestFile,
+} from "./chat/slack/manifest-validator.js";
+export type { SlackManifestCheck, SlackManifestCheckLevel, SlackManifestProfile } from "./chat/slack/manifest-validator.js";
 export { renderSlackInvestigationReply } from "./chat/slack/render.js";
 export { loadConfig } from "./config.js";
 export { createAiProviderFromEnv } from "./ai/provider-factory.js";

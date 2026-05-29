@@ -345,6 +345,22 @@ SLACK_BOT_TOKEN=
 SLACK_SIGNING_SECRET=
 ```
 
+The recommended Slack app profile is mention-only. Start with bot scopes
+`app_mentions:read` and `chat:write`, subscribe only to the `app_mention` bot
+event, then validate the app manifest before installing or updating it:
+
+```bash
+firsttrace slack validate-manifest \
+  --profile slack-minimal \
+  --manifest slack-app-manifest.yaml
+```
+
+Top-level message and reaction triggers are supported, but they require broader
+Slack access. Add `message.channels` plus `channels:history` for public channel
+message triggers, `message.groups` plus `groups:history` for private channel
+message triggers, and `reaction_added` plus `reactions:read` only when
+emoji-triggered investigations are explicitly approved.
+
 Slack Events requests are deduped by team, trigger, channel, source message
 timestamp, and reaction name when applicable, so Slack retries return the
 existing queued job instead of creating duplicate investigations.
@@ -384,9 +400,11 @@ redelivery with a temporary queue.
 Use this sequence to connect the full hosted path:
 
 1. Create or choose a Slack triage channel and note the channel id.
-2. Create a Slack app with `chat:write`, `channels:read`, `channels:history`,
-   `app_mentions:read`, and `reactions:read`; use `groups:read` and
-   `groups:history` too if the channel is private.
+2. Create a Slack app with the minimal bot scopes `chat:write` and
+   `app_mentions:read`, subscribe to the `app_mention` bot event, and run
+   `firsttrace slack validate-manifest --profile slack-minimal --manifest <path>`.
+   Add message or reaction trigger scopes only after explicitly opting into
+   those triggers in config.
 3. Install the Slack app, copy `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET`,
    and invite the bot to the triage channel.
 4. Create a Supabase project and apply every file in `supabase/migrations/` in

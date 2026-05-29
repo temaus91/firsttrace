@@ -32,6 +32,10 @@
       "types": "./dist/src/chat/slack/events.d.ts",
       "import": "./dist/src/chat/slack/events.js"
     },
+    "./chat/slack/manifest-validator": {
+      "types": "./dist/src/chat/slack/manifest-validator.d.ts",
+      "import": "./dist/src/chat/slack/manifest-validator.js"
+    },
     "./chat/slack/render": {
       "types": "./dist/src/chat/slack/render.d.ts",
       "import": "./dist/src/chat/slack/render.js"

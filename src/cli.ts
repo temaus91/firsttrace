@@ -2,6 +2,11 @@
 
 import path from "node:path";
 import { createJobResultNotifierFromEnv } from "./chat/slack/notifier.js";
+import {
+  renderSlackManifestChecks,
+  validateSlackManifestFile,
+  type SlackManifestProfile,
+} from "./chat/slack/manifest-validator.js";
 import { loadConfig } from "./config.js";
 import { loadLocalEnv } from "./env.js";
 import { loadEvalCases } from "./eval/cases.js";
@@ -33,10 +38,13 @@ type ParsedArgs = {
   hostedAction?: string;
   jobId?: string;
   liveSlackPost: boolean;
+  manifestPath?: string;
   once: boolean;
   pollIntervalMs?: number;
+  profile?: SlackManifestProfile;
   queueProvider?: string;
   report?: string;
+  slackAction?: string;
   timeoutMs?: number;
   workerAction?: string;
 };
@@ -50,6 +58,7 @@ const usage = () => `Usage:
   firsttrace submit --queue supabase --config firsttrace.config.yaml --report "bug text" --ai
   firsttrace hosted verify --config examples/hosted.local.config.yaml --queue filesystem --report "bug text"
   firsttrace hosted accept --backend oci --base-url https://example.com --config firsttrace.config.yaml --channel C0123456789 --report "bug text" --expected-build-ref npm:firsttrace@0.1.2
+  firsttrace slack validate-manifest --profile slack-minimal --manifest slack-app-manifest.yaml
   firsttrace worker enqueue --queue filesystem --config firsttrace.config.yaml --report "bug text"
   firsttrace worker run --once --queue filesystem
   firsttrace worker status --queue filesystem --job <job-id>
@@ -67,9 +76,12 @@ Options:
                     Extra duplicate-reply wait after live acceptance sees the final reply.
   --job <id>        Worker job id for status lookup.
   --live-slack-post Post hosted verification results to Slack instead of using the fake notifier.
+  --manifest <path>
+                    Path to a Slack app manifest YAML/JSON file.
   --once            Process at most one queued job.
   --poll-interval-ms <ms>
                     Poll interval for hosted acceptance.
+  --profile <name>  Slack validation profile. Currently slack-minimal.
   --queue <name>    Queue provider: filesystem, supabase, or oci. Defaults to FIRSTTRACE_QUEUE_PROVIDER or filesystem.
   --report <text>   Bug report or feedback text to investigate.
   --timeout-ms <ms> Timeout for hosted acceptance.
@@ -101,10 +113,15 @@ const parseArgs = (argv: string[]): ParsedArgs => {
     hostedAction: command === "hosted" ? argv[1] : undefined,
     liveSlackPost: false,
     once: false,
+    slackAction: command === "slack" ? argv[1] : undefined,
     workerAction: command === "worker" ? argv[1] : undefined,
   };
 
-  for (let index = parsed.command === "worker" || parsed.command === "hosted" ? 2 : 1; index < argv.length; index += 1) {
+  for (
+    let index = parsed.command === "worker" || parsed.command === "hosted" || parsed.command === "slack" ? 2 : 1;
+    index < argv.length;
+    index += 1
+  ) {
     const arg = argv[index];
     if (arg === "--help" || arg === "-h") {
       parsed.help = true;
@@ -118,8 +135,22 @@ const parseArgs = (argv: string[]): ParsedArgs => {
       parsed.liveSlackPost = true;
       continue;
     }
+    if (arg === "--manifest") {
+      const value = argv[index + 1];
+      if (!value) throw new Error("--manifest requires a path.");
+      parsed.manifestPath = value;
+      index += 1;
+      continue;
+    }
     if (arg === "--once") {
       parsed.once = true;
+      continue;
+    }
+    if (arg === "--profile") {
+      const value = argv[index + 1];
+      if (!value) throw new Error("--profile requires a name.");
+      parsed.profile = value as SlackManifestProfile;
+      index += 1;
       continue;
     }
     if (arg === "--config") {
@@ -223,10 +254,27 @@ const main = async () => {
     args.command !== "investigate" &&
     args.command !== "eval" &&
     args.command !== "hosted" &&
+    args.command !== "slack" &&
     args.command !== "submit" &&
     args.command !== "worker"
   ) {
     throw new Error(`Unknown or missing command: ${args.command ?? "<none>"}`);
+  }
+
+  if (args.command === "slack") {
+    if (args.slackAction !== "validate-manifest") {
+      throw new Error(`Unknown or missing slack action: ${args.slackAction ?? "<none>"}`);
+    }
+    if (!args.manifestPath?.trim()) {
+      throw new Error("slack validate-manifest requires --manifest.");
+    }
+    const checks = validateSlackManifestFile({
+      manifestPath: args.manifestPath,
+      profile: args.profile,
+    });
+    console.log(renderSlackManifestChecks(checks));
+    if (checks.some((item) => item.level === "ERROR")) process.exit(1);
+    return;
   }
 
   if (args.command === "submit") {
