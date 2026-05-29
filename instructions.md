@@ -8,13 +8,14 @@ eval runner, local worker runtime, local `submit` message adapter, hosted
 Vercel-compatible receiver/status handlers, Supabase-backed queue, and GitHub
 App repository provider, Slack Events provider, and hosted readiness verifier
 exist. FirstTrace currently supports both a Vercel/Supabase hosted backend and
-an OCI hosted backend. This guide focuses on the Vercel/Supabase setup; OCI
-setup is documented in `deploy/oci/README.md`.
+an OCI hosted backend. The OCI path has passed live acceptance from a clean npm
+package install. This guide focuses on the Vercel/Supabase setup; OCI setup is
+documented in `deploy/oci/README.md`.
 
 Full live Vercel/Supabase deployment still requires a configured Slack app,
 Supabase project, GitHub App, and worker environment. Full live OCI deployment
-requires the same Slack/GitHub/AI configuration plus the OCI resources described
-in the OCI deployment guide.
+for a new organization requires the same Slack/GitHub/AI configuration plus the
+OCI resources described in the OCI deployment guide.
 
 ## Target Workflow
 
@@ -376,32 +377,36 @@ Slack channel id, repository owner/name, ownership paths, and provider choices.
 1. A user posts a bug report in the configured Slack triage channel.
 2. Slack sends the event to the FirstTrace receiver.
 3. The receiver verifies the Slack signature and checks the configured channel.
-4. The receiver creates a Supabase-backed investigation job.
+4. The receiver creates an investigation job in the selected backend queue.
 5. The worker gathers GitHub evidence from the configured repository.
 6. The configured investigator reasons over gathered evidence and citations.
 7. FirstTrace stores the result and replies in the Slack thread.
 
-The Slack reply should include the likely cause, likely files, implementer or
-commit context with dates when available, confidence, citations, suggested next
-steps, and missing-info questions when the report is underspecified.
+The Slack reply should stay compact: classification, likely owner, primary
+files, confidence, a one- or two-sentence likely cause, next checks, and up to
+three implementer/commit/file evidence signals.
 
 ## Verification Checklist
 
 - `hosted verify --queue filesystem` passes with the generic local example.
+- For OCI deployments, `firsttrace hosted accept --backend oci` passes against
+  the deployed API Gateway URL.
 - Slack event URL is verified successfully.
 - The FirstTrace app is installed in the configured channel.
 - A test bug report in the configured channel creates a queued job.
 - The job moves from queued to running to succeeded.
 - The worker can read the configured private GitHub repository.
 - The Slack reply includes cited evidence.
+- Duplicate Slack event delivery does not create duplicate processing or final
+  replies.
 - A message from an unconfigured Slack channel is ignored or safely declined.
 - No secrets appear in git history, logs, or public config files.
 
 ## Security Defaults
 
 - Use read-only repository access by default.
-- Store secrets in Vercel, Supabase, or another host secret manager.
+- Store secrets in Vercel, Supabase, OCI Vault, or another host secret manager.
 - Keep Slack channel ids, repository names, and ownership mappings in config.
 - Do not log full source files by default.
 - Keep AI evidence bundles bounded and inspectable.
-- Rotate Slack, GitHub, Supabase, and AI provider credentials if exposed.
+- Rotate Slack, GitHub, Supabase, OCI, and AI provider credentials if exposed.

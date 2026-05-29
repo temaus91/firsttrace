@@ -8,6 +8,11 @@ installs `firsttrace@<version>` from npm and copies one deployment config file
 into the image. OCI still runs Container Instances, but the image does not need
 the full FirstTrace source tree at runtime.
 
+This flow has been validated from a clean operations directory using the
+published npm package: install `firsttrace`, copy the packaged OCI deployment
+templates, apply Terraform/Resource Manager, sync secrets into OCI Vault, deploy
+an npm-based image, and run `firsttrace hosted accept --backend oci`.
+
 ## What Terraform Creates
 
 - OCI Queue for investigation jobs
@@ -531,8 +536,9 @@ npx firsttrace hosted accept \
 Expected result: health passes, Slack receives one processing reply and one
 final reply in the seed thread, the duplicate signed Slack event returns the
 same job id, the job reaches `succeeded`, and the temporary OCI Queue redelivery
-probe passes. The seed thread is left in the Slack channel; no `chat:delete`
-scope is required.
+probe passes. This validates the live Slack-to-OCI-Queue-to-worker path without
+requiring a FirstTrace source checkout on the deployed runtime. The seed thread
+is left in the Slack channel; no `chat:delete` scope is required.
 
 ## Auth Token Troubleshooting
 

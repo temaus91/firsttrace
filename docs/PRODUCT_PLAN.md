@@ -8,6 +8,20 @@ suspicious files, likely owner, related issues, and suggested next steps.
 This document is the working blueprint. The README explains the project at a
 high level; this plan describes what to build and in what order.
 
+## Current Validation Status
+
+- `firsttrace@0.1.2` is published on npm and is the preferred reusable install
+  artifact for new deployments.
+- The OCI backend has passed a clean npm-install acceptance flow: a fresh
+  operations directory installed the package, copied the packaged Terraform and
+  deployment files, provisioned a new OCI stack, synced runtime secrets into OCI
+  Vault, deployed an npm-based container image, and ran live Slack acceptance.
+- OCI live acceptance currently verifies health/build metadata, real Slack event
+  delivery, exactly one processing reply, exactly one final reply, duplicate
+  Slack event dedupe, worker completion, and OCI Queue redelivery.
+- The Vercel/Supabase backend remains supported, but it needs an equivalent live
+  acceptance pass before it should be considered equally validated.
+
 ## Product Thesis
 
 The first hour of debugging is usually evidence gathering, not coding. Engineers
@@ -580,11 +594,13 @@ GitHub/archive-only images to build with an empty placeholder.
 
 Limitations:
 
-- no live Slack workspace smoke test has run yet
 - no Slack command shortcut or modal flow
-- no Slack retry/deduplication table beyond the existing queue/job records
+- message and reaction triggers are explicit opt-ins because they require
+  broader Slack event subscriptions than the default app-mention path
 - channel repository routing is parsed and preserved, but repository subset
   filtering is deferred until multi-repo hosted deployment needs it
+- Vercel/Supabase still needs an equivalent live Slack acceptance pass; OCI has
+  passed the live Slack path through `hosted accept`
 
 The investigation engine should remain chat-agnostic so Teams, Discord, Linear,
 or other sources can be added later.
@@ -613,40 +629,42 @@ Current capability:
   `--live-slack-post`
 - renders a Markdown pass/fail report with job status, result component, owners,
   captured Slack reply summary, and external readiness checks
-- keeps live Slack, GitHub App, and Supabase checks tracked as blocked or
-  skipped until credentials and infrastructure are available
+- keeps external checks separated by backend so local readiness can pass without
+  implying that every live deployment target has passed acceptance
 
 Limitations:
 
-- no live Slack workspace smoke test has run yet
-- no live GitHub App clone/fetch smoke test has run yet
-- live Supabase queue processing is still blocked until `firsttrace_jobs` is
-  applied in a dedicated Supabase project
 - local readiness can pass while optional live checks remain blocked
+- `hosted verify` is a local readiness command; deployed backends should use
+  `hosted accept`
+- live Vercel/Supabase processing still needs a dedicated Supabase project with
+  all FirstTrace migrations applied before the Supabase path can be accepted
 
-### Phase 9B: Live Hosted Verification
+### Phase 9B: Live Hosted Verification - OCI Complete, Vercel/Supabase Pending
 
 Prove the full hosted workflow for a generic company setup:
 
 ```text
 configured Slack channel
-  -> Vercel receiver
-  -> Supabase-backed job
+  -> selected HTTPS receiver
+  -> selected queue backend
   -> worker
   -> GitHub private repo evidence
   -> configured investigator
   -> Slack thread reply
 ```
 
-This phase should verify:
+This phase is complete for the OCI backend through `firsttrace hosted accept`.
+The equivalent Vercel/Supabase live acceptance path is still pending. Each
+backend should verify:
 
 - a configured Slack channel can submit a bug report without CLI access
 - an unconfigured channel is ignored or receives a safe denial
 - the backend validates Slack signatures before enqueueing work
 - the worker can read a private GitHub repository through the configured provider
 - the configured investigator uses gathered evidence and citations
-- the Slack reply names likely files, likely owner or implementer context,
-  confidence, citations, and missing-info questions
+- the Slack reply names classification, likely owner, primary files, likely
+  cause, next checks, confidence, and compact evidence
 - no company-specific names, repositories, or channels are hardcoded
 
 ### Phase 9C: OCI Queue Runtime - Implemented
@@ -751,17 +769,26 @@ OCI account plan:
 
 Production validation plan:
 
+Completed for the current OCI path:
+
 1. Deploy OCI receiver and worker container with `FIRSTTRACE_QUEUE_PROVIDER=oci`.
 2. Point the configured Slack app Event Subscription request URL to the OCI URL.
-3. Run `firsttrace hosted accept --backend oci` against the API Gateway base
-   URL and require the health endpoint to report `FIRSTTRACE_BUILD_REF` as
-   `npm:firsttrace@<version>`.
-4. Confirm the harness posts a Slack seed message, sends the same signed Slack
+3. Run `firsttrace hosted accept --backend oci` against the API Gateway base URL.
+4. Require the health endpoint to report OCI as the queue provider and a
+   `FIRSTTRACE_BUILD_REF` based on the published npm package.
+5. Confirm the harness posts a Slack seed message, sends the same signed Slack
    event twice, observes one processing reply and one final reply, and sees the
    job reach `succeeded`.
-5. Confirm the acceptance-only temporary OCI Queue redelivery probe can claim,
+6. Confirm the acceptance-only temporary OCI Queue redelivery probe can claim,
    abandon, reclaim, and delete a message without interrupting the real worker.
-6. Compare investigation quality and latency against Vercel/Supabase.
+
+Still useful to repeat before releases:
+
+1. Rebuild the package image from the current published npm version.
+2. Rerun `firsttrace hosted accept --backend oci` against the deployed API
+   Gateway URL.
+3. Compare investigation quality and latency against the Vercel/Supabase path
+   once that path has its own live acceptance result.
 
 ### Phase 10: Read-Only Agentic Investigator
 
@@ -1010,12 +1037,10 @@ Current status:
 - unit tests cover Supabase row mapping, RPC claim behavior, status lookup, and
   receiver behavior through fakes
 - filesystem queue smoke tests pass
-- latest live read check reached Supabase but failed because `firsttrace_jobs`
-  was not present in the schema cache
-- latest hosted verification with `--queue supabase` reached Supabase but failed
-  during insert for the same missing `public.firsttrace_jobs` table
-- live Supabase queue processing still needs a dedicated FirstTrace Supabase
-  project or database with all FirstTrace migrations applied in order
+- no current Vercel/Supabase live acceptance result is recorded in this repo
+- live Supabase queue processing should be accepted only after a dedicated
+  FirstTrace Supabase project or database has all FirstTrace migrations applied
+  in order
 
 Prerequisites:
 
@@ -1050,7 +1075,7 @@ Expected result:
 - stored result includes deterministic investigation evidence
 - no service-role key or source snippets appear in logs or committed files
 
-### GitHub App Repository Live Test - Not Yet Complete
+### GitHub App Repository Live Test - Complete Through OCI Acceptance
 
 Current status:
 
@@ -1060,8 +1085,10 @@ Current status:
   env errors, token-safe git command construction, fake materialization, eval,
   and worker paths
 - local repo smoke tests still pass
-- live GitHub clone/fetch still needs a read-only GitHub App installation and a
-  local ignored GitHub config
+- OCI live acceptance has exercised the configured GitHub-backed investigation
+  path through the deployed worker
+- each new deployment should still verify its own GitHub App installation and
+  repository access
 
 Prerequisites:
 
@@ -1110,7 +1137,7 @@ Expected result:
 - investigation returns file and commit evidence from the GitHub repo
 - owner rules from the config are applied to returned files
 
-### Slack Hosted Event Live Test - Not Yet Complete
+### Slack Hosted Event Live Test - Complete For OCI, Pending For Vercel/Supabase
 
 Current status:
 
@@ -1121,8 +1148,9 @@ Current status:
   message behavior, reaction message fetch, and Slack thread reply rendering
 - worker tests cover posting a completed investigation through a fake Slack
   client
-- live Slack Events API delivery and `chat.postMessage` still need a real Slack
-  app installed in a configured channel
+- OCI live acceptance verifies real Slack Events delivery and `chat.postMessage`
+  through the deployed API Gateway and worker
+- Vercel/Supabase still needs an equivalent live hosted acceptance pass
 
 Prerequisites:
 
@@ -1131,8 +1159,8 @@ Prerequisites:
 - `.env.local` or hosted env values:
   - `SLACK_SIGNING_SECRET`
   - `SLACK_BOT_TOKEN`
-  - `FIRSTTRACE_QUEUE_PROVIDER=supabase` for hosted testing or `filesystem` for
-    local receiver testing
+  - `FIRSTTRACE_QUEUE_PROVIDER=oci` for OCI acceptance, `supabase` for the
+    Vercel/Supabase path, or `filesystem` for local receiver testing
   - `FIRSTTRACE_CONFIG_PATH=<config path>`
 - config with:
   - `chat.provider: slack`
@@ -1206,16 +1234,15 @@ features.
 
 ## Immediate Next Steps
 
-1. Validate Phase 10 read-only agentic investigator with
-   `FIRSTTRACE_MODEL_CHAT=<approved model>`.
-2. Rerun live hosted validation from configured Slack channel to agent-generated
-   Slack reply.
-3. Add the later `codex-cli` investigator adapter only after the built-in agent
-   path is validated, using the same `FIRSTTRACE_MODEL_CHAT` value.
-4. Keep the npm package deployment path validated with `firsttrace hosted
-   accept` for OCI and an equivalent live check for Vercel/Supabase.
-5. Add GitHub Issues, Vercel/Supabase, OCI, and work-item providers only through the
-   generic provider interfaces.
+1. Keep the npm package deployment path validated with `firsttrace hosted
+   accept --backend oci` before release or infrastructure changes.
+2. Add the equivalent live acceptance check for the Vercel/Supabase hosted path.
+3. Continue improving compact Slack reply quality with real reports and eval
+   cases, especially owner/file localization.
+4. Add the later `codex-cli` investigator adapter only after the built-in agent
+   path has clear quality gaps, using the same `FIRSTTRACE_MODEL_CHAT` value.
+5. Add GitHub Issues, Vercel/Supabase, OCI, and work-item providers only through
+   the generic provider interfaces.
 
 ## Open Questions
 

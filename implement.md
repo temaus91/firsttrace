@@ -22,7 +22,8 @@ investigation path.
 - `typescript` for typechecking
 - `vitest` for tests
 - `yaml` for config parsing
-- `openai` for the first AI provider
+- `openai` for direct OpenAI model calls
+- OCI SDKs for OCI Queue, Object Storage, Vault, and OCI Generative AI adapters
 - `zod` for structured AI output validation
 - `dotenv` for local `.env.local` development credentials
 - `@octokit/auth-app` for GitHub App installation tokens
@@ -55,7 +56,8 @@ Provider categories:
 - `GitProvider`: local git now; GitHub, GitLab, Bitbucket, internal git later.
 - `OwnershipProvider`: YAML/globs now; CODEOWNERS and org ownership graph later.
 - `IssueProvider`: issue exports now; GitHub Issues, Jira, OCI, Linear later.
-- `AiProvider`: OpenAI now; Claude, Google AI, local model providers later.
+- `AiProvider`: OpenAI and OCI GenAI now; Claude, Google AI, local model
+  providers later.
 - `ChatProvider`: CLI and Slack now; Teams, Discord, email, API later.
 - `QueueProvider`: in-memory/filesystem, Supabase, and OCI Queue now; Redis later.
 - `RuntimeProvider`: local process, Vercel/Supabase, and OCI package image now;
@@ -86,14 +88,17 @@ Completed:
 7. Phase 7: GitHub App repository provider.
 8. Phase 8: Slack chat provider and channel configuration.
 9. Phase 9A: hosted production-readiness runner.
+10. Phase 9B: live hosted acceptance for the OCI backend.
+11. Phase 9C: OCI Queue runtime with package-based container deployment.
+12. Phase 10: read-only agentic investigator and compact Slack replies.
+13. npm package distribution with `firsttrace`, `firsttrace-http`,
+    `firsttrace-worker`, and `firsttrace-oci-sync-secrets` binaries.
 
 Next:
 
-1. Phase 9B: live hosted production validation.
-   - Verify a configured Slack channel can submit a bug, the hosted backend can
-     queue it, the worker can inspect a configured private repository, AI can
-     reason over cited evidence, and Slack receives the result.
-2. Later: provider expansion.
+1. Add equivalent live acceptance for the Vercel/Supabase backend.
+2. Keep OCI acceptance running before releases or infrastructure changes.
+3. Later: provider expansion.
    - Additional git providers, chat providers, queue providers, runtime
      providers, and work-item providers.
 
@@ -122,14 +127,18 @@ Worker runtime details:
   user-facing message delivery adapter.
 - Worker execution must keep using the shared investigation path so CLI, eval,
   and worker behavior stay consistent.
-- Future Redis, Supabase, Vercel, and OCI queues should implement the same queue
+- Future Redis, Vercel-native, and other queues should implement the same queue
   provider boundary instead of changing investigation logic.
 - The Phase 6 Supabase queue stores jobs in `firsttrace_jobs` and claims work
   through the `firsttrace_claim_next_job()` RPC.
-- CLI queue selection uses `--queue filesystem|supabase`, with
+- The OCI queue adapter uses OCI Queue for work delivery and Object Storage for
+  dedupe, processing-message, final-reply, and job-status markers.
+- CLI queue selection uses `--queue filesystem|supabase|oci`, with
   `FIRSTTRACE_QUEUE_PROVIDER` as the env fallback.
 - Vercel-compatible API handlers live at `/api/investigations` and `/api/jobs`
   and must stay thin receiver/status layers over the queue interface.
+- The standalone HTTP runtime uses `firsttrace-http`; the long-running worker
+  uses `firsttrace-worker`.
 
 Message delivery details:
 
@@ -158,6 +167,9 @@ Slack provider details:
 - Reaction triggers fetch the reacted message text before enqueueing.
 - Worker result notification is a separate `JobResultNotifier` adapter and posts
   concise cited replies when `SLACK_BOT_TOKEN` is available.
+- Compact Slack replies should render classification, likely owner, primary
+  files, confidence, a one- or two-sentence likely cause, next checks, and up to
+  three compact evidence signals. Do not render verbose citation dumps in Slack.
 - Slack-specific code must stay under the chat provider boundary and must not
   leak into evidence ranking, AI reasoning, eval scoring, or queue providers.
 
@@ -171,6 +183,8 @@ Hosted workflow details:
   acknowledge events quickly before long-running investigation.
 - Vercel and Supabase belong in runtime and queue adapters. They must not leak
   into evidence ranking, AI reasoning, scoring, or result rendering.
+- OCI belongs in runtime, queue, object-storage, vault, and AI-provider adapters.
+  It must not leak into evidence ranking, scoring, or result rendering.
 - A complete hosted setup should work for any company by changing config and
   secrets only.
 - The Phase 9A hosted verifier command is `hosted verify`.
@@ -180,8 +194,26 @@ Hosted workflow details:
   `.firsttrace/hosted-verify/jobs`.
 - By default hosted verification uses a fake Slack notifier. `--live-slack-post`
   is the only mode that should call Slack Web API.
-- Phase 9A can pass with blocked optional live checks. Phase 9B is the first
-  phase that can mark real Slack/GitHub/Supabase hosted validation complete.
+- Deployed OCI validation uses `hosted accept --backend oci`; it posts a real
+  Slack seed message, sends a duplicate signed event, expects one processing
+  reply and one final reply, checks job completion, and probes OCI Queue
+  redelivery with a temporary queue.
+- Phase 9A can pass with blocked optional live checks. OCI live acceptance is
+  complete; the Vercel/Supabase backend still needs an equivalent live acceptance
+  result before it should be treated as equally validated.
+
+npm packaging details:
+
+- The published package name is `firsttrace`.
+- Runtime entrypoints are `firsttrace`, `firsttrace-http`, `firsttrace-worker`,
+  and `firsttrace-oci-sync-secrets`.
+- OCI deployments should install the npm package into a Docker/OCI image instead
+  of cloning the FirstTrace source repository at runtime.
+- `deploy/oci/Dockerfile.package` installs `firsttrace@<version>`, copies the
+  deployment config and optional repo snapshots, and exposes the standalone HTTP
+  receiver.
+- Secrets belong in the host secret manager, such as OCI Vault or Vercel
+  environment variables, not in Terraform state or committed config.
 
 Eval runner details:
 

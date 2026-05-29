@@ -145,6 +145,11 @@ import {
 } from "firsttrace";
 ```
 
+The npm-based OCI path has been validated from a clean operations directory:
+install the package, copy `node_modules/firsttrace/deploy/oci`, provision OCI
+with Terraform or Resource Manager, sync secrets into OCI Vault, deploy an image
+that installs `firsttrace@<version>`, and run `firsttrace hosted accept`.
+
 ## Local CLI
 
 Install the packaged CLI when you want to use FirstTrace from another project or
@@ -158,9 +163,9 @@ When working from this source checkout, run `npm install` first and use
 `npm run firsttrace -- ...` as the development equivalent of the `firsttrace`
 commands below.
 
-The CLI supports deterministic investigation, optional AI reasoning,
-evals, a local worker runtime, a local `submit` message adapter, hosted queue
-selection for Supabase-backed jobs, and GitHub App-backed repository
+The CLI supports deterministic investigation, optional AI reasoning, evals, a
+local worker runtime, a local `submit` message adapter, hosted queue selection
+for Supabase-backed and OCI-backed jobs, and GitHub App-backed repository
 materialization. The hosted API also includes a Slack Events receiver that can
 verify Slack signatures, gate events by configured channel and trigger, enqueue
 jobs, and post worker results back to Slack threads when `SLACK_BOT_TOKEN` is
@@ -414,7 +419,8 @@ firsttrace hosted accept \
 The acceptance command posts a real Slack seed message, sends the same signed
 Slack event to the deployed receiver twice, waits for exactly one processing
 reply and one final reply, checks the job status endpoint, and proves OCI Queue
-redelivery with a temporary queue.
+redelivery with a temporary queue. This is the production acceptance path for the
+OCI backend.
 
 ## Hosted Deployment Setup
 
@@ -644,8 +650,9 @@ firsttrace hosted accept \
 
 Next planned work:
 
-1. Run live acceptance regularly for OCI and the Vercel/Supabase hosted path.
-2. Add GitHub Issues or another issue provider through the generic provider boundary.
+1. Run OCI live acceptance before release or infrastructure changes.
+2. Add an equivalent live acceptance pass for the Vercel/Supabase hosted path.
+3. Add GitHub Issues or another issue provider through the generic provider boundary.
 
 ## License
 
