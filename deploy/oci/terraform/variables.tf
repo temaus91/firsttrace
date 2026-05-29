@@ -42,6 +42,18 @@ variable "runtime_secret_names" {
   default     = "FIRSTTRACE_RECEIVER_TOKEN,SLACK_SIGNING_SECRET,SLACK_BOT_TOKEN,GITHUB_APP_ID,GITHUB_APP_PRIVATE_KEY,GITHUB_APP_INSTALLATION_ID"
 }
 
+variable "enable_vault_secret_loading" {
+  description = "Load runtime secrets from OCI Vault. Set false for bootstrap health checks before secrets are created."
+  type        = bool
+  default     = true
+}
+
+variable "oci_vault_secrets_required" {
+  description = "Fail startup when a configured OCI Vault secret is missing. Set false only for bootstrap or UAT flows."
+  type        = bool
+  default     = true
+}
+
 variable "ai_provider" {
   description = "AI model provider. Use oci-genai for OCI-native model inference, or openai for direct OpenAI API use."
   type        = string

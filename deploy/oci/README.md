@@ -60,6 +60,11 @@ it does not require `OPENAI_API_KEY`.
    selected OCI region. If you use a dedicated OCI GenAI endpoint, also set
    `oci_genai_dedicated_endpoint_id`.
 
+   For the strict production path, leave `enable_vault_secret_loading = true`
+   and `oci_vault_secrets_required = true`. For a first bootstrap health check
+   before any secrets exist, temporarily set both to `false`, apply, verify
+   `/healthz`, then create secrets and turn them back on.
+
 4. Apply once. This creates the base infrastructure and OCIR repository.
 
 5. Build and push the package image to OCIR. Authenticate Docker to the
@@ -361,6 +366,8 @@ The default OCI stack uses `FIRSTTRACE_AI_PROVIDER=oci-genai` and
 `ai_model` in `terraform.tfvars` or Resource Manager to a model available in
 your selected OCI region. If you intentionally use direct OpenAI instead, set
 `ai_provider = "openai"` and add `OPENAI_API_KEY` to `runtime_secret_names`.
+When `oci_vault_secrets_required = false`, the runtime logs a warning for a
+missing Vault secret and keeps booting so infrastructure smoke tests can run.
 
 For migration from an existing secret file, opt in explicitly:
 

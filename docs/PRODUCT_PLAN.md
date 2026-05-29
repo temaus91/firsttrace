@@ -800,6 +800,10 @@ Target behavior:
   secrets in OCI Vault
 - the OCI runtime dynamic group has permission to call OCI Generative AI in the
   configured compartment
+- OCI Vault loading is explicit: production can fail closed on missing secrets,
+  while bootstrap/UAT can set `OCI_VAULT_SECRETS_REQUIRED=false` and
+  `enable_vault_secret_loading=false` to bring up `/healthz` before secrets are
+  created
 
 This is an alternative to direct OpenAI API keys, not a replacement for the
 future `codex-cli` adapter. `codex-cli` is an investigation harness/runtime;

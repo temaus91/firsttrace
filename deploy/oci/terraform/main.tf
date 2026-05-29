@@ -22,8 +22,9 @@ locals {
     OCI_QUEUE_POLL_TIMEOUT_SECONDS            = tostring(var.queue_poll_timeout_seconds)
     OCI_QUEUE_VISIBILITY_TIMEOUT_SECONDS      = tostring(var.queue_visibility_seconds)
     OCI_REGION                                = var.region
-    OCI_VAULT_ID                              = oci_kms_vault.secrets.id
-    OCI_VAULT_SECRET_NAMES                    = var.runtime_secret_names
+    OCI_VAULT_ID                              = var.enable_vault_secret_loading ? oci_kms_vault.secrets.id : ""
+    OCI_VAULT_SECRET_NAMES                    = var.enable_vault_secret_loading ? var.runtime_secret_names : ""
+    OCI_VAULT_SECRETS_REQUIRED                = tostring(var.oci_vault_secrets_required)
   }
 }
 
