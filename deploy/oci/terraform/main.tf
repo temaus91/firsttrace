@@ -6,9 +6,11 @@ locals {
   }
 
   runtime_enabled = trimspace(var.container_image_url) != ""
+  create_kms_key  = trimspace(var.existing_kms_key_ocid) == ""
+  kms_key_id      = local.create_kms_key ? oci_kms_key.secrets[0].id : trimspace(var.existing_kms_key_ocid)
   runtime_env = {
-    FIRSTTRACE_AI_ENABLED                    = tostring(var.ai_enabled)
-    FIRSTTRACE_AI_PROVIDER                   = var.ai_provider
+    FIRSTTRACE_AI_ENABLED                     = tostring(var.ai_enabled)
+    FIRSTTRACE_AI_PROVIDER                    = var.ai_provider
     FIRSTTRACE_CONFIG_PATH                    = var.config_path
     FIRSTTRACE_MODEL_CHAT                     = var.ai_model
     FIRSTTRACE_QUEUE_PROVIDER                 = "oci"
@@ -135,6 +137,8 @@ resource "oci_kms_vault" "secrets" {
 }
 
 resource "oci_kms_key" "secrets" {
+  count = local.create_kms_key ? 1 : 0
+
   compartment_id      = local.compartment_id
   display_name        = "${var.project_name}-secret-key"
   freeform_tags       = local.common_tags

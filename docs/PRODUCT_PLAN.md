@@ -815,6 +815,9 @@ Target behavior:
   while bootstrap/UAT can set `OCI_VAULT_SECRETS_REQUIRED=false` and
   `enable_vault_secret_loading=false` to bring up `/healthz` before secrets are
   created
+- OCI Terraform can either create the default Vault KMS key or reuse an existing
+  pre-approved key via `existing_kms_key_ocid`, with secret-sync outputs always
+  pointing at the effective key OCID
 
 This is an alternative to direct OpenAI API keys, not a replacement for the
 future `codex-cli` adapter. `codex-cli` is an investigation harness/runtime;

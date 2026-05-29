@@ -29,3 +29,7 @@ oci_genai_dedicated_endpoint_id = ""
 # verify /healthz, then create secrets and turn them back on.
 enable_vault_secret_loading = true
 oci_vault_secrets_required  = true
+
+# Leave empty to let Terraform create a new Vault KMS key. Set this to a
+# pre-approved OCI Vault key OCID when your tenancy requires reusing managed keys.
+existing_kms_key_ocid = ""

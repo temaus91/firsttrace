@@ -60,6 +60,7 @@ it does not require `OPENAI_API_KEY`.
    ai_model = openai.gpt-oss-120b
    ai_enabled = false
    container_image_url = ""
+   existing_kms_key_ocid = ""
    ```
 
    Pick an `ai_model` that is approved for your tenancy and available in the
@@ -71,6 +72,30 @@ it does not require `OPENAI_API_KEY`.
    and `oci_vault_secrets_required = true`. For a first bootstrap health check
    before any secrets exist, temporarily set both to `false`, apply, verify
    `/healthz`, then create secrets and turn them back on.
+
+   Leave `existing_kms_key_ocid = ""` to let Terraform create a new AES-256 key
+   in the FirstTrace Vault. If your tenancy requires a pre-approved key, set
+   `existing_kms_key_ocid` to that OCI Vault KMS key OCID; Terraform will reuse
+   it for secret sync outputs instead of creating `oci_kms_key.secrets`.
+
+   OCI KMS key creation depends on the Vault management endpoint. Terraform
+   reads that endpoint from `oci_kms_vault.secrets.management_endpoint` when it
+   creates the default key. To create a key manually instead, use the same
+   dependency explicitly:
+
+   ```bash
+   ENDPOINT="$(oci kms management vault get \
+     --vault-id "$OCI_VAULT_ID" \
+     --query 'data."management-endpoint"' \
+     --raw-output)"
+
+   oci kms management key create \
+     --endpoint "$ENDPOINT" \
+     --compartment-id "$OCI_COMPARTMENT_ID" \
+     --display-name firsttrace-secrets-key \
+     --key-shape '{"algorithm":"AES","length":32}' \
+     --protection-mode SOFTWARE
+   ```
 
 4. Apply once. This creates the base infrastructure and OCIR repository.
 

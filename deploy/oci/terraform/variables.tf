@@ -54,6 +54,17 @@ variable "oci_vault_secrets_required" {
   default     = true
 }
 
+variable "existing_kms_key_ocid" {
+  description = "Optional existing OCI Vault KMS key OCID for runtime secrets. Leave empty to create a new AES-256 key in the FirstTrace Vault."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = trimspace(var.existing_kms_key_ocid) == "" || startswith(trimspace(var.existing_kms_key_ocid), "ocid1.key.")
+    error_message = "existing_kms_key_ocid must be empty or an OCI KMS key OCID starting with ocid1.key."
+  }
+}
+
 variable "ai_provider" {
   description = "AI model provider. Use oci-genai for OCI-native model inference, or openai for direct OpenAI API use."
   type        = string

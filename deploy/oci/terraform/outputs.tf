@@ -50,7 +50,7 @@ output "vault_id" {
 
 output "vault_key_id" {
   description = "KMS key OCID used to encrypt runtime secrets."
-  value       = oci_kms_key.secrets.id
+  value       = local.kms_key_id
 }
 
 output "secret_sync_env" {
@@ -59,6 +59,6 @@ output "secret_sync_env" {
     OCI_COMPARTMENT_ID = local.compartment_id
     OCI_REGION         = var.region
     OCI_VAULT_ID       = oci_kms_vault.secrets.id
-    OCI_VAULT_KEY_ID   = oci_kms_key.secrets.id
+    OCI_VAULT_KEY_ID   = local.kms_key_id
   }
 }
