@@ -481,6 +481,8 @@ Current capability:
 
 - local `path` repository configs remain valid and default to `provider: local`
 - `provider: github` repository configs support owner, repo, and default branch
+- `provider: archive` repository configs support a generic `archive_command`
+  for internal git/archive systems that can materialize a local working tree
 - GitHub App credentials are read from environment secrets
 - local validation can use `GITHUB_TOKEN` when a user-scoped token already has read
   access to the target repository

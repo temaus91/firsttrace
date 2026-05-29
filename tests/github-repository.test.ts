@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { runEval } from "../src/eval/runner.js";
 import { executeInvestigation } from "../src/investigation-runner.js";
+import { CommandArchiveRepoMaterializer } from "../src/repositories/archive-materializer.js";
 import {
   GitHubAppRepoMaterializer,
   githubGitAuthHeader,
@@ -20,7 +21,7 @@ import {
 } from "../src/repositories/github-auth.js";
 import { FileSystemJobQueue } from "../src/worker/fs-queue.js";
 import { runWorkerOnce } from "../src/worker/runner.js";
-import type { FirstTraceConfig, GitHubRepoConfig } from "../src/types.js";
+import type { ArchiveRepoConfig, FirstTraceConfig, GitHubRepoConfig } from "../src/types.js";
 
 const tempDir = (name: string) =>
   path.join(tmpdir(), `firsttrace-github-${name}-${Date.now()}-${Math.random().toString(16).slice(2)}`);
@@ -66,6 +67,42 @@ const fakeMaterializer = (repoPath: string): GitHubRepoMaterializer => ({
       provider: "local",
       remoteRepo: repo.repo,
       sourceProvider: "github",
+    };
+  },
+});
+
+const archiveConfig = (): FirstTraceConfig => ({
+  configPath: "firsttrace.archive.local.yaml",
+  docs: ["README.md"],
+  issueExports: [],
+  owners: [{ owner: "@project-docs", path: "README.md" }],
+  repos: [
+    {
+      archiveCommand: "./scripts/download-app.sh",
+      commandCwd: "/tmp/firsttrace-config",
+      name: "example-app",
+      path: "/tmp/firsttrace-repos/example-app",
+      provider: "archive",
+      ref: "refs/heads/main",
+    },
+  ],
+  search: {
+    maxCommits: 8,
+    maxEvidencePerFile: 3,
+    maxFiles: 10,
+  },
+});
+
+const fakeArchiveMaterializer = (repoPath: string) => ({
+  async materialize(repo: ArchiveRepoConfig) {
+    expect(repo.archiveCommand).toBe("./scripts/download-app.sh");
+    expect(repo.ref).toBe("refs/heads/main");
+    return {
+      defaultBranch: repo.ref,
+      name: repo.name,
+      path: repoPath,
+      provider: "local" as const,
+      sourceProvider: "archive" as const,
     };
   },
 });
@@ -162,6 +199,53 @@ describe("GitHub repository provider", () => {
 
     expect(result.passed).toBe(true);
     expect(result.caseResults[0]?.deterministicResult.suspiciousFiles[0]?.repo).toBe("example-app");
+  });
+
+  it("prepares an archive repo into a local path usable by investigation search", async () => {
+    const repoPath = createSearchableRepo();
+    const result = await executeInvestigation({
+      config: archiveConfig(),
+      report: "README deployment plan is unclear",
+      repoPreparation: { archiveMaterializer: fakeArchiveMaterializer(repoPath) },
+    });
+
+    expect(result.likelyComponent).toBe("README.md");
+    expect(result.suspiciousFiles[0]?.repo).toBe("example-app");
+    expect(result.likelyOwners).toContain("@project-docs");
+  });
+
+  it("runs archive commands with target path and ref environment variables", async () => {
+    const commands: Array<{ args: string[]; cwd: string; envPath?: string; envRef?: string }> = [];
+    const targetPath = tempDir("archive-target");
+    const materializer = new CommandArchiveRepoMaterializer({
+      runner: (cwd, _command, args, options) => {
+        commands.push({
+          args,
+          cwd,
+          envPath: options?.env?.FIRSTTRACE_ARCHIVE_REPO_PATH,
+          envRef: options?.env?.FIRSTTRACE_ARCHIVE_REPO_REF,
+        });
+        mkdirSync(targetPath, { recursive: true });
+        writeFileSync(path.join(targetPath, "README.md"), "README deployment plan is unclear.\n");
+        return { stderr: "", stdout: "", status: 0 };
+      },
+    });
+
+    const repo = archiveConfig().repos[0] as ArchiveRepoConfig;
+    const searchable = await materializer.materialize({ ...repo, path: targetPath });
+
+    expect(commands).toEqual([
+      {
+        args: ["-lc", "./scripts/download-app.sh"],
+        cwd: "/tmp/firsttrace-config",
+        envPath: targetPath,
+        envRef: "refs/heads/main",
+      },
+    ]);
+    expect(searchable).toMatchObject({
+      path: targetPath,
+      sourceProvider: "archive",
+    });
   });
 
   it("runs worker jobs through a fake GitHub materializer", async () => {

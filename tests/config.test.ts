@@ -58,6 +58,35 @@ describe("config loading", () => {
     ]);
   });
 
+  it("accepts archive repo config without requiring the target path to exist yet", () => {
+    const dir = tempConfigDir("archive");
+    const configPath = path.join(dir, "firsttrace.config.yaml");
+    writeFileSync(
+      configPath,
+      [
+        "repos:",
+        "  - name: app",
+        "    provider: archive",
+        "    archive_command: ./scripts/download-app.sh",
+        "    ref: refs/heads/main",
+        "    path: repos/app",
+        "docs: []",
+        "issue_exports: []",
+      ].join("\n"),
+    );
+
+    expect(loadConfig(configPath).repos).toEqual([
+      {
+        archiveCommand: "./scripts/download-app.sh",
+        commandCwd: dir,
+        name: "app",
+        path: path.join(dir, "repos", "app"),
+        provider: "archive",
+        ref: "refs/heads/main",
+      },
+    ]);
+  });
+
   it("rejects invalid GitHub repo config with a clear error", () => {
     const dir = tempConfigDir("invalid-github");
     const configPath = path.join(dir, "firsttrace.config.yaml");

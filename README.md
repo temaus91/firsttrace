@@ -272,6 +272,23 @@ search:
   max_evidence_per_file: 3
 ```
 
+Archive-backed repo config for internal git systems:
+
+```yaml
+repos:
+  - name: example-app
+    provider: archive
+    archive_command: ./scripts/download-example-app.sh
+    ref: refs/heads/main
+    path: repos/example-app
+```
+
+The archive command runs from the config file directory and must populate
+`path`. FirstTrace passes `FIRSTTRACE_ARCHIVE_REPO_PATH`,
+`FIRSTTRACE_ARCHIVE_REPO_NAME`, and `FIRSTTRACE_ARCHIVE_REPO_REF` to the command
+so your script can download from an internal Git/archive system without adding a
+host-specific provider to FirstTrace core.
+
 GitHub repos should use a read-only GitHub App installation for hosted or shared
 production environments:
 

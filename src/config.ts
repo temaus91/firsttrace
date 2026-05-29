@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { parse } from "yaml";
-import type { ChatConfig, ChatTrigger, FirstTraceConfig, OwnerRule, RepoConfig, SearchConfig } from "./types.js";
+import type { ArchiveRepoConfig, ChatConfig, ChatTrigger, FirstTraceConfig, OwnerRule, RepoConfig, SearchConfig } from "./types.js";
 
 type RawConfig = {
   chat?: unknown;
@@ -61,8 +61,8 @@ const reposFrom = (value: unknown, configDir: string): RepoConfig[] => {
     }
 
     const provider = typeof item.provider === "string" ? item.provider : item.path !== undefined ? "local" : undefined;
-    if (provider !== "local" && provider !== "github") {
-      throw new Error(`repos[${index}].provider must be "local" or "github".`);
+    if (provider !== "local" && provider !== "github" && provider !== "archive") {
+      throw new Error(`repos[${index}].provider must be "local", "github", or "archive".`);
     }
 
     if (provider === "local") {
@@ -76,6 +76,26 @@ const reposFrom = (value: unknown, configDir: string): RepoConfig[] => {
       }
 
       return { name: item.name, path: repoPath, provider: "local" };
+    }
+
+    if (provider === "archive") {
+      if (typeof item.path !== "string" || !item.path.trim()) {
+        throw new Error(`repos[${index}].path must be a non-empty string for archive repos.`);
+      }
+      if (typeof item.archive_command !== "string" || !item.archive_command.trim()) {
+        throw new Error(`repos[${index}].archive_command must be a non-empty string for archive repos.`);
+      }
+      const repo: ArchiveRepoConfig = {
+        archiveCommand: item.archive_command,
+        commandCwd: configDir,
+        name: item.name,
+        path: path.resolve(configDir, item.path),
+        provider: "archive",
+      };
+      if (item.ref !== undefined) {
+        repo.ref = optionalString(item.ref, `repos[${index}].ref`);
+      }
+      return repo;
     }
 
     if (typeof item.owner !== "string" || !item.owner.trim()) {

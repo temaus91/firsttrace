@@ -286,7 +286,16 @@ export type GitHubRepoConfig = {
   repo: string;
 };
 
-export type RepoConfig = LocalRepoConfig | GitHubRepoConfig;
+export type ArchiveRepoConfig = {
+  archiveCommand: string;
+  commandCwd: string;
+  name: string;
+  path: string;
+  provider: "archive";
+  ref?: string;
+};
+
+export type RepoConfig = LocalRepoConfig | GitHubRepoConfig | ArchiveRepoConfig;
 
 export type SearchableRepoConfig = {
   defaultBranch?: string;
@@ -295,7 +304,7 @@ export type SearchableRepoConfig = {
   path: string;
   provider: "local";
   remoteRepo?: string;
-  sourceProvider: "local" | "github";
+  sourceProvider: "archive" | "local" | "github";
 };
 
 export type OwnerRule = {

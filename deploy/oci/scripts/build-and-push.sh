@@ -16,6 +16,7 @@ platform="${FIRSTTRACE_CONTAINER_PLATFORM:-}"
 dockerfile="${FIRSTTRACE_DOCKERFILE:-Dockerfile}"
 platform_args=()
 build_args=()
+container_runtime="${CONTAINER_RUNTIME:-docker}"
 
 if [[ -n "${platform}" ]]; then
   platform_args+=(--platform "${platform}")
@@ -37,11 +38,11 @@ if [[ -n "${FIRSTTRACE_BUILD_REF:-}" ]]; then
   build_args+=(--build-arg "FIRSTTRACE_BUILD_REF=${FIRSTTRACE_BUILD_REF}")
 fi
 
-if docker buildx build --help 2>/dev/null | grep -q -- "--push"; then
+if [[ "${container_runtime}" == "docker" ]] && docker buildx build --help 2>/dev/null | grep -q -- "--push"; then
   docker buildx build "${platform_args[@]}" -f "${dockerfile}" "${build_args[@]}" -t "${image}" --push .
 else
-  docker build "${platform_args[@]}" -f "${dockerfile}" "${build_args[@]}" -t "${image}" .
-  docker push "${image}"
+  "${container_runtime}" build "${platform_args[@]}" -f "${dockerfile}" "${build_args[@]}" -t "${image}" .
+  "${container_runtime}" push "${image}"
 fi
 
 echo "${image}"

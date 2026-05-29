@@ -18,6 +18,7 @@ export {
   syncOciVaultSecretsFromEnvFile,
   syncOciVaultSecretsFromPrompt,
 } from "./oci/sync-secrets.js";
+export { CommandArchiveRepoMaterializer } from "./repositories/archive-materializer.js";
 export { createFirstTraceHttpServer, startFirstTraceHttpServer } from "./runtime/http-server.js";
 export { runWorkerLoop, startWorkerLoopFromEnv } from "./runtime/worker-loop.js";
 export type * from "./types.js";

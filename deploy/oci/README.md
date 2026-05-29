@@ -40,6 +40,11 @@ it does not require `OPENAI_API_KEY`.
 
    Then create `firsttrace.oci.config.yaml` in that directory. It should contain
    your repositories, owners, and Slack channel config, but not secrets.
+   `provider: local` paths must exist inside the runtime image, so copy repo
+   snapshots into the build context and reference those container paths. For
+   internal source systems that are easier to export as archives, use
+   `provider: archive` and an `archive_command` that populates
+   `FIRSTTRACE_ARCHIVE_REPO_PATH`.
 
 2. Create a zip of `deploy/oci/terraform` and upload it as an OCI Resource
    Manager stack.
@@ -79,6 +84,7 @@ it does not require `OPENAI_API_KEY`.
    export FIRSTTRACE_CONFIG_FILE="firsttrace.oci.config.yaml"
    export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
    export FIRSTTRACE_CONTAINER_PLATFORM="linux/arm64" # Use linux/amd64 for CI.Standard.E4.Flex.
+   export CONTAINER_RUNTIME="docker" # Or podman.
 
    ./deploy/oci/scripts/build-and-push.sh <region-key> <namespace> firsttrace latest
    ```
@@ -111,6 +117,13 @@ it does not require `OPENAI_API_KEY`.
 
    This keeps the deployed runtime npm-based, but uses GitHub-hosted Docker
    Buildx instead of relying on Cloud Shell cross-architecture emulation.
+
+   Optional container smoke test before pushing:
+
+   ```bash
+   ${CONTAINER_RUNTIME:-docker} run --rm --entrypoint sh "$IMAGE" -lc \
+     'cd /app && firsttrace investigate --config firsttrace.config.yaml --report "smoke test" | head -40'
+   ```
 
 6. Export the secret-sync outputs from Terraform, then create runtime secrets in
    OCI Vault:
