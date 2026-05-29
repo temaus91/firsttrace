@@ -84,14 +84,18 @@ it does not require `OPENAI_API_KEY`.
    ai_provider = oci-genai
    ai_model = openai.gpt-oss-120b
    ai_enabled = false
+   oci_genai_region = ""
    container_image_url = ""
    existing_kms_key_ocid = ""
    ```
 
    Pick an `ai_model` that is approved for your tenancy and available in the
-   selected OCI region. If you use a dedicated OCI GenAI endpoint, also set
-   `oci_genai_dedicated_endpoint_id`. Leave `ai_enabled = false` until the Slack
-   channel config and data handling policy are approved for model calls.
+   selected OCI GenAI region. Your tenancy must be subscribed to that model
+   region. If your runtime region does not host that model, set
+   `oci_genai_region` to a subscribed OCI GenAI model region. If you use a
+   dedicated OCI GenAI endpoint, also set `oci_genai_dedicated_endpoint_id`.
+   Leave `ai_enabled = false` until the Slack channel config and data handling
+   policy are approved for model calls.
    FirstTrace also applies AI safety defaults at runtime:
    `FIRSTTRACE_AI_SAFETY_MODE=redact` redacts common credentials and skips AI
    for PHI, PCI, legal/dispute, and customer production-data markers. Set
@@ -448,8 +452,13 @@ npx firsttrace-oci-sync-secrets
 The default OCI stack uses `FIRSTTRACE_AI_PROVIDER=oci-genai` and
 `FIRSTTRACE_MODEL_CHAT` from Terraform variables, not Vault. Set
 `ai_model` in `terraform.tfvars` or Resource Manager to a model available in
-your selected OCI region. If you intentionally use direct OpenAI instead, set
-`ai_provider = "openai"` and add `OPENAI_API_KEY` to `runtime_secret_names`.
+your selected OCI GenAI region. If the runtime/queue region does not host that
+model, set `oci_genai_region` to a subscribed model region; Terraform passes it
+to the runtime as `OCI_GENAI_REGION` while keeping Queue, Object Storage, and
+Vault on `region`. Free tenancies can be limited to one subscribed region, so
+confirm the subscribed region list before enabling Slack AI. If you
+intentionally use direct OpenAI instead, set `ai_provider = "openai"` and add
+`OPENAI_API_KEY` to `runtime_secret_names`.
 Hosted Slack events only enqueue AI jobs when both Terraform `ai_enabled = true`
 and the Slack channel config has `ai_enabled: true`.
 When `oci_vault_secrets_required = false`, the runtime logs a warning for a

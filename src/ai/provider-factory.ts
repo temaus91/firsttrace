@@ -77,7 +77,7 @@ export const ociGenAiConfigFromEnv = (env: NodeJS.ProcessEnv = process.env): Oci
     dedicatedEndpointId: trimmedEnv(env, "OCI_GENAI_DEDICATED_ENDPOINT_ID"),
     endpoint: trimmedEnv(env, "OCI_GENAI_ENDPOINT"),
     maxTokens,
-    region: trimmedEnv(env, "OCI_REGION"),
+    region: trimmedEnv(env, "OCI_GENAI_REGION") || trimmedEnv(env, "OCI_REGION"),
   };
 };
 

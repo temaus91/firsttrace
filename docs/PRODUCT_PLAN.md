@@ -855,6 +855,9 @@ Target behavior:
 - `FIRSTTRACE_MODEL_CHAT` selects the model for all providers; OCI deployments
   can use an approved OCI model such as `openai.gpt-oss-120b` or a dedicated
   endpoint model
+- `OCI_GENAI_REGION` can target a subscribed OCI GenAI model region separately
+  from the runtime `OCI_REGION`, so Queue/Object Storage/Vault can stay local
+  while inference runs where the approved model is available
 - Slack-originated AI is double gated: the channel config must set
   `ai_enabled: true` and the hosted runtime must set `FIRSTTRACE_AI_ENABLED=true`
 - Terraform passes provider/model runtime config directly and keeps only real

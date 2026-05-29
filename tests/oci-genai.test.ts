@@ -137,6 +137,23 @@ describe("OCI GenAI provider", () => {
     ).rejects.toThrow("OCI GenAI did not return valid JSON");
   });
 
+  it("includes model and region when OCI GenAI chat fails", async () => {
+    const client = createOciGenAiJsonClient({
+      chatClient: {
+        async chat() {
+          throw new Error("fetch failed");
+        },
+      },
+      compartmentId: "ocid1.compartment.oc1..test",
+      model: "openai.gpt-oss-120b",
+      region: "us-sanjose-1",
+    });
+
+    await expect(
+      client.generateJson({ responseName: "test_response", systemPrompt: "System", userPrompt: "User" }),
+    ).rejects.toThrow("OCI GenAI chat failed for model openai.gpt-oss-120b in region us-sanjose-1: fetch failed");
+  });
+
   it("grounds one-shot evidence results from OCI GenAI", async () => {
     const provider = createOciGenAiProvider({
       jsonClient: {

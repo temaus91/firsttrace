@@ -184,8 +184,10 @@ investigation agent with `FIRSTTRACE_AI_PROVIDER=openai` and
 `FIRSTTRACE_MODEL_CHAT=gpt-5.4-mini`; set `FIRSTTRACE_INVESTIGATOR=evidence` to
 use the older one-shot evidence-bundle reasoner. `FIRSTTRACE_AI_PROVIDER=oci-genai`
 uses OCI Generative AI through OCI authentication instead of direct OpenAI API
-credentials. `FIRSTTRACE_INVESTIGATOR=codex-cli` is reserved for a later adapter
-and is not implemented yet.
+credentials. If your OCI runtime region does not host the selected GenAI model,
+set `OCI_GENAI_REGION` to a subscribed model region; Queue, Object Storage, and
+Vault can stay on `OCI_REGION`. `FIRSTTRACE_INVESTIGATOR=codex-cli` is reserved
+for a later adapter and is not implemented yet.
 
 ```bash
 firsttrace investigate \
@@ -209,7 +211,8 @@ OCI GenAI-assisted run:
 FIRSTTRACE_AI_PROVIDER=oci-genai \
 FIRSTTRACE_MODEL_CHAT=openai.gpt-oss-120b \
 OCI_COMPARTMENT_ID=ocid1.compartment.oc1..replace \
-OCI_REGION=us-chicago-1 \
+OCI_REGION=us-sanjose-1 \
+OCI_GENAI_REGION=us-chicago-1 \
 firsttrace investigate \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear" \

@@ -18,6 +18,7 @@ locals {
     FIRSTTRACE_WORKER_IDLE_DELAY_MS           = "1000"
     OCI_COMPARTMENT_ID                        = local.compartment_id
     OCI_GENAI_DEDICATED_ENDPOINT_ID           = var.oci_genai_dedicated_endpoint_id
+    OCI_GENAI_REGION                          = var.oci_genai_region
     OCI_OBJECTSTORAGE_BUCKET                  = oci_objectstorage_bucket.state.name
     OCI_OBJECTSTORAGE_NAMESPACE               = data.oci_objectstorage_namespace.current.namespace
     OCI_QUEUE_ID                              = oci_queue_queue.jobs.id

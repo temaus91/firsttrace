@@ -125,23 +125,32 @@ export const createOciGenAiJsonClient = ({
     model,
     async generateJson({ responseName, systemPrompt, userPrompt }) {
       const client = await getClient();
-      const response = await client.chat({
-        chatDetails: {
-          chatRequest: {
-            apiFormat: "GENERIC",
-            isStream: false,
-            maxTokens,
-            messages: [
-              textMessage("SYSTEM", `${systemPrompt}\n\nReturn only valid JSON.`),
-              textMessage("USER", userPrompt),
-            ],
-            responseFormat: { type: "JSON_OBJECT" },
-            temperature: 0,
-          } as OciGenAi.models.GenericChatRequest,
-          compartmentId,
-          servingMode,
-        },
-      });
+      let response: OciGenAi.responses.ChatResponse | ReadableStream<Uint8Array> | null;
+      try {
+        response = await client.chat({
+          chatDetails: {
+            chatRequest: {
+              apiFormat: "GENERIC",
+              isStream: false,
+              maxTokens,
+              messages: [
+                textMessage("SYSTEM", `${systemPrompt}\n\nReturn only valid JSON.`),
+                textMessage("USER", userPrompt),
+              ],
+              responseFormat: { type: "JSON_OBJECT" },
+              temperature: 0,
+            } as OciGenAi.models.GenericChatRequest,
+            compartmentId,
+            servingMode,
+          },
+        });
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        const configuredRegion = region ?? "default";
+        throw new Error(`OCI GenAI chat failed for model ${model} in region ${configuredRegion}: ${detail}`, {
+          cause: error,
+        });
+      }
 
       return parseJsonText(assistantTextFromChatResponse(response, responseName), responseName);
     },

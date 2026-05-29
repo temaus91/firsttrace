@@ -94,6 +94,12 @@ variable "oci_genai_dedicated_endpoint_id" {
   default     = ""
 }
 
+variable "oci_genai_region" {
+  description = "Optional OCI GenAI inference region. Leave empty to use the runtime region. Set this when queues/runtime run in a region that does not host the selected model."
+  type        = string
+  default     = ""
+}
+
 variable "vcn_cidr" {
   description = "CIDR for the runtime VCN."
   type        = string

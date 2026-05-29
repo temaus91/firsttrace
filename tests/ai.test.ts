@@ -5,6 +5,7 @@ import {
   aiModelProviderFromEnv,
   createAiProviderFromEnv,
   DEFAULT_OPENAI_MODEL,
+  ociGenAiConfigFromEnv,
   resolveChatModelFromEnv,
 } from "../src/ai/provider-factory.js";
 import { createInvestigatorProviderFromEnv } from "../src/investigator/provider-factory.js";
@@ -148,6 +149,25 @@ describe("AI provider support", () => {
     expect(agent.model).toBe("openai.gpt-oss-120b");
     expect(evidence.name).toBe("evidence");
     expect(evidence.model).toBe("openai.gpt-oss-120b");
+  });
+
+  it("allows OCI GenAI region to differ from the runtime region", () => {
+    expect(
+      ociGenAiConfigFromEnv({
+        FIRSTTRACE_AI_PROVIDER: "oci-genai",
+        OCI_COMPARTMENT_ID: "ocid1.compartment.oc1..test",
+        OCI_GENAI_REGION: "us-chicago-1",
+        OCI_REGION: "us-sanjose-1",
+      }).region,
+    ).toBe("us-chicago-1");
+
+    expect(
+      ociGenAiConfigFromEnv({
+        FIRSTTRACE_AI_PROVIDER: "oci-genai",
+        OCI_COMPARTMENT_ID: "ocid1.compartment.oc1..test",
+        OCI_REGION: "us-sanjose-1",
+      }).region,
+    ).toBe("us-sanjose-1");
   });
 
   it("fails clearly when OCI GenAI model or compartment config is missing", () => {
