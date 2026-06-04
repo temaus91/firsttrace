@@ -59,8 +59,8 @@ const usage = () => `Usage:
   firsttrace submit --queue filesystem --config firsttrace.config.yaml --report "bug text"
   firsttrace submit --queue supabase --config firsttrace.config.yaml --report "bug text" --ai
   firsttrace hosted verify --config examples/hosted.local.config.yaml --queue filesystem --report "bug text"
-  firsttrace hosted accept --backend oci --base-url https://example.com --config firsttrace.config.yaml --channel C0123456789 --report "bug text" --expected-build-ref npm:firsttrace@0.1.4
-  firsttrace hosted accept --backend vercel-supabase --base-url https://example.com --config firsttrace.config.yaml --channel C0123456789 --report "bug text" --expected-build-ref npm:firsttrace@0.1.4
+  firsttrace hosted accept --backend oci --base-url https://example.com --config firsttrace.config.yaml --channel C0123456789 --report "bug text" --expected-build-ref npm:firsttrace@0.1.5
+  firsttrace hosted accept --backend vercel-supabase --base-url https://example.com --config firsttrace.config.yaml --channel C0123456789 --report "bug text" --expected-build-ref npm:firsttrace@0.1.5
   firsttrace slack validate-manifest --profile slack-minimal --manifest slack-app-manifest.yaml
   firsttrace worker enqueue --queue filesystem --config firsttrace.config.yaml --report "bug text"
   firsttrace worker run --once --queue filesystem

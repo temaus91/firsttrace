@@ -3,9 +3,11 @@
 import { realpathSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { fileURLToPath } from "node:url";
+import { aiReadinessMetadataFromEnv } from "../ai/readiness.js";
 import { SlackWebApiClient } from "../chat/slack/client.js";
 import { handleSlackEventsRequest, loadSlackConfigFromPath, runtimeAiEnabledFromEnv } from "../chat/slack/events.js";
 import { createJobProgressNotifierFromEnv, createJobResultNotifierFromEnv } from "../chat/slack/notifier.js";
+import { loadConfig } from "../config.js";
 import { loadLocalEnv } from "../env.js";
 import { createOciSlackNotifiersFromEnv } from "../oci/notifiers.js";
 import { loadOciVaultSecretsIntoEnv } from "../oci/secrets.js";
@@ -62,6 +64,14 @@ const jsonResponse = (status: number, body: unknown) =>
     status,
   });
 
+const promptConfigForHealth = (configPath: string) => {
+  try {
+    return loadConfig(configPath).investigation.prompt;
+  } catch {
+    return undefined;
+  }
+};
+
 export const createFirstTraceHttpServer = async () => {
   const queueProvider = hostedQueueProvider();
   const queueSelection = createJobQueue(queueProvider);
@@ -85,6 +95,7 @@ export const createFirstTraceHttpServer = async () => {
           outgoing,
           jsonResponse(200, {
             buildRef: buildRef(),
+            ai: aiReadinessMetadataFromEnv(process.env, promptConfigForHealth(configPath)),
             ok: true,
             queueProvider: queueSelection.provider,
             slackReplyFormat: slackReplyFormat(),

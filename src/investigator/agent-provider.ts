@@ -3,8 +3,9 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { buildAiReasonerRequest } from "../ai/evidence.js";
 import { groundAiResult } from "../ai/grounding.js";
 import type { AiInvestigationResultPayload } from "../ai/schema.js";
-import { agentSystemPrompt, agentUserPrompt } from "./agent-prompts.js";
+import { agentBaseSystemPrompt } from "./agent-prompts.js";
 import { AgentFinalResponseSchema, AgentTurnResponseSchema } from "./agent-schemas.js";
+import { agentUserPrompt, buildSystemPrompt, type InvestigationPromptContract } from "./prompt-contract.js";
 import { createInvestigationToolset } from "./tools.js";
 import type {
   AiEvidenceItem,
@@ -37,6 +38,7 @@ export type AgentObservation = InvestigationToolResult & {
 export type AgentModelInput = {
   maxSteps: number;
   observations: AgentObservation[];
+  prompt?: InvestigationPromptContract;
   request: AiReasonerRequest;
   step: number;
 };
@@ -51,9 +53,10 @@ const createOpenAiAgentModelClient = (apiKey: string, model: string): AgentModel
 
   return {
     async next(input) {
+      const prompt = input.prompt ?? buildSystemPrompt({ basePrompt: agentBaseSystemPrompt });
       const response = await client.responses.parse({
         input: [
-          { role: "system", content: agentSystemPrompt },
+          { role: "system", content: prompt.systemPrompt },
           { role: "user", content: agentUserPrompt(input) },
         ],
         model,
@@ -91,9 +94,10 @@ const createOpenAiAgentModelClient = (apiKey: string, model: string): AgentModel
       };
     },
     async final(input) {
+      const prompt = input.prompt ?? buildSystemPrompt({ basePrompt: agentBaseSystemPrompt });
       const response = await client.responses.parse({
         input: [
-          { role: "system", content: agentSystemPrompt },
+          { role: "system", content: prompt.systemPrompt },
           { role: "user", content: agentUserPrompt(input, true) },
         ],
         model,
@@ -351,11 +355,14 @@ const groundedResult = (
   payload: AiInvestigationResultPayload,
   request: AiReasonerRequest,
   observations: AgentObservation[],
+  prompt: InvestigationPromptContract,
 ) =>
   groundAiResult(
     {
       ...payload,
       provider: "agent",
+      promptProfile: prompt.profile,
+      promptVersion: prompt.version,
     },
     requestWithObservations(request, observations),
   );
@@ -776,6 +783,7 @@ const finalPayload = async (
   payload: AiInvestigationResultPayload,
   baseRequest: AiReasonerRequest,
   observations: AgentObservation[],
+  prompt: InvestigationPromptContract,
 ) => {
   const normalizePayload = (result: AiInvestigationResultPayload) =>
     preferRetryStateOwner(preferAuthenticatedSurfaceOwner(result, baseRequest, observations), baseRequest, observations);
@@ -802,6 +810,7 @@ const finalPayload = async (
   const revised = await modelClient.final({
     maxSteps: MAX_AGENT_STEPS,
     observations,
+    prompt,
     request: requestWithObservations(baseRequest, observations),
     step: MAX_AGENT_STEPS,
   });
@@ -867,10 +876,12 @@ const enrichOwnerSignals = async (
 export type AgentInvestigatorOptions =
   | {
       apiKey: string;
+      env?: NodeJS.ProcessEnv;
       model: string;
       modelClient?: never;
     }
   | {
+      env?: NodeJS.ProcessEnv;
       model: string;
       modelClient: AgentModelClient;
       apiKey?: never;
@@ -886,14 +897,19 @@ export const createAgentInvestigator = (options: AgentInvestigatorOptions): Inve
       const baseRequest = buildAiReasonerRequest(result);
       const toolset = createInvestigationToolset(preparedConfig);
       const observations: AgentObservation[] = await seedJourneyObservations(baseRequest, toolset);
+      const prompt = buildSystemPrompt({
+        basePrompt: agentBaseSystemPrompt,
+        config: preparedConfig.investigation.prompt,
+        env: options.env,
+      });
 
       for (let step = 1; step <= MAX_AGENT_STEPS; step += 1) {
         const request = requestWithObservations(baseRequest, observations);
-        const turn = await modelClient.next({ maxSteps: MAX_AGENT_STEPS, observations, request, step });
+        const turn = await modelClient.next({ maxSteps: MAX_AGENT_STEPS, observations, prompt, request, step });
         if (turn.type === "final") {
-          const correctedPayload = await finalPayload(modelClient, turn.result, baseRequest, observations);
+          const correctedPayload = await finalPayload(modelClient, turn.result, baseRequest, observations, prompt);
           const payload = await enrichOwnerSignals(correctedPayload, observations, toolset);
-          return groundedResult(payload, baseRequest, observations);
+          return groundedResult(payload, baseRequest, observations, prompt);
         }
 
         let toolResult: InvestigationToolResult;
@@ -913,12 +929,13 @@ export const createAgentInvestigator = (options: AgentInvestigatorOptions): Inve
       const resultPayload = await modelClient.final({
         maxSteps: MAX_AGENT_STEPS,
         observations,
+        prompt,
         request,
         step: MAX_AGENT_STEPS,
       });
-      const correctedPayload = await finalPayload(modelClient, resultPayload, baseRequest, observations);
+      const correctedPayload = await finalPayload(modelClient, resultPayload, baseRequest, observations, prompt);
       const payload = await enrichOwnerSignals(correctedPayload, observations, toolset);
-      return groundedResult(payload, baseRequest, observations);
+      return groundedResult(payload, baseRequest, observations, prompt);
     },
   };
 };

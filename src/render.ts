@@ -35,8 +35,17 @@ const renderAiReasoning = (ai: AiInvestigationResult) =>
     "AI Reasoning",
     [
       `Provider: \`${ai.provider}\``,
+      ai.promptVersion ? `Prompt: \`${ai.promptVersion}\` / \`${ai.promptProfile ?? "default"}\`` : "",
       `Confidence: \`${ai.confidence.toFixed(2)}\``,
+      ai.confidenceRationale ? `Confidence rationale: ${ai.confidenceRationale}` : "",
+      ai.bugLikelihood ? `Bug likelihood: \`${ai.bugLikelihood}\`` : "",
+      ai.userImpact ? `User impact: ${ai.userImpact}` : "",
       `Likely component: \`${ai.likelyComponent}\``,
+      ai.firstContact ? `First contact: \`${ai.firstContact}\`` : "",
+      ai.relatedChange ? `Related change: ${ai.relatedChange}` : "",
+      ai.quality
+        ? `Quality: exact_file=\`${ai.quality.foundExactFile}\`, owner=\`${ai.quality.foundOwner}\`, related_commit=\`${ai.quality.foundRelatedCommit}\`, citation_coverage=\`${ai.quality.citationCoverage.toFixed(2)}\`, actionability=\`${ai.quality.actionability.toFixed(2)}\``
+        : "",
       `Likely owners: ${
         ai.likelyOwners.length ? ai.likelyOwners.map((owner) => `\`${owner}\``).join(", ") : empty
       }`,

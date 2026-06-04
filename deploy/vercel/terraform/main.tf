@@ -6,7 +6,7 @@ locals {
   runtime_environment = merge(
     {
       FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER = "false"
-      FIRSTTRACE_BUILD_REF                      = "npm:firsttrace@0.1.4"
+      FIRSTTRACE_BUILD_REF                      = "npm:firsttrace@0.1.5"
       FIRSTTRACE_CONFIG_PATH                    = "firsttrace.config.yaml"
       FIRSTTRACE_QUEUE_PROVIDER                 = "supabase"
       FIRSTTRACE_SLACK_REPLY_FORMAT             = "compact-v1"

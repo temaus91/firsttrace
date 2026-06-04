@@ -1,6 +1,7 @@
 import { createOciGenAiJsonClient, type OciGenAiJsonClient } from "../ai/oci-genai-json-client.js";
-import { agentSystemPrompt, agentUserPrompt } from "./agent-prompts.js";
-import { AgentFinalResponseSchema, AgentTurnResponseSchema } from "./agent-schemas.js";
+import { agentBaseSystemPrompt } from "./agent-prompts.js";
+import { normalizeAgentFinalResponse, normalizeAgentTurnResponse } from "./agent-schemas.js";
+import { agentUserPrompt, buildSystemPrompt } from "./prompt-contract.js";
 import type { AgentModelClient, AgentTurn } from "./agent-provider.js";
 
 export type OciGenAiAgentClientOptions = {
@@ -8,7 +9,7 @@ export type OciGenAiAgentClientOptions = {
 };
 
 const turnFromPayload = (payload: unknown): AgentTurn => {
-  const parsed = AgentTurnResponseSchema.parse(payload);
+  const parsed = normalizeAgentTurnResponse(payload);
   if (parsed.type === "final") {
     if (!parsed.result) {
       throw new Error("OCI GenAI returned a final agent turn without result.");
@@ -40,19 +41,21 @@ const turnFromPayload = (payload: unknown): AgentTurn => {
 
 export const createOciGenAiAgentModelClient = ({ jsonClient }: OciGenAiAgentClientOptions): AgentModelClient => ({
   async next(input) {
+    const prompt = input.prompt ?? buildSystemPrompt({ basePrompt: agentBaseSystemPrompt });
     return turnFromPayload(
       await jsonClient.generateJson({
         responseName: "firsttrace_agent_turn",
-        systemPrompt: agentSystemPrompt,
+        systemPrompt: prompt.systemPrompt,
         userPrompt: agentUserPrompt(input),
       }),
     );
   },
   async final(input) {
-    const payload = AgentFinalResponseSchema.parse(
+    const prompt = input.prompt ?? buildSystemPrompt({ basePrompt: agentBaseSystemPrompt });
+    const payload = normalizeAgentFinalResponse(
       await jsonClient.generateJson({
         responseName: "firsttrace_agent_final",
-        systemPrompt: agentSystemPrompt,
+        systemPrompt: prompt.systemPrompt,
         userPrompt: agentUserPrompt(input, true),
       }),
     );

@@ -37,3 +37,8 @@ oci_vault_secrets_required  = true
 # Leave empty to let Terraform create a new Vault KMS key. Set this to a
 # pre-approved OCI Vault key OCID when your tenancy requires reusing managed keys.
 existing_kms_key_ocid = ""
+
+# Runtime Vault secret profile. Use bootstrap before secrets exist,
+# slack-minimal for Slack-only/archive setups, github-repos for GitHub App
+# repository access, or direct-openai when ai_provider = "openai".
+secret_profile = "github-repos"

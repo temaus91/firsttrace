@@ -19,6 +19,12 @@ const preparedConfig = (repo: SearchableRepoConfig): PreparedFirstTraceConfig =>
   chat: undefined,
   configPath: "firsttrace.config.yaml",
   docs: ["README.md", "docs"],
+  investigation: {
+    prompt: {
+      overlayFiles: [],
+      profile: "default",
+    },
+  },
   issueExports: [],
   owners: [{ owner: "@docs", path: "docs/**" }],
   repos: [repo],

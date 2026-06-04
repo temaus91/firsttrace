@@ -39,7 +39,7 @@ it does not require `OPENAI_API_KEY`.
    mkdir firsttrace-oci
    cd firsttrace-oci
    npm init -y
-   npm install firsttrace@0.1.4
+   npm install firsttrace@0.1.5
    cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
    ```
 
@@ -138,8 +138,8 @@ it does not require `OPENAI_API_KEY`.
 
    ```bash
    export FIRSTTRACE_DOCKERFILE="deploy/oci/Dockerfile.package"
-   export FIRSTTRACE_PACKAGE_SPEC="firsttrace@0.1.4"
-   export FIRSTTRACE_BUILD_REF="npm:firsttrace@0.1.4"
+   export FIRSTTRACE_PACKAGE_SPEC="firsttrace@0.1.5"
+   export FIRSTTRACE_BUILD_REF="npm:firsttrace@0.1.5"
    export FIRSTTRACE_CONFIG_FILE="firsttrace.oci.config.yaml"
    export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
    export FIRSTTRACE_REPOS_DIR="repos" # Optional local repo snapshots copied to /app/repos.
@@ -235,7 +235,7 @@ it does not require `OPENAI_API_KEY`.
      --config firsttrace.oci.config.yaml \
      --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
      --report "README deployment plan is unclear" \
-     --expected-build-ref "npm:firsttrace@0.1.4"
+     --expected-build-ref "npm:firsttrace@0.1.5"
    ```
 
    This posts a real Slack seed message, sends the same signed event to OCI
@@ -257,7 +257,7 @@ export COMPARTMENT_OCID="<compartment_ocid>"
 export OCI_REGION="<oci-region>"        # Example: us-sanjose-1
 export OCI_REGION_KEY="<ocir-region-key>" # Example: sjc
 export PROJECT_NAME="firsttrace"
-export FIRSTTRACE_VERSION="0.1.4"
+export FIRSTTRACE_VERSION="0.1.5"
 export IMAGE_TAG="${FIRSTTRACE_VERSION}"
 ```
 
@@ -274,6 +274,20 @@ cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
 Upload or create your deployment config as `~/firsttrace/firsttrace.config.yaml`.
 It should contain your `repos`, `owners`, and Slack channel configuration, but
 not secrets.
+
+If you need domain-specific investigation behavior, add an optional prompt
+overlay to the same config:
+
+```yaml
+investigation:
+  prompt:
+    profile: enterprise-triage
+    overlay_files:
+      - ./prompts/company-investigation.md
+```
+
+Prompt overlays are additive and cannot remove FirstTrace safety, citation, or
+output-schema rules.
 
 Create the base OCI infrastructure. Keep `container_image_url` empty for the
 first apply because the OCIR repository must exist before the image can be
@@ -464,6 +478,19 @@ and the Slack channel config has `ai_enabled: true`.
 When `oci_vault_secrets_required = false`, the runtime logs a warning for a
 missing Vault secret and keeps booting so infrastructure smoke tests can run.
 
+Terraform supports named Vault secret profiles:
+
+```text
+secret_profile = "bootstrap"      # no runtime secrets, for first health checks
+secret_profile = "slack-minimal"  # receiver token + Slack signing/bot secrets
+secret_profile = "github-repos"   # Slack + GitHub App repository materialization
+secret_profile = "direct-openai"  # github-repos + OPENAI_API_KEY
+```
+
+Leave `runtime_secret_names` empty to use the selected profile. Set
+`runtime_secret_names` only when your deployment needs a custom comma-separated
+Vault secret list.
+
 For migration from an existing secret file, opt in explicitly:
 
 ```bash
@@ -594,7 +621,7 @@ for example `~/.oci/config` plus `OCI_CONFIG_PROFILE`.
 
 ## Required Runtime Secrets
 
-These are loaded from OCI Vault at startup when present:
+By default, `secret_profile = "github-repos"` loads these from OCI Vault:
 
 ```text
 FIRSTTRACE_RECEIVER_TOKEN
@@ -608,8 +635,9 @@ GITHUB_APP_INSTALLATION_ID
 Provider/runtime tuning values such as `FIRSTTRACE_AI_PROVIDER` and
 `FIRSTTRACE_MODEL_CHAT` are supplied as Terraform container environment
 variables by default. Add optional values such as `FIRSTTRACE_INVESTIGATOR` or
-direct-OpenAI `OPENAI_API_KEY` to `runtime_secret_names` only when you also
-create matching Vault secrets.
+direct-OpenAI `OPENAI_API_KEY` by selecting `secret_profile = "direct-openai"`
+or by setting `runtime_secret_names` only when you also create matching Vault
+secrets.
 
 Use the GitHub App values for production repositories. `GITHUB_TOKEN` is only a
 fallback for local or personal deployments; add it to `runtime_secret_names` only

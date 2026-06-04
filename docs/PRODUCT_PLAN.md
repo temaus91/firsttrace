@@ -10,7 +10,7 @@ high level; this plan describes what to build and in what order.
 
 ## Current Validation Status
 
-- `firsttrace@0.1.4` is published on npm and is the preferred reusable install
+- `firsttrace@0.1.5` is published on npm and is the preferred reusable install
   artifact for new deployments.
 - The OCI backend has passed a clean npm-install acceptance flow: a fresh
   operations directory installed the package, copied the packaged Terraform and
@@ -876,6 +876,57 @@ This is an alternative to direct OpenAI API keys, not a replacement for the
 future `codex-cli` adapter. `codex-cli` is an investigation harness/runtime;
 OCI GenAI is the model service the existing FirstTrace agent can call.
 
+### Phase 10C: Provider-Neutral Prompt Contract And Quality Metadata
+
+FirstTrace should keep investigation quality behavior above provider-specific
+transport code. OpenAI, OCI GenAI, and future model providers should use the
+same built-in prompt contract by default, with provider-specific code limited to
+API calls, response normalization, JSON parsing, and retry/error handling.
+
+Implemented direction for the package runtime:
+
+- one versioned default investigation prompt contract, currently
+  `firsttrace-agent-v1`
+- optional additive prompt overlays through `investigation.prompt.overlay_files`
+  or `FIRSTTRACE_PROMPT_OVERLAY_FILES`, so npm users can customize domain
+  handoff behavior without forking
+- prompt overlays cannot remove required safety, citation grounding, or output
+  schema rules
+- OCI GenAI response handling normalizes provider-wrapped final payloads before
+  strict schema parsing and preserves warnings when coercion happens
+- AI results can include mixed-audience handoff fields such as `bugLikelihood`,
+  `userImpact`, `firstContact`, `relatedChange`, and `confidenceRationale`
+- grounded results include computed quality metadata: exact file found, owner
+  found, related commit found, citation coverage, and actionability
+- `/healthz` exposes non-secret AI readiness metadata: AI gate status, provider,
+  model, investigator, safety mode, dry-run mode, prompt profile/version, and
+  overlay posture
+- compact Slack replies remain short and avoid verbose citation dumps while
+  showing user impact and short quality warnings when useful
+
+Example target handoff for mixed PM/engineering audiences:
+
+```text
+Classification: likely bug
+Likely owner: Artem Tarasenko
+Primary files: app/page.tsx, lib/app-context.tsx
+AI confidence: 0.91
+User impact: Artist users briefly see an empty profile surface after login.
+
+Likely cause
+This is an authenticated artist-profile journey, not a public detail-route issue. The strongest lead is the app shell/bootstrap path that delays profile rendering.
+
+Next checks
+1. Inspect app/page.tsx first.
+2. Route the first pass to Artem Tarasenko.
+3. Confirm whether the blank screen is on the authenticated profile tab.
+
+Evidence
+1. Artem Tarasenko - commit 8ce926d, 2026-04-21: Recent routing/bootstrap stabilization touched the artist profile path.
+2. app/page.tsx: Entry shell decides when the authenticated profile tab is shown.
+3. lib/app-context.tsx: Defines auth/app bootstrap readiness flags.
+```
+
 ### Later: Codex CLI Investigator Adapter
 
 After the built-in FirstTrace agent is working, add `codex-cli` as an optional
@@ -924,7 +975,7 @@ The preferred customer installation path is an npm package plus a small
 operations wrapper:
 
 ```bash
-npm install firsttrace@0.1.4
+npm install firsttrace@0.1.5
 ```
 
 Vercel/Supabase deployments should copy `node_modules/firsttrace/deploy/vercel`
@@ -1246,18 +1297,28 @@ Apache License 2.0 allows enterprise use while preserving room for a commercial
 offering around hosting, integrations, support, and proprietary enterprise
 features.
 
-## Immediate Next Steps
+## Future TODOs
 
-1. Deploy the npm-wrapper Vercel/Supabase backend and run `firsttrace hosted
-   accept --backend vercel-supabase`.
-2. Keep the OCI package deployment path validated with `firsttrace hosted accept
-   --backend oci` before OCI release or infrastructure changes.
-3. Continue improving compact Slack reply quality with real reports and eval
-   cases, especially owner/file localization.
-4. Add the later `codex-cli` investigator adapter only after the built-in agent
+The following items are intentionally deferred from the prompt-contract and
+quality-metadata release:
+
+1. Parse CODEOWNERS and optional `firsttrace.owners.yaml` automatically, then
+   map team aliases to Slack users, emails, Jira components, or escalation
+   groups.
+2. Improve route/navigation searches for UI bugs by expanding reports into
+   route templates, link components, `navigate(` calls, query params,
+   `encodeURIComponent`, and existing path-helper usage.
+3. Add configurable retention and data-minimization controls for stored reports
+   and results across OCI Object Storage, Supabase, and filesystem queues.
+4. Add live Jira, GitHub Issues, OCI work-item, and fixture issue-provider
+   adapters behind one generic issue-provider interface.
+5. Add a generic read-only `provider: git` clone/fetch adapter or an external
+   provider extension API for enterprise-specific repository sources.
+6. Add the later `codex-cli` investigator adapter only after the built-in agent
    path has clear quality gaps, using the same `FIRSTTRACE_MODEL_CHAT` value.
-5. Add GitHub Issues, Vercel/Supabase, OCI, and work-item providers only through
-   the generic provider interfaces.
+7. Add stricter release gates that fail or quarantine broad low-quality answers
+   when `quality.foundExactFile`, `quality.foundOwner`, or
+   `quality.foundRelatedCommit` are missing for known historical-bug eval cases.
 
 ## Open Questions
 

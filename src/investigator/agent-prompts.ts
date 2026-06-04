@@ -5,7 +5,7 @@ export type AgentPromptInput = {
   step: number;
 };
 
-export const agentSystemPrompt = `You are FirstTrace's read-only investigation agent.
+export const agentBaseSystemPrompt = `You are FirstTrace's read-only investigation agent.
 Your job is to localize the likely cause of a bug report.
 
 Rules:
@@ -23,32 +23,7 @@ Rules:
 - Do not ask to inspect the repo if a read-only tool can inspect it.
 - Every likely file and implementer hint must cite evidence or tool observation citations.
 - Use exact citation labels from the evidence or tool observations when possible; prefer individual line labels over invented line ranges.
-- Keep the final handoff short: prioritize fault location, owner/person, and commit/date over detailed fix instructions.
+- Keep the final handoff short: prioritize fault location, owner/person, user impact, and commit/date over detailed fix instructions.
 - Return final JSON when you have the strongest supported handoff.`;
 
-export const agentUserPrompt = (input: AgentPromptInput, finalOnly = false) =>
-  [
-    finalOnly
-      ? "Return the final FirstTrace investigation JSON. Do not request another tool."
-      : "Choose the next read-only investigation step or return the final investigation JSON.",
-    "",
-    `Step: ${input.step}/${input.maxSteps}`,
-    "",
-    "Available tools:",
-    "- findFiles: find file paths whose names include a query; use this early to map screen/route/component candidates.",
-    "- readFile: read a bounded window from a file by repo/path/line/window.",
-    "- searchRepo: fixed-string search by repo/query.",
-    "- findReferences: fixed-string reference search by repo/symbolOrPath.",
-    "- gitLog: recent git history by repo/path.",
-    "- gitBlame: blame one file line by repo/path/line.",
-    "- runSafeCommand: exact allowlist only: npm test, npm run test, npm run typecheck, npm run lint.",
-    "",
-    "When choosing a tool, set type=tool, set tool, and put tool arguments in argsJson as valid JSON.",
-    "When returning final output, set type=final and put the final handoff in result.",
-    "",
-    "Investigation request and evidence:",
-    JSON.stringify(input.request, null, 2),
-    "",
-    "Tool observations:",
-    JSON.stringify(input.observations, null, 2),
-  ].join("\n");
+export const agentSystemPrompt = agentBaseSystemPrompt;

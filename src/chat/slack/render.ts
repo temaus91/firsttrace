@@ -60,7 +60,11 @@ const humanImplementerName = (item: AiImplementerHint) => {
 };
 
 const likelyOwners = (result: InvestigationResult) => {
-  const humanOwners = unique(result.ai?.implementerHints.map(humanImplementerName).filter((name): name is string => Boolean(name)) ?? []);
+  const firstContact = result.ai?.firstContact && !isTeamAlias(result.ai.firstContact) ? [result.ai.firstContact] : [];
+  const humanOwners = unique([
+    ...firstContact,
+    ...(result.ai?.implementerHints.map(humanImplementerName).filter((name): name is string => Boolean(name)) ?? []),
+  ]);
   if (humanOwners.length) return humanOwners.slice(0, 2);
 
   return unique([
@@ -112,6 +116,7 @@ const suspiciousFileSignalText = (item: EvidenceItem) =>
 
 const evidenceSignals = (result: InvestigationResult) => {
   const signals = [
+    result.ai?.relatedChange ? `Related change: ${compactReason(result.ai.relatedChange)}` : undefined,
     ...(result.ai?.implementerHints ?? [])
       .filter((item) => Boolean(humanImplementerName(item) || item.commit))
       .slice(0, 2)
@@ -121,19 +126,39 @@ const evidenceSignals = (result: InvestigationResult) => {
     ...result.suspiciousFiles.slice(0, 2).map(suspiciousFileSignalText),
   ];
 
-  return unique(signals)
+  return unique(signals.filter((signal): signal is string => Boolean(signal)))
     .slice(0, 3)
     .map((signal, index) => `${index + 1}. ${signal}`)
     .join("\n");
 };
 
-export const renderSlackInvestigationReply = (result: InvestigationResult) =>
-  [
+const qualityWarnings = (result: InvestigationResult) => {
+  const quality = result.ai?.quality;
+  if (!quality) return [];
+  const warnings: string[] = [];
+  if (!quality.foundExactFile) warnings.push("AI quality: no exact grounded file lead.");
+  if (!quality.foundOwner) warnings.push("AI quality: no evidence-backed human owner.");
+  if (!quality.foundRelatedCommit) warnings.push("AI quality: no evidence-backed related commit.");
+  return warnings.slice(0, 2);
+};
+
+const slackWarnings = (result: InvestigationResult) =>
+  unique([
+    ...result.warnings,
+    ...(result.ai?.warnings.filter((warning) => /normalized/i.test(warning)) ?? []),
+    ...qualityWarnings(result),
+  ]).slice(0, 4);
+
+export const renderSlackInvestigationReply = (result: InvestigationResult) => {
+  const warnings = slackWarnings(result);
+
+  return [
     "*FirstTrace investigation*",
     `Classification: \`${classificationLabel(result.classification)}\``,
     `Likely owner: \`${textList(likelyOwners(result))}\``,
     `Primary files: \`${textList(primaryFiles(result))}\``,
     result.ai ? `AI confidence: \`${result.ai.confidence.toFixed(2)}\`` : "",
+    result.ai?.userImpact ? `User impact: ${sentenceLimit(result.ai.userImpact, 1)}` : undefined,
     "",
     "*Likely cause*",
     result.ai?.explanation ? sentenceLimit(result.ai.explanation, 2) : sentenceLimit(result.likelyComponent, 2) || empty,
@@ -143,7 +168,12 @@ export const renderSlackInvestigationReply = (result: InvestigationResult) =>
     "",
     "*Evidence*",
     evidenceSignals(result) || empty,
-    result.warnings.length ? `\n*Warnings*\n${result.warnings.map((warning) => `- ${warning}`).join("\n")}` : undefined,
+    warnings.length
+      ? `\n*Warnings*\n${warnings
+          .map((warning) => `- ${warning}`)
+          .join("\n")}`
+      : undefined,
   ]
     .filter((line) => line !== undefined)
     .join("\n");
+};

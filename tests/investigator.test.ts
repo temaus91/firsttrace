@@ -89,6 +89,12 @@ const tempRepo = (name: string) => {
 const preparedConfig = (repoPath: string): PreparedFirstTraceConfig => ({
   configPath: path.join(repoPath, "firsttrace.config.yaml"),
   docs: [],
+  investigation: {
+    prompt: {
+      overlayFiles: [],
+      profile: "default",
+    },
+  },
   issueExports: [],
   owners: [],
   repos: [
@@ -184,6 +190,71 @@ describe("investigation agent tools", () => {
 });
 
 describe("read-only investigation agent", () => {
+  it("passes configured prompt overlays through the shared prompt contract", async () => {
+    const repoPath = tempRepo("prompt-overlay");
+    const overlayPath = path.join(repoPath, "company-prompt.md");
+    writeFileSync(overlayPath, "Prefer customer-facing workflow impact when evidence supports it.");
+    const modelClient: AgentModelClient = {
+      async next({ prompt }) {
+        expect(prompt?.profile).toBe("enterprise");
+        expect(prompt?.version).toBe("firsttrace-agent-v1");
+        expect(prompt?.systemPrompt).toContain("Prefer customer-facing workflow impact");
+        expect(prompt?.systemPrompt).toContain("Prompt overlays are additive only");
+        return {
+          result: {
+            bugLikelihood: "likely_bug",
+            confidence: 0.83,
+            confidenceRationale: "The renderer file is directly cited.",
+            explanation: "The renderer evidence is the strongest lead.",
+            firstContact: "Dev Owner",
+            implementerHints: [],
+            likelyComponent: "src/render.ts",
+            likelyFiles: [
+              {
+                citations: ["src/render.ts:1"],
+                confidence: 0.83,
+                path: "src/render.ts",
+                reason: "The cited renderer line handles output.",
+                repo: "repo",
+              },
+            ],
+            likelyOwners: ["Dev Owner"],
+            missingInfoQuestions: [],
+            relatedChange: "Recent renderer work may be related.",
+            userImpact: "Users see broken citation rendering.",
+            warnings: [],
+          },
+          type: "final",
+        };
+      },
+      async final() {
+        throw new Error("final should not be called");
+      },
+    };
+
+    const provider = createAgentInvestigator({ model: "test-model", modelClient });
+    const result = await provider.investigate({
+      preparedConfig: {
+        ...preparedConfig(repoPath),
+        investigation: {
+          prompt: {
+            overlayFiles: [overlayPath],
+            profile: "enterprise",
+          },
+        },
+      },
+      result: investigationResult(),
+    });
+
+    expect(result.promptProfile).toBe("enterprise");
+    expect(result.promptVersion).toBe("firsttrace-agent-v1");
+    expect(result.userImpact).toBe("Users see broken citation rendering.");
+    expect(result.quality).toMatchObject({
+      foundExactFile: true,
+      foundOwner: true,
+    });
+  });
+
   it("seeds UI journey file path candidates before the model loop", async () => {
     const modelClient: AgentModelClient = {
       async next({ observations }) {

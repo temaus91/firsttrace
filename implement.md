@@ -68,6 +68,10 @@ Rules:
 
 - Core code receives normalized requests and returns normalized results.
 - Core code should not import Slack, OpenAI, GitHub, Vercel, Supabase, or OCI SDKs.
+- Model adapters should not own investigation behavior. Keep the default prompt
+  contract shared and versioned, apply optional prompt overlays above provider
+  transport code, and keep provider-specific logic limited to API calls,
+  response normalization, parsing, and retries.
 - Vendor SDK imports belong inside provider implementation files.
 - Evidence collection stays deterministic before AI reasoning.
 - AI providers reason over bounded evidence bundles and citations, not blind repo

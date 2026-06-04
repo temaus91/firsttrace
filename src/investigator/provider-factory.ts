@@ -43,6 +43,7 @@ export const createInvestigatorProviderFromEnv = (
 
   if (aiProvider === "oci-genai") {
     return createAgentInvestigator({
+      env,
       model,
       modelClient: createOciGenAiAgentModelClientFromConfig({
         ...ociGenAiConfigFromEnv(env),
@@ -53,5 +54,5 @@ export const createInvestigatorProviderFromEnv = (
   }
 
   const apiKey = requireOpenAiApiKey(env);
-  return createAgentInvestigator({ apiKey, model });
+  return createAgentInvestigator({ apiKey, env, model });
 };

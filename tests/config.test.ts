@@ -87,6 +87,49 @@ describe("config loading", () => {
     ]);
   });
 
+  it("loads optional investigation prompt overlay config", () => {
+    const dir = tempConfigDir("prompt-overlay");
+    const repoDir = path.join(dir, "repo");
+    mkdirSync(repoDir, { recursive: true });
+    const configPath = path.join(dir, "firsttrace.config.yaml");
+    writeFileSync(
+      configPath,
+      [
+        "repos:",
+        "  - name: local-repo",
+        "    path: repo",
+        "docs: []",
+        "issue_exports: []",
+        "investigation:",
+        "  prompt:",
+        "    profile: enterprise",
+        "    overlay_files:",
+        "      - prompts/company.md",
+      ].join("\n"),
+    );
+
+    expect(loadConfig(configPath).investigation.prompt).toEqual({
+      overlayFiles: [path.join(dir, "prompts", "company.md")],
+      profile: "enterprise",
+    });
+  });
+
+  it("defaults investigation prompt config", () => {
+    const dir = tempConfigDir("prompt-default");
+    const repoDir = path.join(dir, "repo");
+    mkdirSync(repoDir, { recursive: true });
+    const configPath = path.join(dir, "firsttrace.config.yaml");
+    writeFileSync(
+      configPath,
+      ["repos:", "  - name: local-repo", "    path: repo", "docs: []", "issue_exports: []"].join("\n"),
+    );
+
+    expect(loadConfig(configPath).investigation.prompt).toEqual({
+      overlayFiles: [],
+      profile: "default",
+    });
+  });
+
   it("rejects invalid GitHub repo config with a clear error", () => {
     const dir = tempConfigDir("invalid-github");
     const configPath = path.join(dir, "firsttrace.config.yaml");

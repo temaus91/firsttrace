@@ -116,7 +116,7 @@ deployment guide lives under [deploy/oci](deploy/oci).
 For an external project or deployment wrapper, install FirstTrace from npm:
 
 ```bash
-npm install firsttrace@0.1.4
+npm install firsttrace@0.1.5
 ```
 
 The package provides:
@@ -135,7 +135,7 @@ template:
 mkdir firsttrace-vercel
 cd firsttrace-vercel
 npm init -y
-npm install firsttrace@0.1.4
+npm install firsttrace@0.1.5
 cp -R node_modules/firsttrace/deploy/vercel/* .
 cp node_modules/firsttrace/deploy/vercel/gitignore.template .gitignore
 npm install
@@ -217,6 +217,59 @@ firsttrace investigate \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear" \
   --ai
+```
+
+### Prompt Profiles And Overlays
+
+OpenAI, OCI GenAI, and future model adapters use the same built-in FirstTrace
+investigation prompt contract by default. The default prompt is versioned and
+keeps safety, citation grounding, and output-schema rules inside the package.
+
+Advanced deployments can add prompt overlays without forking FirstTrace. Overlays
+are appended to the built-in prompt and cannot remove required safety, evidence,
+or schema rules.
+
+```yaml
+investigation:
+  prompt:
+    profile: enterprise-triage
+    overlay_files:
+      - ./prompts/company-investigation.md
+```
+
+The same behavior can be configured with environment variables:
+
+```bash
+FIRSTTRACE_PROMPT_PROFILE=enterprise-triage
+FIRSTTRACE_PROMPT_OVERLAY_FILES=./prompts/company-investigation.md
+```
+
+Use overlays for domain-specific handoff preferences, such as naming a business
+surface, preferred escalation language, or how to describe user impact. Keep
+repository secrets, customer data, and tokens out of prompt overlay files.
+
+Example compact Slack reply from a real UI/bootstrap report:
+
+```text
+FirstTrace investigation
+Classification: likely bug
+Likely owner: Artem Tarasenko
+Primary files: app/page.tsx, lib/app-context.tsx, app/artists/[artistId]/page.tsx
+AI confidence: 0.91
+User impact: Artist users briefly see an empty profile surface after login before data finishes loading.
+
+Likely cause
+This is an authenticated artist-profile journey, not a public detail-route issue. The strongest lead is the app shell/bootstrap path that delays profile rendering, with the artist profile screen as the secondary leaf component.
+
+Next checks
+1. Inspect app/page.tsx first.
+2. Route the first pass to Artem Tarasenko.
+3. Confirm whether the blank screen is on the authenticated profile tab or the public artist detail route.
+
+Evidence
+1. Artem Tarasenko - commit 8ce926d, 2026-04-21: Recent routing/bootstrap stabilization touched the artist profile path.
+2. app/page.tsx: Entry shell decides when the authenticated profile tab is shown.
+3. lib/app-context.tsx: Defines auth/app bootstrap readiness flags.
 ```
 
 Eval run:
@@ -421,7 +474,7 @@ firsttrace hosted accept \
   --config firsttrace.config.yaml \
   --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
   --report "README deployment plan is unclear" \
-  --expected-build-ref "npm:firsttrace@0.1.4"
+  --expected-build-ref "npm:firsttrace@0.1.5"
 ```
 
 The acceptance command posts a real Slack seed message, sends the same signed
@@ -449,7 +502,7 @@ package:
    off by default; FirstTrace is built for hosted Slack Events delivery.
 4. Install the Slack app, copy `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET`,
    and invite the bot to the triage channel.
-5. Create a small operations wrapper, install `firsttrace@0.1.4`, and copy
+5. Create a small operations wrapper, install `firsttrace@0.1.5`, and copy
    `node_modules/firsttrace/deploy/vercel` into that wrapper.
 6. Create a Supabase project and apply every packaged migration from
    `node_modules/firsttrace/supabase/migrations` with the Supabase CLI.
@@ -458,7 +511,7 @@ package:
 8. Store `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
    `FIRSTTRACE_QUEUE_PROVIDER=supabase`, `FIRSTTRACE_RECEIVER_TOKEN`,
    `FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false`, and
-   `FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.4` in Vercel.
+   `FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.5` in Vercel.
 9. Configure repositories with either a read-only GitHub App
    (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`) or
    local validation `GITHUB_TOKEN`.
@@ -489,7 +542,7 @@ config into the image. A user deploying from a separate operations repo can star
 with:
 
 ```bash
-npm install firsttrace@0.1.4
+npm install firsttrace@0.1.5
 cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
 ```
 
@@ -503,7 +556,7 @@ Runtime secrets should be stored in OCI Vault, not Terraform state. After the
 Terraform stack creates Vault/KMS, run:
 
 ```bash
-npm install firsttrace@0.1.4
+npm install firsttrace@0.1.5
 npx firsttrace-oci-sync-secrets --prompt
 ```
 
@@ -661,7 +714,7 @@ firsttrace hosted accept \
   --config firsttrace.config.yaml \
   --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
   --report "README deployment plan is unclear" \
-  --expected-build-ref "npm:firsttrace@0.1.4"
+  --expected-build-ref "npm:firsttrace@0.1.5"
 ```
 
 The Vercel/Supabase live acceptance command is:
@@ -673,7 +726,7 @@ firsttrace hosted accept \
   --config firsttrace.config.yaml \
   --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
   --report "README deployment plan is unclear" \
-  --expected-build-ref "npm:firsttrace@0.1.4"
+  --expected-build-ref "npm:firsttrace@0.1.5"
 ```
 
 Next planned work:

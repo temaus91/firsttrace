@@ -6,6 +6,7 @@ import type {
   ChatConfig,
   ChatTrigger,
   FirstTraceConfig,
+  InvestigationConfig,
   OwnerRule,
   RepoConfig,
   SearchConfig,
@@ -15,6 +16,7 @@ import type {
 type RawConfig = {
   chat?: unknown;
   docs?: unknown;
+  investigation?: unknown;
   issue_exports?: unknown;
   owners?: unknown;
   repos?: unknown;
@@ -159,6 +161,31 @@ const searchFrom = (value: unknown): SearchConfig => {
   };
 };
 
+const DEFAULT_INVESTIGATION: InvestigationConfig = {
+  prompt: {
+    overlayFiles: [],
+    profile: "default",
+  },
+};
+
+const investigationFrom = (value: unknown, configDir: string): InvestigationConfig => {
+  if (value === undefined) return DEFAULT_INVESTIGATION;
+  const item = asObject(value, "investigation");
+  const promptRaw = item.prompt === undefined ? {} : asObject(item.prompt, "investigation.prompt");
+  const profile = optionalString(promptRaw.profile, "investigation.prompt.profile") ?? "default";
+  const overlayFiles = stringArray(
+    promptRaw.overlay_files,
+    "investigation.prompt.overlay_files",
+  ).map((file) => path.resolve(configDir, file));
+
+  return {
+    prompt: {
+      overlayFiles,
+      profile,
+    },
+  };
+};
+
 const CHAT_TRIGGERS = new Set<ChatTrigger>(["app_mention", "message", "reaction"]);
 const SLACK_DATA_CLASSIFICATIONS = new Set<SlackDataClassification>(["confidential", "internal", "restricted"]);
 
@@ -239,6 +266,7 @@ export const loadConfig = (configPath: string): FirstTraceConfig => {
     chat: chatFrom(root.chat),
     configPath: resolvedConfigPath,
     docs: stringArray(root.docs, "docs"),
+    investigation: investigationFrom(root.investigation, configDir),
     issueExports: stringArray(root.issue_exports, "issue_exports"),
     owners: ownersFrom(root.owners),
     repos: reposFrom(root.repos, configDir),

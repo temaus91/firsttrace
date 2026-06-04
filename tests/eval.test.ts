@@ -53,6 +53,12 @@ const investigationResult = (): InvestigationResult => ({
 const config = (): FirstTraceConfig => ({
   configPath: "firsttrace.config.yaml",
   docs: [],
+  investigation: {
+    prompt: {
+      overlayFiles: [],
+      profile: "default",
+    },
+  },
   issueExports: [],
   owners: [{ owner: "@project-docs", path: "README.md" }],
   repos: [{ name: "firsttrace", path: process.cwd() }],

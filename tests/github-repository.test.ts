@@ -36,6 +36,12 @@ const createSearchableRepo = () => {
 const githubConfig = (): FirstTraceConfig => ({
   configPath: "firsttrace.github.local.yaml",
   docs: ["README.md"],
+  investigation: {
+    prompt: {
+      overlayFiles: [],
+      profile: "default",
+    },
+  },
   issueExports: [],
   owners: [{ owner: "@project-docs", path: "README.md" }],
   repos: [
@@ -74,6 +80,12 @@ const fakeMaterializer = (repoPath: string): GitHubRepoMaterializer => ({
 const archiveConfig = (): FirstTraceConfig => ({
   configPath: "firsttrace.archive.local.yaml",
   docs: ["README.md"],
+  investigation: {
+    prompt: {
+      overlayFiles: [],
+      profile: "default",
+    },
+  },
   issueExports: [],
   owners: [{ owner: "@project-docs", path: "README.md" }],
   repos: [

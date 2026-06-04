@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildAiReasonerRequest } from "../src/ai/evidence.js";
 import { groundAiResult } from "../src/ai/grounding.js";
+import { aiReadinessMetadataFromEnv } from "../src/ai/readiness.js";
 import {
   aiModelProviderFromEnv,
   createAiProviderFromEnv,
@@ -69,6 +70,26 @@ describe("AI provider support", () => {
     expect(() => createAiProviderFromEnv({ FIRSTTRACE_AI_PROVIDER: "openai" })).toThrow(
       "OPENAI_API_KEY is required",
     );
+  });
+
+  it("reports AI readiness only when the active provider can run", () => {
+    expect(aiReadinessMetadataFromEnv({ FIRSTTRACE_AI_ENABLED: "false" })).toMatchObject({
+      aiEnabled: false,
+      aiProvider: "openai",
+      aiReady: false,
+      investigator: "agent",
+      model: "gpt-5.4-mini",
+      slackAiGate: "disabled",
+    });
+
+    expect(aiReadinessMetadataFromEnv({ FIRSTTRACE_AI_ENABLED: "true" })).toMatchObject({
+      aiEnabled: true,
+      aiProvider: "openai",
+      aiReady: false,
+      investigator: "agent",
+      slackAiGate: "enabled",
+      warning: "OPENAI_API_KEY is required when --ai is enabled.",
+    });
   });
 
   it("uses gpt-5.4-mini as the default shared OpenAI model", () => {
@@ -251,6 +272,13 @@ describe("AI provider support", () => {
     expect(grounded.likelyFiles[0]?.citations).toEqual(["src/render.ts:12"]);
     expect(grounded.implementerHints[0]?.citations).toEqual(["commit abc123"]);
     expect(grounded.warnings.join("\n")).toContain("unsupported citations");
+    expect(grounded.quality).toMatchObject({
+      foundExactFile: true,
+      foundOwner: true,
+      foundRelatedCommit: true,
+    });
+    expect(grounded.quality?.citationCoverage).toBe(0.5);
+    expect(grounded.quality?.actionability).toBeGreaterThan(0.7);
   });
 
   it("normalizes AI line ranges to supported evidence citations", () => {

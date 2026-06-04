@@ -14,6 +14,8 @@ export { createOciGenAiJsonClient } from "./ai/oci-genai-json-client.js";
 export type { OciGenAiJsonClient, OciGenAiJsonClientOptions } from "./ai/oci-genai-json-client.js";
 export { aiDryRunFromEnv, aiSafetyModeFromEnv, sanitizeReportForAi } from "./ai/safety.js";
 export type { AiSafetyMode, AiSafetyResult } from "./ai/safety.js";
+export { aiReadinessMetadataFromEnv } from "./ai/readiness.js";
+export type { AiReadinessMetadata } from "./ai/readiness.js";
 export { runHostedAccept } from "./hosted/accept.js";
 export type { HostedAcceptCheck, HostedAcceptOptions, HostedAcceptResult } from "./hosted/accept.js";
 export { handleInvestigationRequest, handleJobStatusRequest } from "./http/receiver.js";
@@ -21,6 +23,12 @@ export { runVercelHandler, type VercelRequestLike, type VercelResponseLike } fro
 export { handleWorkerRunOnceRequest } from "./http/worker.js";
 export { executeInvestigation } from "./investigation-runner.js";
 export { createInvestigatorProviderFromEnv } from "./investigator/provider-factory.js";
+export {
+  buildSystemPrompt,
+  DEFAULT_PROMPT_PROFILE,
+  INVESTIGATION_PROMPT_VERSION,
+} from "./investigator/prompt-contract.js";
+export type { InvestigationPromptContract } from "./investigator/prompt-contract.js";
 export { runOciQueueRedeliveryProbe } from "./oci/queue-redelivery-probe.js";
 export type { OciRedeliveryProbeOptions, OciRedeliveryProbeResult } from "./oci/queue-redelivery-probe.js";
 export {

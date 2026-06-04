@@ -96,6 +96,7 @@ export const createAiProviderFromEnv = (env: NodeJS.ProcessEnv = process.env): A
 
   return createOpenAiProvider({
     apiKey: requireOpenAiApiKey(env),
+    env,
     model,
     resultProviderName: "evidence",
   });

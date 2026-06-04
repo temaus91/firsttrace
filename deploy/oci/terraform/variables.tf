@@ -36,10 +36,21 @@ variable "config_path" {
   default     = "firsttrace.config.yaml"
 }
 
-variable "runtime_secret_names" {
-  description = "Comma-separated Vault secret names the runtime must load. Add optional tuning env vars here only when you also create matching Vault secrets."
+variable "secret_profile" {
+  description = "Named runtime Vault secret profile: bootstrap, slack-minimal, github-repos, or direct-openai. Ignored when runtime_secret_names is set."
   type        = string
-  default     = "FIRSTTRACE_RECEIVER_TOKEN,SLACK_SIGNING_SECRET,SLACK_BOT_TOKEN,GITHUB_APP_ID,GITHUB_APP_PRIVATE_KEY,GITHUB_APP_INSTALLATION_ID"
+  default     = "github-repos"
+
+  validation {
+    condition     = contains(["bootstrap", "slack-minimal", "github-repos", "direct-openai"], var.secret_profile)
+    error_message = "secret_profile must be bootstrap, slack-minimal, github-repos, or direct-openai."
+  }
+}
+
+variable "runtime_secret_names" {
+  description = "Optional comma-separated Vault secret names override. Leave empty to use secret_profile."
+  type        = string
+  default     = ""
 }
 
 variable "enable_vault_secret_loading" {

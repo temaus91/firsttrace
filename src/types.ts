@@ -83,22 +83,38 @@ export type AiImplementerHint = {
   reason: string;
 };
 
+export type AiInvestigationQuality = {
+  actionability: number;
+  citationCoverage: number;
+  foundExactFile: boolean;
+  foundOwner: boolean;
+  foundRelatedCommit: boolean;
+};
+
 export type AiInvestigationResult = {
+  bugLikelihood?: "likely_bug" | "feature_request" | "support_question" | "needs_clarification";
   confidence: number;
+  confidenceRationale?: string | null;
   explanation: string;
+  firstContact?: string | null;
   implementerHints: AiImplementerHint[];
   likelyComponent: string;
   likelyFiles: AiFileFinding[];
   likelyOwners: string[];
   missingInfoQuestions: string[];
   provider: string;
+  promptProfile?: string;
+  promptVersion?: string;
+  quality?: AiInvestigationQuality;
+  relatedChange?: string | null;
+  userImpact?: string | null;
   warnings: string[];
 };
 
 export type AiProvider = {
   model?: string;
   name: string;
-  reason(request: AiReasonerRequest): Promise<AiInvestigationResult>;
+  reason(request: AiReasonerRequest, promptConfig?: InvestigationPromptConfig): Promise<AiInvestigationResult>;
 };
 
 export type InvestigationToolName =
@@ -318,6 +334,15 @@ export type SearchConfig = {
   maxFiles: number;
 };
 
+export type InvestigationPromptConfig = {
+  overlayFiles: string[];
+  profile: string;
+};
+
+export type InvestigationConfig = {
+  prompt: InvestigationPromptConfig;
+};
+
 export type ChatTrigger = "app_mention" | "message" | "reaction";
 export type SlackDataClassification = "confidential" | "internal" | "restricted";
 
@@ -342,6 +367,7 @@ export type FirstTraceConfig = {
   configPath: string;
   docs: string[];
   issueExports: string[];
+  investigation: InvestigationConfig;
   owners: OwnerRule[];
   repos: RepoConfig[];
   search: SearchConfig;

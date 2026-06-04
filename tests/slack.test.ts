@@ -797,4 +797,56 @@ describe("Slack result notification", () => {
     expect(rendered).toContain("Confirm: Does the blank state appear");
     expect(rendered).not.toContain("Evidence: app/artists/[artistId]/page.tsx:21");
   });
+
+  it("renders mixed-audience AI fields without verbose citation dumps", () => {
+    const rendered = renderSlackInvestigationReply({
+      ai: {
+        bugLikelihood: "likely_bug",
+        confidence: 0.78,
+        confidenceRationale: "The cited file directly owns the alert link.",
+        explanation: "The alert component builds a route from raw study IDs. IDs containing slashes can create broken portfolio links.",
+        firstContact: "Jane Doe",
+        implementerHints: [],
+        likelyComponent: "apps/trial-intelligence/src/components/HomeAlertsView/index.tsx",
+        likelyFiles: [
+          {
+            citations: ["apps/trial-intelligence/src/components/HomeAlertsView/index.tsx:42"],
+            confidence: 0.86,
+            path: "apps/trial-intelligence/src/components/HomeAlertsView/index.tsx",
+            reason: "The component owns home alert navigation.",
+            repo: "trial-intelligence",
+          },
+        ],
+        likelyOwners: ["@trial-ui"],
+        missingInfoQuestions: [],
+        provider: "agent",
+        quality: {
+          actionability: 0.6,
+          citationCoverage: 0.5,
+          foundExactFile: true,
+          foundOwner: false,
+          foundRelatedCommit: false,
+        },
+        relatedChange: "Commit abc123 changed alert navigation.",
+        userImpact: "Home alert links for study IDs containing slashes can open a broken portfolio route.",
+        warnings: ["AI returned unsupported citations for likely file 1: fake.ts:1"],
+      },
+      classification: "bug",
+      likelyComponent: "alerts",
+      likelyOwners: ["@trial-ui"],
+      relatedCommits: [],
+      relatedDocs: [],
+      report: "Home alert link breaks when study id contains slash",
+      searchTerms: ["alert", "slash"],
+      suggestedNextSteps: [],
+      suspiciousFiles: [],
+      warnings: [],
+    });
+
+    expect(rendered).toContain("User impact: Home alert links for study IDs containing slashes can open a broken portfolio route.");
+    expect(rendered).toContain("Likely owner: `Jane Doe`");
+    expect(rendered).toContain("1. Related change: Commit abc123 changed alert navigation.");
+    expect(rendered).toContain("AI quality: no evidence-backed human owner.");
+    expect(rendered).not.toContain("fake.ts:1");
+  });
 });

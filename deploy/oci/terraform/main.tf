@@ -8,6 +8,13 @@ locals {
   runtime_enabled = trimspace(var.container_image_url) != ""
   create_kms_key  = trimspace(var.existing_kms_key_ocid) == ""
   kms_key_id      = local.create_kms_key ? oci_kms_key.secrets[0].id : trimspace(var.existing_kms_key_ocid)
+  secret_profiles = {
+    bootstrap     = ""
+    slack-minimal = "FIRSTTRACE_RECEIVER_TOKEN,SLACK_SIGNING_SECRET,SLACK_BOT_TOKEN"
+    github-repos  = "FIRSTTRACE_RECEIVER_TOKEN,SLACK_SIGNING_SECRET,SLACK_BOT_TOKEN,GITHUB_APP_ID,GITHUB_APP_PRIVATE_KEY,GITHUB_APP_INSTALLATION_ID"
+    direct-openai = "FIRSTTRACE_RECEIVER_TOKEN,SLACK_SIGNING_SECRET,SLACK_BOT_TOKEN,GITHUB_APP_ID,GITHUB_APP_PRIVATE_KEY,GITHUB_APP_INSTALLATION_ID,OPENAI_API_KEY"
+  }
+  effective_runtime_secret_names = trimspace(var.runtime_secret_names) != "" ? var.runtime_secret_names : local.secret_profiles[var.secret_profile]
   runtime_env = {
     FIRSTTRACE_AI_ENABLED                     = tostring(var.ai_enabled)
     FIRSTTRACE_AI_PROVIDER                    = var.ai_provider
@@ -27,7 +34,7 @@ locals {
     OCI_QUEUE_VISIBILITY_TIMEOUT_SECONDS      = tostring(var.queue_visibility_seconds)
     OCI_REGION                                = var.region
     OCI_VAULT_ID                              = var.enable_vault_secret_loading ? oci_kms_vault.secrets.id : ""
-    OCI_VAULT_SECRET_NAMES                    = var.enable_vault_secret_loading ? var.runtime_secret_names : ""
+    OCI_VAULT_SECRET_NAMES                    = var.enable_vault_secret_loading ? local.effective_runtime_secret_names : ""
     OCI_VAULT_SECRETS_REQUIRED                = tostring(var.oci_vault_secrets_required)
   }
 }

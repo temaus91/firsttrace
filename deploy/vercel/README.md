@@ -22,7 +22,7 @@ Supabase schema migrations are provided by the npm package under
 mkdir firsttrace-vercel
 cd firsttrace-vercel
 npm init -y
-npm install firsttrace@0.1.4
+npm install firsttrace@0.1.5
 cp -R node_modules/firsttrace/deploy/vercel/* .
 cp node_modules/firsttrace/deploy/vercel/gitignore.template .gitignore
 npm install
@@ -30,6 +30,19 @@ npm install
 
 Edit `firsttrace.config.yaml` for your Slack channel, repositories, and owners.
 Do not put secrets in that file.
+
+Optional prompt overlays can be configured in the same file:
+
+```yaml
+investigation:
+  prompt:
+    profile: enterprise-triage
+    overlay_files:
+      - ./prompts/company-investigation.md
+```
+
+Overlays are additive. They customize the built-in prompt contract without
+removing FirstTrace safety, citation, or output-schema rules.
 
 ## Apply Supabase Migrations
 
@@ -73,7 +86,7 @@ The Terraform defaults set:
 FIRSTTRACE_QUEUE_PROVIDER=supabase
 FIRSTTRACE_CONFIG_PATH=firsttrace.config.yaml
 FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false
-FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.4
+FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.5
 FIRSTTRACE_SLACK_REPLY_FORMAT=compact-v1
 ```
 

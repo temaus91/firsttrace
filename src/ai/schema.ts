@@ -3,8 +3,13 @@ import { z } from "zod";
 export const Confidence = z.number().min(0).max(1);
 
 export const AiInvestigationResultPayloadSchema = z.object({
+  bugLikelihood: z
+    .enum(["likely_bug", "feature_request", "support_question", "needs_clarification"])
+    .optional(),
   confidence: Confidence,
+  confidenceRationale: z.string().nullable().optional(),
   explanation: z.string(),
+  firstContact: z.string().nullable().optional(),
   implementerHints: z
     .array(
       z.object({
@@ -30,6 +35,8 @@ export const AiInvestigationResultPayloadSchema = z.object({
     .max(5),
   likelyOwners: z.array(z.string()).max(8),
   missingInfoQuestions: z.array(z.string()).max(5),
+  relatedChange: z.string().nullable().optional(),
+  userImpact: z.string().nullable().optional(),
   warnings: z.array(z.string()).max(8),
 });
 

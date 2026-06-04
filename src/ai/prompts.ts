@@ -1,6 +1,6 @@
 import type { AiReasonerRequest } from "../types.js";
 
-export const evidenceSystemPrompt = `You are FirstTrace's AI reasoner.
+export const evidenceBaseSystemPrompt = `You are FirstTrace's AI reasoner.
 FirstTrace is a read-only bug localization tool.
 
 Rules:
@@ -17,6 +17,8 @@ Rules:
 - For implementer hints, explain how the cited commit or author relates to the suspect code; do not only say it is recent.
 - Avoid generic next steps such as "inspect the repo"; make the output useful to the next engineer opening the code.
 - Keep provider-specific details out of the result.`;
+
+export const evidenceSystemPrompt = evidenceBaseSystemPrompt;
 
 export const evidenceUserPrompt = (request: AiReasonerRequest) => `Investigate this bug report using only this JSON evidence bundle.
 

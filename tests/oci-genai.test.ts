@@ -205,4 +205,74 @@ describe("OCI GenAI provider", () => {
     });
     expect(calls).toEqual(["firsttrace_agent_turn", "firsttrace_agent_final"]);
   });
+
+  it("normalizes simplified OCI GenAI final payloads", async () => {
+    const client = createOciGenAiAgentModelClient({
+      jsonClient: {
+        async generateJson() {
+          return aiPayload();
+        },
+        model: "openai.gpt-oss-120b",
+      },
+    });
+
+    await expect(
+      client.next({ maxSteps: 8, observations: [], request: buildAiReasonerRequest(investigationResult()), step: 1 }),
+    ).resolves.toMatchObject({
+      result: {
+        likelyComponent: "src/render.ts",
+        warnings: expect.arrayContaining([
+          "Provider returned a direct final payload; FirstTrace normalized it to the agent turn schema.",
+        ]),
+      },
+      type: "final",
+    });
+  });
+
+  it("normalizes wrapped OCI GenAI final-only responses", async () => {
+    const client = createOciGenAiAgentModelClient({
+      jsonClient: {
+        async generateJson() {
+          return {
+            argsJson: "{}",
+            reason: "Provider returned an agent final turn.",
+            result: aiPayload(),
+            tool: null,
+            type: "final",
+          };
+        },
+        model: "openai.gpt-oss-120b",
+      },
+    });
+
+    await expect(
+      client.final({ maxSteps: 8, observations: [], request: buildAiReasonerRequest(investigationResult()), step: 8 }),
+    ).resolves.toMatchObject({
+      likelyComponent: "src/render.ts",
+      warnings: expect.arrayContaining([
+        "Provider returned an agent final turn; FirstTrace normalized it to the final response schema.",
+      ]),
+    });
+  });
+
+  it("fails clearly on malformed OCI GenAI tool arguments", async () => {
+    const client = createOciGenAiAgentModelClient({
+      jsonClient: {
+        async generateJson() {
+          return {
+            argsJson: "{not-json",
+            reason: "Read a file.",
+            result: null,
+            tool: "readFile",
+            type: "tool",
+          };
+        },
+        model: "openai.gpt-oss-120b",
+      },
+    });
+
+    await expect(
+      client.next({ maxSteps: 8, observations: [], request: buildAiReasonerRequest(investigationResult()), step: 1 }),
+    ).rejects.toThrow("OCI GenAI returned invalid tool args JSON");
+  });
 });
