@@ -6,7 +6,7 @@ on:
       firsttrace_version:
         description: FirstTrace npm version or dist-tag to install.
         required: true
-        default: 0.1.4
+        default: 0.1.5
       config_file:
         description: Config file in the repository checkout to copy into the image.
         required: true
