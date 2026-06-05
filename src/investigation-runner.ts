@@ -5,6 +5,7 @@ import {
   type AiSafetyResult,
 } from "./ai/safety.js";
 import { investigate } from "./investigate.js";
+import { enrichOwnerEvidenceWithProviderMetadata, type ProviderMetadataAdapter } from "./provider-metadata.js";
 import { prepareConfigForInvestigation, type RepoPreparationOptions } from "./repositories/prepare.js";
 import type { FirstTraceConfig, InvestigationJobSource, InvestigationResult, InvestigatorProvider } from "./types.js";
 
@@ -13,6 +14,7 @@ export type ExecuteInvestigationOptions = {
   config: FirstTraceConfig;
   env?: NodeJS.ProcessEnv;
   investigatorProvider?: InvestigatorProvider;
+  providerMetadataAdapter?: ProviderMetadataAdapter;
   report: string;
   repoPreparation?: RepoPreparationOptions;
   source?: InvestigationJobSource;
@@ -54,12 +56,20 @@ export const executeInvestigation = async ({
   config,
   env = process.env,
   investigatorProvider,
+  providerMetadataAdapter,
   report,
   repoPreparation,
   source,
 }: ExecuteInvestigationOptions): Promise<InvestigationResult> => {
   const preparedConfig = await prepareConfigForInvestigation(config, repoPreparation);
   const result = await investigate(report, preparedConfig);
+  if (providerMetadataAdapter && result.ownerEvidence) {
+    result.ownerEvidence = await enrichOwnerEvidenceWithProviderMetadata(
+      result.ownerEvidence,
+      preparedConfig.repos,
+      providerMetadataAdapter,
+    );
+  }
 
   if (investigatorProvider) {
     const slackChannel = slackChannelFor(config, source);

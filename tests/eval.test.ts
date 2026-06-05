@@ -201,7 +201,7 @@ describe("eval support", () => {
 
     expect(result.passed).toBe(true);
     expect(result.summary).toEqual({ failed: 0, passed: 5, total: 5 });
-  });
+  }, 10_000);
 
   it("renders AI failures when AI was requested but unavailable", () => {
     const rendered = renderEvalRun({

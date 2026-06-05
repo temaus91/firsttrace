@@ -229,7 +229,7 @@ const reasonFor = (commits: OwnerEvidenceCommit[]) => {
   return "Only weak recent file history is available.";
 };
 
-const rankCandidates = (commits: OwnerEvidenceCommit[]): OwnerEvidenceCandidate[] => {
+export const rankOwnerEvidenceCandidates = (commits: OwnerEvidenceCommit[]): OwnerEvidenceCandidate[] => {
   const grouped = new Map<string, OwnerEvidenceCommit[]>();
   for (const commit of commits) {
     const key = personKey(commit);
@@ -301,7 +301,7 @@ export const collectOwnerEvidenceForRepo = (
   }
 
   return {
-    candidates: rankCandidates(exactCommits),
+    candidates: rankOwnerEvidenceCandidates(exactCommits),
     missingInfo,
     warnings,
     weakCommits,
@@ -313,7 +313,7 @@ export const collectOwnerEvidence = (
   suspiciousFiles: EvidenceItem[],
 ): OwnerEvidenceResult => {
   const results = repos.map((repo) => collectOwnerEvidenceForRepo(repo, suspiciousFiles));
-  const candidates = rankCandidates(results.flatMap((result) =>
+  const candidates = rankOwnerEvidenceCandidates(results.flatMap((result) =>
     result.candidates.flatMap((candidate) => candidate.evidenceCommits),
   ));
 

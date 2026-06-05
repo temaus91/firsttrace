@@ -35,7 +35,12 @@ export {
 export {
   collectOwnerEvidence,
   collectOwnerEvidenceForRepo,
+  rankOwnerEvidenceCandidates,
 } from "./owner-evidence.js";
+export {
+  enrichOwnerEvidenceWithProviderMetadata,
+  GitHubProviderMetadataAdapter,
+} from "./provider-metadata.js";
 export type {
   ManagerOwnerTriageCandidate,
   ManagerOwnerTriageEvidenceCommit,
@@ -48,6 +53,10 @@ export type {
   OwnerEvidenceKind,
   OwnerEvidenceResult,
 } from "./owner-evidence.js";
+export type {
+  ProviderCommitMetadata,
+  ProviderMetadataAdapter,
+} from "./provider-metadata.js";
 export { createInvestigatorProviderFromEnv } from "./investigator/provider-factory.js";
 export {
   buildSystemPrompt,
