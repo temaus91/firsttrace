@@ -170,6 +170,48 @@ describe("OCI GenAI provider", () => {
     expect(result.likelyFiles[0]?.citations).toEqual(["src/render.ts:12"]);
   });
 
+  it("normalizes wrapped one-shot evidence results from OCI GenAI", async () => {
+    const provider = createOciGenAiProvider({
+      jsonClient: {
+        async generateJson() {
+          return { result: aiPayload() };
+        },
+        model: "openai.gpt-oss-120b",
+      },
+    });
+
+    const result = await provider.reason(buildAiReasonerRequest(investigationResult()));
+
+    expect(result.likelyFiles[0]?.citations).toEqual(["src/render.ts:12"]);
+    expect(result.warnings).toContain(
+      "Provider returned a nested final payload; FirstTrace normalized it to the investigation result schema.",
+    );
+  });
+
+  it("normalizes agent-turn-shaped one-shot evidence results from OCI GenAI", async () => {
+    const provider = createOciGenAiProvider({
+      jsonClient: {
+        async generateJson() {
+          return {
+            argsJson: "{}",
+            reason: "Provider returned a final turn.",
+            result: aiPayload(),
+            tool: null,
+            type: "final",
+          };
+        },
+        model: "openai.gpt-oss-120b",
+      },
+    });
+
+    const result = await provider.reason(buildAiReasonerRequest(investigationResult()));
+
+    expect(result.likelyFiles[0]?.citations).toEqual(["src/render.ts:12"]);
+    expect(result.warnings).toContain(
+      "Provider returned an agent final turn; FirstTrace normalized it to the investigation result schema.",
+    );
+  });
+
   it("adapts OCI GenAI agent turns and final results", async () => {
     const calls: string[] = [];
     const client = createOciGenAiAgentModelClient({

@@ -1,4 +1,4 @@
-import type { ManagerOwnerTriageResult } from "./manager-triage.js";
+import type { ManagerOwnerTriageCandidate, ManagerOwnerTriageResult } from "./manager-triage.js";
 import type { OwnerEvidenceResult } from "./owner-evidence.js";
 
 export type Classification = "bug" | "feature_request" | "support_question" | "unknown";
@@ -59,7 +59,9 @@ export type AiEvidenceItem = {
   id: string;
   kind: AiEvidenceKind;
   metadata?: Record<string, string | number | boolean | null>;
+  missingInfo?: string[];
   owner?: string;
+  ownerCandidate?: ManagerOwnerTriageCandidate;
   path?: string;
   repo?: string;
   score?: number;

@@ -1,5 +1,6 @@
 import { citationText } from "../citations.js";
 import type { AiEvidenceItem, EvidenceItem, InvestigationResult } from "../types.js";
+import type { OwnerEvidenceCandidate } from "../owner-evidence.js";
 
 const MAX_SUMMARY_LENGTH = 500;
 
@@ -25,21 +26,54 @@ const evidenceFromItems = (
     type: item.type,
   }));
 
+const ownerCandidateFrom = (candidate: OwnerEvidenceCandidate) => ({
+  confidence: candidate.confidence,
+  email: candidate.email,
+  evidence_commits: candidate.evidenceCommits.map((commit) => ({
+    commit_id: commit.commitId,
+    commit_time: commit.commitTime,
+    commit_title: commit.commitTitle,
+    evidence_code: commit.evidenceCode,
+    file: commit.file,
+    line: commit.line,
+    repo: commit.repo,
+    why_relevant: commit.whyRelevant,
+  })),
+  evidence_source: candidate.evidenceSource,
+  name: candidate.name,
+  rank: candidate.rank,
+  reason: candidate.reason,
+});
+
 const ownerEvidenceFrom = (result: InvestigationResult): AiEvidenceItem[] =>
-  result.ownerEvidence?.candidates.map((candidate, index) => ({
-    citations: candidate.evidenceCommits.map((commit) => `commit ${commit.commitId}`),
-    id: `owner-${index + 1}`,
-    kind: "owner_evidence" as const,
-    metadata: {
-      confidence: candidate.confidence,
-      email: candidate.email,
-      evidenceSource: candidate.evidenceSource,
-      name: candidate.name,
-      rank: candidate.rank,
-    },
-    summary: truncate(candidate.reason, MAX_SUMMARY_LENGTH),
-    title: `Owner evidence: ${candidate.name || candidate.email}`,
-  })) ?? [];
+  [
+    ...(result.ownerEvidence?.candidates.map((candidate, index) => {
+      const ownerCandidate = ownerCandidateFrom(candidate);
+      return {
+        citations: candidate.evidenceCommits.map((commit) => `commit ${commit.commitId}`),
+        id: `owner-${index + 1}`,
+        kind: "owner_evidence" as const,
+        metadata: {
+          confidence: candidate.confidence,
+          email: candidate.email,
+          evidenceSource: candidate.evidenceSource,
+          name: candidate.name,
+          rank: candidate.rank,
+        },
+        ownerCandidate,
+        summary: truncate(candidate.reason, MAX_SUMMARY_LENGTH),
+        title: `Owner evidence: ${candidate.name || candidate.email}`,
+      };
+    }) ?? []),
+    ...(result.ownerEvidence?.missingInfo.map((item, index) => ({
+      citations: [],
+      id: `owner-missing-${index + 1}`,
+      kind: "owner_evidence" as const,
+      missingInfo: [item],
+      summary: truncate(item, MAX_SUMMARY_LENGTH),
+      title: "Owner evidence missing",
+    })) ?? []),
+  ];
 
 export const buildAiReasonerRequest = (result: InvestigationResult) => ({
   classification: result.classification,

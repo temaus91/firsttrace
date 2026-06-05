@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { buildAiReasonerRequest } from "../src/ai/evidence.js";
 import { groundAiResult } from "../src/ai/grounding.js";
 import { aiReadinessMetadataFromEnv } from "../src/ai/readiness.js";
+import { buildSystemPrompt } from "../src/investigator/prompt-contract.js";
+import { MANAGER_OWNER_TRIAGE_PROFILE } from "../src/manager-triage.js";
 import {
   aiModelProviderFromEnv,
   createAiProviderFromEnv,
@@ -46,6 +48,44 @@ const investigationResult = (): InvestigationResult => ({
   warnings: ["No issue exports configured."],
 });
 
+const ownerEvidence = () => ({
+  candidates: [
+    {
+      confidence: "High" as const,
+      email: "dev.owner@example.com",
+      evidenceCommits: [
+        {
+          authorEmail: "dev.owner@example.com",
+          authorName: "Dev Owner",
+          authorTime: "2026-05-20T17:15:30Z",
+          commitId: "abcdef1234567890abcdef1234567890abcdef12",
+          commitTime: "2026-05-20T17:15:30Z",
+          commitTitle: "Add renderer citation path",
+          committerEmail: "dev.owner@example.com",
+          committerName: "Dev Owner",
+          committerTime: "2026-05-20T17:15:30Z",
+          evidenceCode: "return renderCitation(citation)",
+          evidenceKind: "exact_line_blame" as const,
+          evidenceSource: "commit_author" as const,
+          file: "src/render.ts",
+          line: 12,
+          repo: "repo",
+          score: 100,
+          whyRelevant: "Exact-line blame for the failing citation renderer.",
+        },
+      ],
+      evidenceSource: "commit_author" as const,
+      name: "Dev Owner",
+      rank: 1,
+      reason: "Exact-line blame points to src/render.ts:12.",
+      score: 100,
+    },
+  ],
+  missingInfo: ["No PR metadata provider is configured."],
+  warnings: [],
+  weakCommits: [],
+});
+
 describe("AI provider support", () => {
   it("builds a bounded cited evidence bundle", () => {
     const request = buildAiReasonerRequest(investigationResult());
@@ -64,6 +104,45 @@ describe("AI provider support", () => {
       kind: "related_commit",
       metadata: { author: "Dev Owner", date: "2026-05-21" },
     });
+  });
+
+  it("feeds structured owner evidence to the model", () => {
+    const request = buildAiReasonerRequest({
+      ...investigationResult(),
+      ownerEvidence: ownerEvidence(),
+    });
+
+    expect(request.evidence.map((item) => item.id)).toEqual(["file-1", "commit-1", "owner-1", "owner-missing-1", "warning-1"]);
+    expect(request.evidence[2]).toMatchObject({
+      citations: ["commit abcdef1234567890abcdef1234567890abcdef12"],
+      kind: "owner_evidence",
+      ownerCandidate: {
+        email: "dev.owner@example.com",
+        evidence_commits: [
+          {
+            commit_id: "abcdef1234567890abcdef1234567890abcdef12",
+            evidence_code: "return renderCitation(citation)",
+            file: "src/render.ts",
+            line: 12,
+          },
+        ],
+        evidence_source: "commit_author",
+        name: "Dev Owner",
+      },
+    });
+    expect(request.evidence[3]).toMatchObject({
+      kind: "owner_evidence",
+      missingInfo: ["No PR metadata provider is configured."],
+    });
+  });
+
+  it("adds the built-in manager-owner profile contract to prompts", () => {
+    const prompt = buildSystemPrompt({ basePrompt: "Base prompt", env: {} });
+
+    expect(prompt.profile).toBe(MANAGER_OWNER_TRIAGE_PROFILE);
+    expect(prompt.systemPrompt).toContain("Include managerTriage in the final JSON");
+    expect(prompt.systemPrompt).toContain("Create likely_owner_candidates only from owner_evidence items");
+    expect(prompt.systemPrompt).toContain("ownerCandidate evidence");
   });
 
   it("requires an OpenAI API key for the default provider", () => {
@@ -349,5 +428,188 @@ describe("AI provider support", () => {
 
     expect(grounded.likelyFiles[0]?.citations).toEqual(["components/profile-tab.tsx"]);
     expect(grounded.warnings.join("\n")).not.toContain("unsupported citations");
+  });
+
+  it("normalizes manager owner candidates against structured owner evidence", () => {
+    const request = buildAiReasonerRequest({
+      ...investigationResult(),
+      ownerEvidence: ownerEvidence(),
+    });
+    const grounded = groundAiResult(
+      {
+        confidence: 0.82,
+        explanation: "The renderer line is the likely source.",
+        implementerHints: [],
+        likelyComponent: "src/render.ts",
+        likelyFiles: [
+          {
+            citations: ["src/render.ts:12"],
+            confidence: 0.82,
+            path: "src/render.ts",
+            reason: "Renderer evidence matches.",
+            repo: "repo",
+          },
+        ],
+        likelyOwners: ["Invented Owner"],
+        managerTriage: {
+          issue: "Renderer crashes on citations.",
+          likely_owner_candidates: [
+            {
+              confidence: "Low",
+              email: "invented@example.com",
+              evidence_commits: [
+                {
+                  commit_id: "abcdef1234567890abcdef1234567890abcdef12",
+                  commit_time: "wrong",
+                  commit_title: "wrong",
+                  evidence_code: "wrong",
+                  file: "wrong.ts",
+                  line: 99,
+                  repo: "repo",
+                  why_relevant: "wrong",
+                },
+              ],
+              evidence_source: "unknown",
+              name: "Invented Owner",
+              rank: 1,
+              reason: "This commit is the strongest owner evidence.",
+            },
+            {
+              confidence: "High",
+              email: "other@example.com",
+              evidence_commits: [
+                {
+                  commit_id: "madeup",
+                  commit_time: "2026-05-21T00:00:00Z",
+                  commit_title: "Made up",
+                  evidence_code: "made up",
+                  file: "made-up.ts",
+                  line: 1,
+                  repo: "repo",
+                  why_relevant: "Made up.",
+                },
+              ],
+              evidence_source: "commit_author",
+              name: "Other Owner",
+              rank: 2,
+              reason: "Unsupported candidate.",
+            },
+          ],
+          likely_root_cause: "Raw citation rendering path is failing.",
+          missing_info: [],
+          recommended_manager_action: "Route to the supported owner.",
+          title: "Bug Triage",
+          user_impact: "Users cannot read citations.",
+        },
+        missingInfoQuestions: [],
+        promptProfile: MANAGER_OWNER_TRIAGE_PROFILE,
+        provider: "test",
+        warnings: [],
+      },
+      request,
+    );
+
+    expect(grounded.likelyOwners).toEqual(["Dev Owner"]);
+    expect(grounded.managerTriage?.likely_owner_candidates).toHaveLength(1);
+    expect(grounded.managerTriage?.likely_owner_candidates[0]).toMatchObject({
+      confidence: "High",
+      email: "dev.owner@example.com",
+      evidence_commits: [
+        {
+          commit_id: "abcdef1234567890abcdef1234567890abcdef12",
+          commit_time: "2026-05-20T17:15:30Z",
+          evidence_code: "return renderCitation(citation)",
+          file: "src/render.ts",
+          line: 12,
+        },
+      ],
+      evidence_source: "commit_author",
+      name: "Dev Owner",
+      rank: 1,
+    });
+    expect(grounded.managerTriage?.missing_info.join("\n")).toContain("No PR metadata provider is configured");
+    expect(grounded.warnings.join("\n")).toContain("Removed unsupported manager owner candidate");
+  });
+
+  it("renders weak manager triage when the default profile receives a simplified answer", () => {
+    const request = buildAiReasonerRequest(investigationResult());
+    const grounded = groundAiResult(
+      {
+        confidence: 0.55,
+        explanation: "Renderer evidence is suspicious but owner evidence is missing.",
+        implementerHints: [],
+        likelyComponent: "src/render.ts",
+        likelyFiles: [
+          {
+            citations: ["src/render.ts:12"],
+            confidence: 0.55,
+            path: "src/render.ts",
+            reason: "Renderer evidence matches.",
+            repo: "repo",
+          },
+        ],
+        likelyOwners: ["Invented Owner"],
+        missingInfoQuestions: [],
+        promptProfile: MANAGER_OWNER_TRIAGE_PROFILE,
+        provider: "test",
+        userImpact: "Users cannot read citations.",
+        warnings: [],
+      },
+      request,
+    );
+
+    expect(grounded.likelyOwners).toEqual([]);
+    expect(grounded.managerTriage).toMatchObject({
+      likely_owner_candidates: [],
+      recommended_manager_action: "Do not assign a person yet. Collect exact-line blame, PR metadata, or pushed-by provider metadata, then rerun triage.",
+      user_impact: "Users cannot read citations.",
+    });
+    expect(grounded.managerTriage?.missing_info.join("\n")).toContain("Provider returned a simplified answer without managerTriage");
+    expect(grounded.warnings.join("\n")).toContain("Provider did not return managerTriage");
+  });
+
+  it("preserves deterministic owner evidence when normalizing a simplified manager answer", () => {
+    const request = buildAiReasonerRequest({
+      ...investigationResult(),
+      ownerEvidence: ownerEvidence(),
+    });
+    const grounded = groundAiResult(
+      {
+        confidence: 0.62,
+        explanation: "Renderer evidence is suspicious.",
+        implementerHints: [],
+        likelyComponent: "src/render.ts",
+        likelyFiles: [
+          {
+            citations: ["src/render.ts:12"],
+            confidence: 0.62,
+            path: "src/render.ts",
+            reason: "Renderer evidence matches.",
+            repo: "repo",
+          },
+        ],
+        likelyOwners: [],
+        missingInfoQuestions: [],
+        promptProfile: MANAGER_OWNER_TRIAGE_PROFILE,
+        provider: "test",
+        warnings: [],
+      },
+      request,
+    );
+
+    expect(grounded.likelyOwners).toEqual(["Dev Owner"]);
+    expect(grounded.managerTriage?.likely_owner_candidates[0]).toMatchObject({
+      email: "dev.owner@example.com",
+      evidence_commits: [
+        {
+          commit_id: "abcdef1234567890abcdef1234567890abcdef12",
+          file: "src/render.ts",
+          line: 12,
+        },
+      ],
+      name: "Dev Owner",
+      rank: 1,
+    });
+    expect(grounded.managerTriage?.recommended_manager_action).toContain("weak normalized handoff");
   });
 });

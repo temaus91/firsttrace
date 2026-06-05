@@ -43,3 +43,38 @@ export const AiInvestigationResultPayloadSchema = z.object({
 });
 
 export type AiInvestigationResultPayload = z.infer<typeof AiInvestigationResultPayloadSchema>;
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const withNormalizationWarning = (payload: AiInvestigationResultPayload, warning: string) => ({
+  ...payload,
+  warnings: [...payload.warnings, warning].slice(0, 8),
+});
+
+export const normalizeAiInvestigationResultPayload = (payload: unknown): AiInvestigationResultPayload => {
+  const strict = AiInvestigationResultPayloadSchema.safeParse(payload);
+  if (strict.success) return strict.data;
+
+  if (isObject(payload) && payload.type === "final" && isObject(payload.result)) {
+    const turnResult = AiInvestigationResultPayloadSchema.safeParse(payload.result);
+    if (turnResult.success) {
+      return withNormalizationWarning(
+        turnResult.data,
+        "Provider returned an agent final turn; FirstTrace normalized it to the investigation result schema.",
+      );
+    }
+  }
+
+  if (isObject(payload) && isObject(payload.result)) {
+    const nested = AiInvestigationResultPayloadSchema.safeParse(payload.result);
+    if (nested.success) {
+      return withNormalizationWarning(
+        nested.data,
+        "Provider returned a nested final payload; FirstTrace normalized it to the investigation result schema.",
+      );
+    }
+  }
+
+  return AiInvestigationResultPayloadSchema.parse(payload);
+};
