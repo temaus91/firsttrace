@@ -3,7 +3,15 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
-import { scorePath, scoreTextLine, searchCommits, searchDocs, searchFiles, sortEvidenceItems } from "../src/search.js";
+import {
+  deriveSearchQueries,
+  scorePath,
+  scoreTextLine,
+  searchCommits,
+  searchDocs,
+  searchFiles,
+  sortEvidenceItems,
+} from "../src/search.js";
 import type { EvidenceItem, PreparedFirstTraceConfig, SearchableRepoConfig } from "../src/types.js";
 
 const item = (title: string, score: number): EvidenceItem => ({
@@ -64,6 +72,64 @@ describe("search scoring", () => {
     } finally {
       process.env.PATH = previousPath;
     }
+  });
+
+  it("derives route and identifier search passes for slash-containing ID reports", () => {
+    const queries = deriveSearchQueries(
+      "Entity detail links fail for ID ACME/123 when clicking dashboard links.",
+      ["entity", "detail", "links", "fail", "id", "dashboard"],
+    );
+
+    expect(queries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ pass: "ui_journey_route", query: "navigate(" }),
+        expect.objectContaining({ pass: "code_pattern_expansion", query: "${" }),
+        expect.objectContaining({ pass: "safe_pattern_search", query: "encodeURIComponent" }),
+      ]),
+    );
+  });
+
+  it("ranks exact route interpolation ahead of broad domain matches", () => {
+    const repoPath = path.join(tmpdir(), `firsttrace-route-ranking-${Date.now()}`);
+    mkdirSync(path.join(repoPath, "src", "components"), { recursive: true });
+    writeFileSync(
+      path.join(repoPath, "src", "components", "EntityOverview.tsx"),
+      [
+        "export const copy = [",
+        "  'entity detail dashboard entity entity entity',",
+        "  'entity links entity list entity page',",
+        "].join(' ')",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      path.join(repoPath, "src", "components", "EntityLinks.tsx"),
+      [
+        "export function EntityLinks({ entity, navigate }) {",
+        "  return <button onClick={() => navigate(`/entities/${entity.id}/detail`)}>Open</button>",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    const repo: SearchableRepoConfig = { name: "app", path: repoPath, provider: "local", sourceProvider: "local" };
+    const config = preparedConfig(repo);
+    const report = "Entity detail links fail for ID ACME/123. The entity exists, but clicking the link does not open the detail page.";
+    const results = searchFiles(repo, ["entity", "detail", "links", "id"], config, { report });
+
+    expect(results[0]?.path).toBe("src/components/EntityLinks.tsx");
+    expect(results[0]?.metadata).toMatchObject({
+      evidenceQuery: "${",
+      evidenceRelevance: "exact_cause",
+      evidenceSearchPass: "code_pattern_expansion",
+    });
+    expect(results[0]?.citations[0]).toMatchObject({
+      line: 2,
+      query: "${",
+      relevance: "exact_cause",
+      searchPass: "code_pattern_expansion",
+      snippet: "return <button onClick={() => navigate(`/entities/${entity.id}/detail`)}>Open</button>",
+    });
   });
 
   it("adds git file-history and line-blame signals for suspicious files", async () => {

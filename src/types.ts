@@ -6,10 +6,16 @@ export type EvidenceType = "file" | "commit" | "doc" | "issue";
 
 export type Citation = {
   commit?: string;
+  query?: string;
+  relevance?: string;
   label: string;
   line?: number;
   path?: string;
   repo: string;
+  score?: number;
+  searchPass?: string;
+  snippet?: string;
+  whyRelevant?: string;
 };
 
 export type EvidenceItem = {

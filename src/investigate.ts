@@ -55,7 +55,7 @@ export const investigate = async (report: string, config: PreparedFirstTraceConf
   }
 
   const suspiciousFiles = sortEvidenceItems(
-    config.repos.flatMap((repo) => searchFiles(repo, searchTerms, config)),
+    config.repos.flatMap((repo) => searchFiles(repo, searchTerms, config, { report })),
   ).slice(0, config.search.maxFiles);
 
   const relatedDocs = sortEvidenceItems(
