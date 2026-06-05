@@ -1,4 +1,5 @@
 import { citationListText } from "./citations.js";
+import { renderManagerOwnerTriage } from "./manager-triage.js";
 import type { AiInvestigationResult, EvidenceItem, InvestigationResult } from "./types.js";
 
 const empty = "_None found._";
@@ -79,8 +80,10 @@ const renderAiReasoning = (ai: AiInvestigationResult) =>
       .join("\n\n"),
   );
 
-export const renderInvestigation = (result: InvestigationResult) =>
-  [
+export const renderInvestigation = (result: InvestigationResult) => {
+  if (result.ai?.managerTriage) return renderManagerOwnerTriage(result.ai.managerTriage);
+
+  return [
     "# FirstTrace Investigation",
     `Classification: \`${result.classification}\``,
     `Likely component: \`${result.likelyComponent}\``,
@@ -104,3 +107,4 @@ export const renderInvestigation = (result: InvestigationResult) =>
   ]
     .filter(Boolean)
     .join("\n\n");
+};

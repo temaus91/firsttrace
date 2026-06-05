@@ -67,7 +67,7 @@ describe("packaged Vercel handlers", () => {
         aiReady: true,
         investigator: "agent",
         model: "openai.gpt-oss-120b",
-        promptProfile: "default",
+        promptProfile: "manager-owner-triage",
         promptVersion: "firsttrace-agent-v1",
         slackAiGate: "enabled",
       },

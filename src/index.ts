@@ -22,6 +22,22 @@ export { handleInvestigationRequest, handleJobStatusRequest } from "./http/recei
 export { runVercelHandler, type VercelRequestLike, type VercelResponseLike } from "./http/vercel-adapter.js";
 export { handleWorkerRunOnceRequest } from "./http/worker.js";
 export { executeInvestigation } from "./investigation-runner.js";
+export {
+  MANAGER_OWNER_TRIAGE_PROFILE,
+  ManagerOwnerTriageCandidateSchema,
+  ManagerOwnerTriageConfidenceSchema,
+  ManagerOwnerTriageEvidenceCommitSchema,
+  ManagerOwnerTriageEvidenceSourceSchema,
+  ManagerOwnerTriageResultSchema,
+  parseManagerOwnerTriageResult,
+  renderManagerOwnerTriage,
+} from "./manager-triage.js";
+export type {
+  ManagerOwnerTriageCandidate,
+  ManagerOwnerTriageEvidenceCommit,
+  ManagerOwnerTriageEvidenceSource,
+  ManagerOwnerTriageResult,
+} from "./manager-triage.js";
 export { createInvestigatorProviderFromEnv } from "./investigator/provider-factory.js";
 export {
   buildSystemPrompt,

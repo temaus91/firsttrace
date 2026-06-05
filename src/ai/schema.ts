@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ManagerOwnerTriageResultSchema } from "../manager-triage.js";
 
 export const Confidence = z.number().min(0).max(1);
 
@@ -34,6 +35,7 @@ export const AiInvestigationResultPayloadSchema = z.object({
     )
     .max(5),
   likelyOwners: z.array(z.string()).max(8),
+  managerTriage: ManagerOwnerTriageResultSchema.optional(),
   missingInfoQuestions: z.array(z.string()).max(5),
   relatedChange: z.string().nullable().optional(),
   userImpact: z.string().nullable().optional(),

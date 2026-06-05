@@ -1,3 +1,5 @@
+import type { ManagerOwnerTriageResult } from "./manager-triage.js";
+
 export type Classification = "bug" | "feature_request" | "support_question" | "unknown";
 
 export type EvidenceType = "file" | "commit" | "doc" | "issue";
@@ -101,6 +103,7 @@ export type AiInvestigationResult = {
   likelyComponent: string;
   likelyFiles: AiFileFinding[];
   likelyOwners: string[];
+  managerTriage?: ManagerOwnerTriageResult;
   missingInfoQuestions: string[];
   provider: string;
   promptProfile?: string;

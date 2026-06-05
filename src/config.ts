@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { parse } from "yaml";
+import { MANAGER_OWNER_TRIAGE_PROFILE } from "./manager-triage.js";
 import type {
   ArchiveRepoConfig,
   ChatConfig,
@@ -164,7 +165,7 @@ const searchFrom = (value: unknown): SearchConfig => {
 const DEFAULT_INVESTIGATION: InvestigationConfig = {
   prompt: {
     overlayFiles: [],
-    profile: "default",
+    profile: MANAGER_OWNER_TRIAGE_PROFILE,
   },
 };
 
@@ -172,7 +173,7 @@ const investigationFrom = (value: unknown, configDir: string): InvestigationConf
   if (value === undefined) return DEFAULT_INVESTIGATION;
   const item = asObject(value, "investigation");
   const promptRaw = item.prompt === undefined ? {} : asObject(item.prompt, "investigation.prompt");
-  const profile = optionalString(promptRaw.profile, "investigation.prompt.profile") ?? "default";
+  const profile = optionalString(promptRaw.profile, "investigation.prompt.profile") ?? MANAGER_OWNER_TRIAGE_PROFILE;
   const overlayFiles = stringArray(
     promptRaw.overlay_files,
     "investigation.prompt.overlay_files",

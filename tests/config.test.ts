@@ -126,7 +126,7 @@ describe("config loading", () => {
 
     expect(loadConfig(configPath).investigation.prompt).toEqual({
       overlayFiles: [],
-      profile: "default",
+      profile: "manager-owner-triage",
     });
   });
 

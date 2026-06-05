@@ -85,4 +85,45 @@ describe("renderInvestigation", () => {
     expect(rendered).toContain("What exact command reproduced the crash?");
     expect(rendered).toContain("Evidence is limited.");
   });
+
+  it("renders manager triage as the external response when present", () => {
+    const result: InvestigationResult = {
+      ai: {
+        confidence: 0.9,
+        explanation: "Manager triage is available.",
+        implementerHints: [],
+        likelyComponent: "src/components/EntityLinks.tsx",
+        likelyFiles: [],
+        likelyOwners: [],
+        managerTriage: {
+          issue: "Entity detail links fail for IDs containing '/'.",
+          likely_owner_candidates: [],
+          likely_root_cause: "Raw IDs are inserted into route paths.",
+          missing_info: ["Collect Git blame for the suspected route construction line."],
+          recommended_manager_action: "Do not assign a person yet.",
+          title: "Bug Triage",
+          user_impact: "Users cannot open affected detail pages.",
+        },
+        missingInfoQuestions: [],
+        provider: "agent",
+        warnings: [],
+      },
+      classification: "bug",
+      likelyComponent: "src",
+      likelyOwners: ["@core"],
+      relatedCommits: [],
+      relatedDocs: [],
+      report: "entity links fail",
+      searchTerms: ["entity", "links", "fail"],
+      suggestedNextSteps: [],
+      suspiciousFiles: [],
+      warnings: [],
+    };
+
+    const rendered = renderInvestigation(result);
+    expect(rendered).toContain("Bug Triage\n\nIssue");
+    expect(rendered).toContain("Likely Owner Candidates");
+    expect(rendered).toContain("Do not assign a person yet.");
+    expect(rendered).not.toContain("# FirstTrace Investigation");
+  });
 });

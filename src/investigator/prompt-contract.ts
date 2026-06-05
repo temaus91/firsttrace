@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { MANAGER_OWNER_TRIAGE_PROFILE } from "../manager-triage.js";
 import type { AgentPromptInput } from "./agent-prompts.js";
 import type { InvestigationPromptConfig } from "../types.js";
 
@@ -9,7 +10,7 @@ export type InvestigationPromptContract = {
   version: string;
 };
 
-export const DEFAULT_PROMPT_PROFILE = "default";
+export const DEFAULT_PROMPT_PROFILE = MANAGER_OWNER_TRIAGE_PROFILE;
 export const INVESTIGATION_PROMPT_VERSION = "firsttrace-agent-v1";
 
 const requiredFooter = `Required FirstTrace contract:
