@@ -82,6 +82,7 @@ type CommitSignalSource = "term" | "path_history" | "line_blame" | "github_term"
 
 type CommitSignal = {
   author: string;
+  authorEmail?: string;
   date: string;
   hash: string;
   line?: number;
@@ -276,9 +277,10 @@ const commitSignalSummary = (signal: CommitSignal) => {
 };
 
 const commitSignalToEvidence = (repo: SearchableRepoConfig, signal: CommitSignal): EvidenceItem => ({
-  citations: [{ commit: shortHash(signal.hash), label: `${repo.name}:${shortHash(signal.hash)}`, repo: repo.name }],
+  citations: [{ commit: signal.hash, label: `${repo.name}:${signal.hash}`, repo: repo.name }],
   metadata: {
     author: signal.author,
+    authorEmail: signal.authorEmail ?? null,
     date: signal.date,
     line: signal.line ?? null,
     path: signal.path ?? null,
@@ -293,7 +295,7 @@ const commitSignalToEvidence = (repo: SearchableRepoConfig, signal: CommitSignal
 
 const parseGitLogRows = (
   stdout: string,
-  scoreFor: (index: number, row: { author: string; date: string; hash: string; subject: string }) => number,
+  scoreFor: (index: number, row: { author: string; authorEmail?: string; date: string; hash: string; subject: string }) => number,
   source: CommitSignalSource,
   pathValue?: string,
 ): CommitSignal[] =>
@@ -301,18 +303,22 @@ const parseGitLogRows = (
     .split("\n")
     .filter(Boolean)
     .flatMap((row, index) => {
-      const [hash, date, author, ...subjectParts] = row.split("\t");
-      const subject = subjectParts.join("\t");
-      if (!hash || !date || !author || !subject) return [];
+      const [hash, date, author, maybeEmail, ...subjectParts] = row.split("\t");
+      const hasEmail = maybeEmail?.includes("@");
+      const authorEmail = hasEmail ? maybeEmail : undefined;
+      const normalizedSubjectParts = hasEmail ? subjectParts : [maybeEmail, ...subjectParts];
+      const normalizedSubject = normalizedSubjectParts.filter(Boolean).join("\t");
+      if (!hash || !date || !author || !normalizedSubject) return [];
       return [
         {
           author,
+          authorEmail,
           date,
           hash,
           path: pathValue,
-          score: scoreFor(index, { author, date, hash, subject }),
+          score: scoreFor(index, { author, authorEmail, date, hash, subject: normalizedSubject }),
           source,
-          subject,
+          subject: normalizedSubject,
         },
       ];
     });
@@ -371,12 +377,13 @@ const gitBlameSignal = (
 
   const show = gitOutput(
     repo.path,
-    ["show", "-s", "--date=short", "--pretty=format:%h%x09%ad%x09%an%x09%s", blame.hash],
+    ["show", "-s", "--date=iso-strict", "--pretty=format:%H%x09%aI%x09%an%x09%ae%x09%s", blame.hash],
   );
   const [shown] = show ? parseGitLogRows(show, () => score, "line_blame", pathValue) : [];
 
   return {
     author: shown?.author ?? blame.author,
+    authorEmail: shown?.authorEmail,
     date: shown?.date ?? blame.date,
     hash: shown?.hash ?? blame.hash,
     line,
@@ -400,9 +407,9 @@ const gitCommitSignals = (
     const stdout = gitOutput(repo.path, [
       "log",
       "--all",
-      "--date=short",
+      "--date=iso-strict",
       "--max-count=250",
-      "--pretty=format:%h%x09%ad%x09%an%x09%s",
+      "--pretty=format:%H%x09%aI%x09%an%x09%ae%x09%s",
     ]);
     if (stdout !== undefined) {
       gitAvailable = true;
@@ -421,10 +428,10 @@ const gitCommitSignals = (
   candidatePaths.forEach((pathValue, pathIndex) => {
     const stdout = gitOutput(repo.path, [
       "log",
-      "--date=short",
+      "--date=iso-strict",
       "--max-count",
       String(perPathLimit),
-      "--pretty=format:%h%x09%ad%x09%an%x09%s",
+      "--pretty=format:%H%x09%aI%x09%an%x09%ae%x09%s",
       "--",
       pathValue,
     ]);
@@ -459,6 +466,7 @@ type GitHubCommitResponse = {
   commit?: {
     author?: {
       date?: string;
+      email?: string;
       name?: string;
     } | null;
     message?: string;
@@ -478,7 +486,8 @@ const githubCommitSignalFrom = (
 
   return {
     author: commit.commit?.author?.name ?? commit.author?.login ?? "unknown",
-    date: commit.commit?.author?.date?.slice(0, 10) ?? "",
+    authorEmail: commit.commit?.author?.email,
+    date: commit.commit?.author?.date ?? "",
     hash,
     path: pathValue,
     score,
@@ -566,8 +575,8 @@ const githubCommitSignals = async (
 const dedupeCommitSignals = (signals: CommitSignal[]) => {
   const byHash = new Map<string, CommitSignal>();
   for (const signal of signals) {
-    const current = byHash.get(shortHash(signal.hash));
-    if (!current || signal.score > current.score) byHash.set(shortHash(signal.hash), signal);
+    const current = byHash.get(signal.hash);
+    if (!current || signal.score > current.score) byHash.set(signal.hash, signal);
   }
   return [...byHash.values()];
 };

@@ -25,11 +25,28 @@ const evidenceFromItems = (
     type: item.type,
   }));
 
+const ownerEvidenceFrom = (result: InvestigationResult): AiEvidenceItem[] =>
+  result.ownerEvidence?.candidates.map((candidate, index) => ({
+    citations: candidate.evidenceCommits.map((commit) => `commit ${commit.commitId}`),
+    id: `owner-${index + 1}`,
+    kind: "owner_evidence" as const,
+    metadata: {
+      confidence: candidate.confidence,
+      email: candidate.email,
+      evidenceSource: candidate.evidenceSource,
+      name: candidate.name,
+      rank: candidate.rank,
+    },
+    summary: truncate(candidate.reason, MAX_SUMMARY_LENGTH),
+    title: `Owner evidence: ${candidate.name || candidate.email}`,
+  })) ?? [];
+
 export const buildAiReasonerRequest = (result: InvestigationResult) => ({
   classification: result.classification,
   evidence: [
     ...evidenceFromItems("suspicious_file", "file", result.suspiciousFiles),
     ...evidenceFromItems("related_commit", "commit", result.relatedCommits),
+    ...ownerEvidenceFrom(result),
     ...evidenceFromItems("related_doc", "doc", result.relatedDocs),
     ...result.warnings.map((warning, index) => ({
       citations: [],

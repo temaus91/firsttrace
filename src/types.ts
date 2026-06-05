@@ -1,4 +1,5 @@
 import type { ManagerOwnerTriageResult } from "./manager-triage.js";
+import type { OwnerEvidenceResult } from "./owner-evidence.js";
 
 export type Classification = "bug" | "feature_request" | "support_question" | "unknown";
 
@@ -35,6 +36,7 @@ export type InvestigationResult = {
   classification: Classification;
   likelyComponent: string;
   likelyOwners: string[];
+  ownerEvidence?: OwnerEvidenceResult;
   relatedCommits: EvidenceItem[];
   relatedDocs: EvidenceItem[];
   report: string;
@@ -48,6 +50,7 @@ export type AiEvidenceKind =
   | "suspicious_file"
   | "related_commit"
   | "related_doc"
+  | "owner_evidence"
   | "agent_observation"
   | "warning";
 

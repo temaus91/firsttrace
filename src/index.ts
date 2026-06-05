@@ -32,12 +32,22 @@ export {
   parseManagerOwnerTriageResult,
   renderManagerOwnerTriage,
 } from "./manager-triage.js";
+export {
+  collectOwnerEvidence,
+  collectOwnerEvidenceForRepo,
+} from "./owner-evidence.js";
 export type {
   ManagerOwnerTriageCandidate,
   ManagerOwnerTriageEvidenceCommit,
   ManagerOwnerTriageEvidenceSource,
   ManagerOwnerTriageResult,
 } from "./manager-triage.js";
+export type {
+  OwnerEvidenceCandidate,
+  OwnerEvidenceCommit,
+  OwnerEvidenceKind,
+  OwnerEvidenceResult,
+} from "./owner-evidence.js";
 export { createInvestigatorProviderFromEnv } from "./investigator/provider-factory.js";
 export {
   buildSystemPrompt,

@@ -218,6 +218,6 @@ describe("search scoring", () => {
 
     expect(urls.some((url) => url.includes("path=app%2Fartists%2F%5BartistId%5D%2Fpage.tsx"))).toBe(true);
     expect(commits[0]?.summary).toContain("Recent change to app/artists/[artistId]/page.tsx");
-    expect(commits[0]?.metadata).toMatchObject({ author: "Dev Owner", date: "2026-05-21" });
+    expect(commits[0]?.metadata).toMatchObject({ author: "Dev Owner", date: "2026-05-21T00:00:00Z" });
   });
 });
