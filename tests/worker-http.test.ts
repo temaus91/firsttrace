@@ -98,6 +98,7 @@ describe("worker HTTP endpoint", () => {
     expect(response.status).toBe(200);
     expect(body.status).toBe("processed");
     expect((body.job as InvestigationJob).id).toBe(job.id);
+    expect(((body.job as InvestigationJob).result?.warnings ?? []).join("\n")).toContain("Git history is unavailable");
     expect((await queue.get(job.id))?.status).toBe("succeeded");
     expect(progressNotifier.notified).toHaveLength(1);
     expect(notifier.notified).toHaveLength(1);

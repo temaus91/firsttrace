@@ -92,6 +92,8 @@ const isTeamAlias = (value: string | null | undefined) => Boolean(value?.trim().
 
 const hasHumanOwner = (hint: AiImplementerHint) => Boolean((hint.name && !isTeamAlias(hint.name)) || hint.email);
 
+const isExactLineCitation = (citation: string) => /^.+:\d+$/.test(citation);
+
 const ownerEvidenceCandidatesFrom = (request: AiReasonerRequest) =>
   request.evidence.flatMap((item) => item.ownerCandidate ? [item.ownerCandidate] : []);
 
@@ -231,27 +233,52 @@ const computeActionability = ({
   citationCoverage,
   confidence,
   foundExactFile,
-  foundOwner,
-  foundRelatedCommit,
+  foundPersonOwner,
+  foundCommitEvidence,
 }: {
   citationCoverage: number;
   confidence: number;
   foundExactFile: boolean;
-  foundOwner: boolean;
-  foundRelatedCommit: boolean;
+  foundPersonOwner: boolean;
+  foundCommitEvidence: boolean;
 }) =>
   Math.min(
     1,
     Number(
       (
         (foundExactFile ? 0.35 : 0) +
-        (foundOwner ? 0.25 : 0) +
-        (foundRelatedCommit ? 0.2 : 0) +
+        (foundPersonOwner ? 0.25 : 0) +
+        (foundCommitEvidence ? 0.2 : 0) +
         Math.min(0.1, citationCoverage * 0.1) +
         Math.min(0.1, confidence * 0.1)
       ).toFixed(2),
     ),
   );
+
+const triageQualityFor = ({
+  citationCoverage,
+  executionStatus,
+  foundCommitEvidence,
+  foundExactFile,
+  foundExactLine,
+  foundPersonOwner,
+}: {
+  citationCoverage: number;
+  executionStatus: "succeeded" | "failed";
+  foundCommitEvidence: boolean;
+  foundExactFile: boolean;
+  foundExactLine: boolean;
+  foundPersonOwner: boolean;
+}) => {
+  if (executionStatus === "failed") return "failed";
+  if (foundExactFile && foundExactLine && foundPersonOwner && foundCommitEvidence && citationCoverage >= 0.8) {
+    return "strong";
+  }
+  if (foundExactFile && (foundPersonOwner || foundCommitEvidence) && citationCoverage >= 0.5) {
+    return "medium";
+  }
+  return "weak";
+};
 
 export const groundAiResult = (
   result: AiInvestigationResult,
@@ -286,15 +313,39 @@ export const groundAiResult = (
   const likelyOwners = result.promptProfile === MANAGER_OWNER_TRIAGE_PROFILE && managerTriage
     ? managerOwnerNames
     : result.likelyOwners;
-  const citationCoverage = qualityCounts.total
-    ? Number((qualityCounts.supported / qualityCounts.total).toFixed(2))
+  const managerEvidenceCommitCount = managerTriage?.likely_owner_candidates.reduce(
+    (sum, candidate) => sum + candidate.evidence_commits.length,
+    0,
+  ) ?? 0;
+  const totalCitationChecks = qualityCounts.total + managerEvidenceCommitCount;
+  const supportedCitationChecks = qualityCounts.supported + managerEvidenceCommitCount;
+  const citationCoverage = totalCitationChecks
+    ? Number((supportedCitationChecks / totalCitationChecks).toFixed(2))
     : 0;
-  const foundExactFile = likelyFiles.some((file) => file.citations.length > 0);
-  const foundOwner = implementerHints.some((hint) => hint.citations.length > 0 && hasHumanOwner(hint)) ||
-    managerOwnerNames.length > 0 ||
-    likelyOwners.some((owner) => !isTeamAlias(owner));
-  const foundRelatedCommit = implementerHints.some((hint) => hint.commit && hint.citations.length > 0) ||
+  const foundExactFile = likelyFiles.some((file) => file.citations.length > 0) ||
+    Boolean(managerTriage?.likely_owner_candidates.some((candidate) =>
+      candidate.evidence_commits.some((commit) => Boolean(commit.file)),
+    ));
+  const foundExactLine = likelyFiles.some((file) => file.citations.some(isExactLineCitation)) ||
+    Boolean(managerTriage?.likely_owner_candidates.some((candidate) =>
+      candidate.evidence_commits.some((commit) => commit.line !== null),
+    ));
+  const foundPersonOwner = implementerHints.some((hint) => hint.citations.length > 0 && hasHumanOwner(hint)) ||
+    managerOwnerNames.length > 0;
+  const foundCommitEvidence = implementerHints.some((hint) => hint.commit && hint.citations.length > 0) ||
     Boolean(managerTriage?.likely_owner_candidates.some((candidate) => candidate.evidence_commits.length > 0));
+  const usedTeamFallback = !foundPersonOwner &&
+    (request.likelyOwners.some(isTeamAlias) || request.evidence.some((item) => isTeamAlias(item.owner)));
+  const executionStatus = "succeeded" as const;
+  const evidenceWarnings = uniqueStrings([...warnings, ...ownerEvidenceMissingInfoFrom(request)]).slice(0, 8);
+  const triageQuality = triageQualityFor({
+    citationCoverage,
+    executionStatus,
+    foundCommitEvidence,
+    foundExactFile,
+    foundExactLine,
+    foundPersonOwner,
+  });
 
   return {
     ...result,
@@ -307,13 +358,20 @@ export const groundAiResult = (
         citationCoverage,
         confidence: result.confidence,
         foundExactFile,
-        foundOwner,
-        foundRelatedCommit,
+        foundPersonOwner,
+        foundCommitEvidence,
       }),
       citationCoverage,
+      evidenceWarnings,
+      executionStatus,
+      foundCommitEvidence,
       foundExactFile,
-      foundOwner,
-      foundRelatedCommit,
+      foundExactLine,
+      foundOwner: foundPersonOwner,
+      foundPersonOwner,
+      foundRelatedCommit: foundCommitEvidence,
+      triageQuality,
+      usedTeamFallback,
     },
     warnings,
   };

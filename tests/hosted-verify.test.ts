@@ -3,9 +3,10 @@ import path from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
+import { renderHostedVerify } from "../src/hosted/render.js";
 import { runHostedVerify } from "../src/hosted/verify.js";
 import { FileSystemJobQueue } from "../src/worker/fs-queue.js";
-import type { EnqueueInvestigationJobInput, InvestigationJob, InvestigationResult, JobQueue } from "../src/types.js";
+import type { EnqueueInvestigationJobInput, HostedVerifyResult, InvestigationJob, InvestigationResult, JobQueue } from "../src/types.js";
 
 const tempDir = (name: string) =>
   path.join(tmpdir(), `firsttrace-hosted-${name}-${Date.now()}-${Math.random().toString(16).slice(2)}`);
@@ -273,5 +274,68 @@ describe("hosted verification runner", () => {
         status: "passed",
       }),
     );
+  });
+
+  it("renders weak triage quality in hosted verification summaries", () => {
+    const result: HostedVerifyResult = {
+      checks: [],
+      configPath: "firsttrace.config.yaml",
+      job: {
+        aiEnabled: true,
+        attempts: 1,
+        configPath: "firsttrace.config.yaml",
+        createdAt: "2026-05-22T00:00:00.000Z",
+        id: "job-1",
+        maxAttempts: 1,
+        report: "Renderer crashes",
+        result: {
+          ai: {
+            confidence: 0.4,
+            explanation: "Evidence is incomplete.",
+            implementerHints: [],
+            likelyComponent: "src/render.ts",
+            likelyFiles: [],
+            likelyOwners: [],
+            missingInfoQuestions: [],
+            provider: "agent",
+            quality: {
+              actionability: 0.1,
+              citationCoverage: 0,
+              evidenceWarnings: ["Git history is unavailable for app."],
+              executionStatus: "succeeded",
+              foundCommitEvidence: false,
+              foundExactFile: false,
+              foundExactLine: false,
+              foundOwner: false,
+              foundPersonOwner: false,
+              foundRelatedCommit: false,
+              triageQuality: "weak",
+              usedTeamFallback: false,
+            },
+            warnings: [],
+          },
+          classification: "bug",
+          likelyComponent: "src/render.ts",
+          likelyOwners: [],
+          relatedCommits: [],
+          relatedDocs: [],
+          report: "Renderer crashes",
+          searchTerms: ["renderer"],
+          suggestedNextSteps: [],
+          suspiciousFiles: [],
+          warnings: [],
+        },
+        status: "succeeded",
+        updatedAt: "2026-05-22T00:00:00.000Z",
+      },
+      passed: true,
+      queueProvider: "filesystem",
+    };
+
+    const rendered = renderHostedVerify(result);
+
+    expect(rendered).toContain("Job status: `succeeded`");
+    expect(rendered).toContain("Triage quality: `weak`");
+    expect(rendered).toContain("Evidence warnings: Git history is unavailable for app.");
   });
 });

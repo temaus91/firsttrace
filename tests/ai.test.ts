@@ -352,9 +352,15 @@ describe("AI provider support", () => {
     expect(grounded.implementerHints[0]?.citations).toEqual(["commit abc123"]);
     expect(grounded.warnings.join("\n")).toContain("unsupported citations");
     expect(grounded.quality).toMatchObject({
+      executionStatus: "succeeded",
       foundExactFile: true,
+      foundExactLine: true,
+      foundCommitEvidence: true,
       foundOwner: true,
+      foundPersonOwner: true,
       foundRelatedCommit: true,
+      triageQuality: "medium",
+      usedTeamFallback: false,
     });
     expect(grounded.quality?.citationCoverage).toBe(0.5);
     expect(grounded.quality?.actionability).toBeGreaterThan(0.7);
@@ -566,6 +572,7 @@ describe("AI provider support", () => {
     });
     expect(grounded.managerTriage?.missing_info.join("\n")).toContain("Provider returned a simplified answer without managerTriage");
     expect(grounded.warnings.join("\n")).toContain("Provider did not return managerTriage");
+    expect(grounded.quality?.triageQuality).toBe("weak");
   });
 
   it("preserves deterministic owner evidence when normalizing a simplified manager answer", () => {
@@ -579,15 +586,7 @@ describe("AI provider support", () => {
         explanation: "Renderer evidence is suspicious.",
         implementerHints: [],
         likelyComponent: "src/render.ts",
-        likelyFiles: [
-          {
-            citations: ["src/render.ts:12"],
-            confidence: 0.62,
-            path: "src/render.ts",
-            reason: "Renderer evidence matches.",
-            repo: "repo",
-          },
-        ],
+        likelyFiles: [],
         likelyOwners: [],
         missingInfoQuestions: [],
         promptProfile: MANAGER_OWNER_TRIAGE_PROFILE,
@@ -611,5 +610,6 @@ describe("AI provider support", () => {
       rank: 1,
     });
     expect(grounded.managerTriage?.recommended_manager_action).toContain("weak normalized handoff");
+    expect(grounded.quality?.triageQuality).toBe("strong");
   });
 });

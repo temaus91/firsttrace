@@ -99,9 +99,16 @@ export type AiImplementerHint = {
 export type AiInvestigationQuality = {
   actionability: number;
   citationCoverage: number;
+  evidenceWarnings: string[];
+  executionStatus: "succeeded" | "failed";
   foundExactFile: boolean;
+  foundExactLine: boolean;
+  foundCommitEvidence: boolean;
   foundOwner: boolean;
+  foundPersonOwner: boolean;
   foundRelatedCommit: boolean;
+  triageQuality: "strong" | "medium" | "weak" | "failed";
+  usedTeamFallback: boolean;
 };
 
 export type AiInvestigationResult = {

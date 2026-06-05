@@ -79,6 +79,7 @@ export const investigate = async (report: string, config: PreparedFirstTraceConf
   }
 
   const ownerEvidence = collectOwnerEvidence(config.repos, suspiciousFiles);
+  warnings.push(...ownerEvidence.missingInfo);
 
   return {
     classification: classifyReport(report),

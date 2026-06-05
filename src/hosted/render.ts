@@ -21,8 +21,12 @@ export const renderHostedVerify = (result: HostedVerifyResult) =>
     result.job ? `Job: \`${result.job.id}\`` : "",
     result.job ? `Job status: \`${result.job.status}\`` : "",
     result.job?.result ? `Result component: \`${result.job.result.likelyComponent}\`` : "",
+    result.job?.result?.ai?.quality ? `Triage quality: \`${result.job.result.ai.quality.triageQuality}\`` : "",
     result.job?.result?.likelyOwners.length
       ? `Result owners: ${result.job.result.likelyOwners.map((owner) => `\`${owner}\``).join(", ")}`
+      : "",
+    result.job?.result?.ai?.quality?.evidenceWarnings.length
+      ? `Evidence warnings: ${result.job.result.ai.quality.evidenceWarnings.join("; ")}`
       : "",
     result.slackReplyText ? `Captured Slack reply: ${result.slackReplyText.split("\n")[0]}` : "",
     "## Checks",

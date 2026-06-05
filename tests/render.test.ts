@@ -106,6 +106,20 @@ describe("renderInvestigation", () => {
         },
         missingInfoQuestions: [],
         provider: "agent",
+        quality: {
+          actionability: 0.2,
+          citationCoverage: 0,
+          evidenceWarnings: ["No exact line blame evidence was available."],
+          executionStatus: "succeeded",
+          foundCommitEvidence: false,
+          foundExactFile: false,
+          foundExactLine: false,
+          foundOwner: false,
+          foundPersonOwner: false,
+          foundRelatedCommit: false,
+          triageQuality: "weak",
+          usedTeamFallback: false,
+        },
         warnings: [],
       },
       classification: "bug",
@@ -124,6 +138,9 @@ describe("renderInvestigation", () => {
     expect(rendered).toContain("Bug Triage\n\nIssue");
     expect(rendered).toContain("Likely Owner Candidates");
     expect(rendered).toContain("Do not assign a person yet.");
+    expect(rendered).toContain("## Triage Quality");
+    expect(rendered).toContain("triage_quality: `weak`");
+    expect(rendered).toContain("No exact line blame evidence was available.");
     expect(rendered).not.toContain("# FirstTrace Investigation");
   });
 });

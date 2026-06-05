@@ -136,10 +136,12 @@ const qualityWarnings = (result: InvestigationResult) => {
   const quality = result.ai?.quality;
   if (!quality) return [];
   const warnings: string[] = [];
+  if (quality.triageQuality === "weak") warnings.push("AI quality: triage_quality=weak.");
   if (!quality.foundExactFile) warnings.push("AI quality: no exact grounded file lead.");
-  if (!quality.foundOwner) warnings.push("AI quality: no evidence-backed human owner.");
-  if (!quality.foundRelatedCommit) warnings.push("AI quality: no evidence-backed related commit.");
-  return warnings.slice(0, 2);
+  if (!quality.foundExactLine) warnings.push("AI quality: no exact grounded line lead.");
+  if (!quality.foundPersonOwner) warnings.push("AI quality: no evidence-backed human owner.");
+  if (!quality.foundCommitEvidence) warnings.push("AI quality: no evidence-backed commit.");
+  return warnings.slice(0, 3);
 };
 
 const slackWarnings = (result: InvestigationResult) =>
@@ -158,6 +160,7 @@ export const renderSlackInvestigationReply = (result: InvestigationResult) => {
     `Likely owner: \`${textList(likelyOwners(result))}\``,
     `Primary files: \`${textList(primaryFiles(result))}\``,
     result.ai ? `AI confidence: \`${result.ai.confidence.toFixed(2)}\`` : "",
+    result.ai?.quality ? `Triage quality: \`${result.ai.quality.triageQuality}\`` : undefined,
     result.ai?.userImpact ? `User impact: ${sentenceLimit(result.ai.userImpact, 1)}` : undefined,
     "",
     "*Likely cause*",
