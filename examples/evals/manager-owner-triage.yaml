@@ -1,0 +1,49 @@
+- id: slash-id-navigation
+  report: "Entity detail links fail when an entity id contains a slash."
+  expected_classification: bug
+  expected_component: src/components/EntityLinks.tsx
+  expected_files:
+    - src/components/EntityLinks.tsx
+  expected_owners:
+    - "@team"
+  notes: "Generic route interpolation case; no customer route names or product nouns."
+
+- id: blank-existing-entity-screen
+  report: "Opening an existing entity detail screen fails with a blank view instead of showing the entity."
+  expected_classification: bug
+  expected_component: src/routes/EntityShell.tsx
+  expected_files:
+    - src/routes/EntityShell.tsx
+  expected_owners:
+    - "@team"
+  notes: "Generic parent shell fallback case for existing-entity blank screens."
+
+- id: route-helper-url-encoding
+  report: "Route helper behavior fails for entity ids with reserved URL characters."
+  expected_classification: bug
+  expected_component: src/routes/entity-url.ts
+  expected_files:
+    - src/routes/entity-url.ts
+  expected_owners:
+    - "@team"
+  notes: "Generic helper coverage for encode/decode URL behavior."
+
+- id: api-request-construction
+  report: "Entity summary API requests fail when entity ids include reserved URL characters."
+  expected_classification: bug
+  expected_component: src/api/entity-client.ts
+  expected_files:
+    - src/api/entity-client.ts
+  expected_owners:
+    - "@team"
+  notes: "Generic API request construction case."
+
+- id: retry-idempotency-state
+  report: "Retrying a failed notification is skipped because idempotency state is treated as already sent."
+  expected_classification: bug
+  expected_component: src/server/retry-store.ts
+  expected_files:
+    - src/server/retry-store.ts
+  expected_owners:
+    - "@team"
+  notes: "Generic retry/idempotency state-machine case."

@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
+import { loadConfig } from "../src/config.js";
 import { loadEvalCases } from "../src/eval/cases.js";
 import { renderEvalRun } from "../src/eval/render.js";
 import { runEval } from "../src/eval/runner.js";
@@ -181,6 +182,25 @@ describe("eval support", () => {
     expect(rendered).toContain("readme-deployment-plan: PASS");
     expect(rendered).toContain("Deterministic: PASS");
     expect(rendered).toContain("Usefulness: `1.00`");
+  });
+
+  it("runs the public manager-owner synthetic eval fixtures", async () => {
+    const cases = loadEvalCases("examples/evals/manager-owner-triage.yaml");
+    expect(cases.map((item) => item.id)).toEqual([
+      "slash-id-navigation",
+      "blank-existing-entity-screen",
+      "route-helper-url-encoding",
+      "api-request-construction",
+      "retry-idempotency-state",
+    ]);
+
+    const result = await runEval({
+      cases,
+      config: loadConfig("examples/minimal.local.config.yaml"),
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.summary).toEqual({ failed: 0, passed: 5, total: 5 });
   });
 
   it("renders AI failures when AI was requested but unavailable", () => {
