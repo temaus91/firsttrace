@@ -37,9 +37,9 @@ The current version is read-only:
 5. The same investigation path can run through local evals or the local worker
    queue under `.firsttrace/jobs`.
 
-The next version priority is to make `manager-owner-triage` the default
-bug-report response contract. That means a stable manager Markdown reply from
-validated JSON, no customer-specific prompt overlay required.
+The `0-1-6-release` branch makes `manager-owner-triage` the default bug-report
+response contract. That means a stable manager Markdown reply from validated
+JSON, no customer-specific prompt overlay required.
 
 The hosted channel version is chat-triggered:
 
@@ -265,12 +265,12 @@ OpenAI, OCI GenAI, and future model adapters use the same built-in FirstTrace
 investigation prompt contract by default. The default prompt is versioned and
 keeps safety, citation grounding, and output-schema rules inside the package.
 
-The next version priority is a built-in `manager-owner-triage` profile so
-enterprise teams do not need a custom prompt overlay for PM/manager bug triage.
-Advanced deployments can still add prompt overlays without forking FirstTrace,
-but overlays are an escape hatch for local language and domain preferences, not
-the mechanism for the core owner-triage behavior. Overlays are appended to the
-built-in prompt and cannot remove required safety, evidence, or schema rules.
+The built-in `manager-owner-triage` profile means enterprise teams do not need a
+custom prompt overlay for PM/manager bug triage. Advanced deployments can still
+add prompt overlays without forking FirstTrace, but overlays are an escape hatch
+for local language and domain preferences, not the mechanism for the core
+owner-triage behavior. Overlays are appended to the built-in prompt and cannot
+remove required safety, evidence, or schema rules.
 
 ```yaml
 investigation:
@@ -776,12 +776,10 @@ firsttrace hosted accept \
   --expected-build-ref "npm:firsttrace@0.1.5"
 ```
 
-Next planned work:
+Release follow-up:
 
-1. Execute the customer-requested manager-owner triage milestones in
-   [docs/PRODUCT_PLAN.md](docs/PRODUCT_PLAN.md) as the next version priority.
-2. Keep OCI and Vercel/Supabase hosted acceptance as release verification gates.
-3. Defer unrelated issue-provider work unless it directly supports the
+1. Keep OCI and Vercel/Supabase hosted acceptance as release verification gates.
+2. Defer unrelated issue-provider work unless it directly supports the
    manager-owner evidence contract.
 
 ## License

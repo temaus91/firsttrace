@@ -328,251 +328,57 @@ In this model, automatic triage can run on broad triggers, but write actions
 such as creating a bug should require a deliberate trigger or an explicit policy
 in the channel profile.
 
-## Next Version Priority: Manager Owner Triage
+## Version 0.1.6: Manager Owner Triage - Implemented
 
-The next npm version priority is the customer-requested manager-owner triage
-workflow. This is not optional polish and not a downstream prompt overlay. It is
-the product direction for FirstTrace: PMs and managers should get a stable,
-evidence-backed bug triage response from the open-source package without
-forking FirstTrace, patching deployed code, or maintaining a custom prompt.
+The customer-requested manager-owner triage workflow is implemented release
+scope on the `0-1-6-release` branch. It remains the
+product direction for FirstTrace: PMs and engineering managers are the primary
+users, and engineers receive enough evidence to start a later code-level debug
+or fix workflow.
 
-Default audience and product surface:
+Implemented 0.1.6 scope:
 
-- PMs and engineering managers are the primary users.
-- Engineers remain secondary users who receive enough evidence to begin a later
-  code-level debugging or fix workflow.
-- For bug reports, the default external response should be the
-  `manager-owner-triage` contract rendered as stable Markdown.
-- The existing engineering fields can remain internally available for CLI
-  diagnostics, evals, and future developer surfaces.
-- The package should not assign a person when person-level Git/provider evidence
-  is unavailable. In that case it should say what evidence is missing and
-  recommend collecting blame, commit history, PR metadata, or pushed-by
-  metadata.
+- `manager-owner-triage` is the default bug-report profile and public response
+  contract.
+- The manager output is rendered from a strict schema with issue, up to two
+  owner candidates, grouped evidence commits, likely root cause, user impact,
+  recommended manager action, and missing info.
+- Deterministic evidence search now uses explicit multi-pass search for raw
+  terms, UI journeys, route construction, identifiers, safe helpers, API
+  construction, and retry/idempotency state patterns.
+- Suspicious file citations preserve repo, path, exact line, snippet, query,
+  search pass, relevance, and why the line matters.
+- A dedicated owner evidence collector gathers exact-line blame, file history as
+  weak context, full commit metadata, identity dedupe, and at most two
+  evidence-backed person candidates.
+- Broad recent history, team aliases, and CODEOWNERS-only matches no longer
+  create person candidates. Missing git/provider metadata is surfaced as missing
+  info.
+- AI providers receive structured search and owner evidence. The manager triage
+  payload is normalized and validated so unsupported names, emails, commits,
+  timestamps, files, lines, or snippets are removed rather than invented.
+- Triage quality gates distinguish operational worker success from investigation
+  quality with execution status, strong/medium/weak/failed triage quality, exact
+  file/line/person/commit flags, team fallback detection, citation coverage,
+  actionability, and evidence warnings.
+- CLI, Slack, worker, hosted verification, and API result objects surface weak
+  triage quality and missing evidence.
+- Public synthetic eval fixtures cover slash-containing ID navigation, blank
+  existing-entity screens, route helper URL behavior, API request construction,
+  and retry/idempotency state-machine bugs without customer-specific names or
+  private workflow assumptions.
+- A provider metadata interface and GitHub adapter can enrich owner evidence
+  with PR author metadata. Pushed-by evidence is used only when a provider
+  explicitly exposes it; GitHub does not fabricate it.
 
-Scope boundary:
+Release boundary:
 
-- Implement generic heuristics for route construction, URL encoding, route
-  params, API request construction, state-machine ownership, and provider
-  metadata.
-- Do not hard-code one customer's route names, repository names, domain nouns,
-  cloud tenancy, Slack channel, or workflow labels.
-- Keep GitHub, GitLab, Jira, OCI DevOps, and other vendors behind provider
-  interfaces. GitHub can be implemented first, but local Git must remain a
-  first-class fallback.
-
-### Milestone 1: Manager Triage Contract And Renderer
-
-Goal: make the manager-facing output contract explicit and stable.
-
-Build:
-
-- add a strict `manager-owner-triage` JSON schema with:
-  - `issue`
-  - `likely_owner_candidates` limited to zero, one, or two entries
-  - grouped evidence commits per person
-  - `likely_root_cause`
-  - `user_impact`
-  - `recommended_manager_action`
-  - `missing_info`
-- add allowed evidence source values:
-  - `pushed_by`
-  - `pr_author`
-  - `committer`
-  - `commit_author`
-  - `unknown`
-- add a built-in Markdown renderer for the fixed manager triage format.
-- make `manager-owner-triage` the first-class/default bug-report profile for
-  the next version.
-- keep prompt overlays as an advanced escape hatch, not a requirement for this
-  workflow.
-
-Acceptance:
-
-- output validates against the schema before rendering.
-- `likely_owner_candidates` never exceeds two people.
-- the same person is grouped once with multiple evidence commits.
-- candidates without evidence commits are rejected or moved to `missing_info`.
-- the Markdown output is stable enough for snapshot tests and Slack/API callers.
-
-### Milestone 2: Deterministic Multi-Pass Evidence Search
-
-Goal: collect the obvious evidence before asking the model to reason.
-
-Build:
-
-- turn the current deterministic search into explicit passes:
-  - raw report term extraction
-  - UI journey and route expansion
-  - identifier expansion
-  - code-pattern expansion
-  - existing helper and safe-pattern search
-  - commit/blame enrichment for top candidate lines
-- add route/navigation queries for reports mentioning links, navigation,
-  routing, tabs, deep links, detail pages, dashboards, entities, IDs, slugs, or
-  URL failures.
-- add slash-containing ID heuristics that search for raw path interpolation and
-  missing encoding:
-  - `navigate(`
-  - `router.push`
-  - `href=`
-  - `to=`
-  - `${id}`
-  - `${slug}`
-  - `generatePath`
-  - `encodeURIComponent`
-  - `decodeURIComponent`
-  - `URLSearchParams`
-- preserve exact evidence lines with repo, path, line number, snippet, query,
-  relevance category, and why the line matters.
-- rank candidate files by exact fault pattern before broad file-name or broad
-  domain-noun matches.
-
-Acceptance:
-
-- a synthetic slash-ID navigation report finds raw route interpolation ahead of
-  broad noun matches.
-- existing safe helper usage or missing helper usage is surfaced before a likely
-  cause is written.
-- broad terms such as screen names or plural nouns cannot outrank exact route or
-  API construction evidence.
-
-### Milestone 3: Dedicated Owner Evidence Collector
-
-Goal: make owner attribution deterministic and evidence-first.
-
-Build:
-
-- add a structured owner evidence collector independent of the LLM.
-- collect exact-line `git blame` for top suspicious lines.
-- collect `git log --follow` for top candidate files.
-- collect `git show --format=fuller --name-status --find-renames` for relevant
-  commits when practical.
-- upgrade local git metadata to full SHA, full ISO timestamps, author name/email,
-  committer name/email, commit title, file, line, and snippet.
-- dedupe people by explicit identity and group multiple relevant commits under
-  one candidate.
-- rank owner evidence by:
-  - exact broken-line blame
-  - likely introducing commit for the suspicious pattern
-  - PR/merge metadata for the exact code path
-  - same route/navigation pattern in related files
-  - recent broad file activity only as weak context
-- prevent team aliases, CODEOWNERS-only matches, and broad recent history from
-  producing person candidates when `allowTeamFallback=false`.
-
-Acceptance:
-
-- exact-line blame can produce one high-confidence owner candidate.
-- two relevant commits by the same person produce one candidate with multiple
-  evidence commits.
-- two strong people produce at most two candidates.
-- missing `.git` history produces `missing_info`, not an invented person.
-- current agent behavior that promotes recent file history into a person owner
-  is tightened so broad recency alone becomes weak evidence or missing info.
-
-### Milestone 4: Built-In AI Contract And Strict Normalization
-
-Goal: let the model plan and explain, but not invent evidence.
-
-Build:
-
-- add a built-in manager-owner system prompt/profile section.
-- feed the model structured search evidence and owner evidence.
-- require the model to return the manager-owner schema for this profile.
-- normalize provider-wrapped OpenAI and OCI GenAI responses, then validate the
-  final payload against the strict manager-owner schema.
-- if a provider returns a simplified or incomplete answer, mark the result weak
-  and render missing evidence instead of filling gaps.
-
-Acceptance:
-
-- unsupported names, emails, commits, timestamps, file paths, line numbers, or
-  snippets are rejected or removed.
-- the model can rank evidence, explain root cause/user impact, and recommend a
-  manager action, but cannot create person candidates without evidence commits.
-- no custom prompt overlay is required for a slash-ID navigation bug or blank
-  existing-entity screen bug.
-
-### Milestone 5: Triage Quality Gates
-
-Goal: separate worker success from investigation quality.
-
-Build:
-
-- add quality fields such as:
-  - `execution_status`
-  - `triage_quality`
-  - `found_exact_file`
-  - `found_exact_line`
-  - `found_person_owner`
-  - `found_commit_evidence`
-  - `used_team_fallback`
-  - `evidence_warnings`
-- define strong, medium, weak, and failed quality levels.
-- surface weak manager-owner results in CLI, API, and Slack renderers even when
-  the worker job operationally succeeded.
-- warn when a deployment packages source without `.git` and no provider
-  metadata adapter is configured.
-
-Acceptance:
-
-- an operationally successful job can still report `triage_quality=weak`.
-- strict mode callers can detect weak results without parsing prose.
-- missing exact file, exact line, person owner, or commit evidence is visible to
-  PMs/managers as missing evidence, not hidden in logs.
-
-### Milestone 6: Tests And Synthetic Evals
-
-Goal: make the customer-requested behavior regression-testable in open source.
-
-Build:
-
-- add unit tests for schema validation and stable Markdown rendering.
-- add owner evidence tests:
-  - exact line blame produces one owner candidate
-  - same-person commits are grouped
-  - different-person evidence caps at two candidates
-  - team fallback does not create a person candidate
-  - missing `.git` history creates missing info
-  - provider metadata can label `pr_author` or `pushed_by`
-- add synthetic eval fixtures for:
-  - slash-containing ID navigation
-  - blank detail screen when an entity exists
-  - route helper or URL helper usage
-  - API request construction bugs
-  - retry/idempotency state-machine bugs
-- keep historical customer-specific acceptance cases private/downstream.
-
-Acceptance:
-
-- public evals use generic entity, route, and repository fixtures.
-- no eval fixture embeds customer-specific routes, product nouns, repositories,
-  tenants, or private workflow assumptions.
-- the manager-owner schema and renderer are tested independently of model
-  behavior.
-
-### Milestone 7: Provider Metadata Adapters
-
-Goal: improve person attribution beyond local Git when provider metadata is
-available.
-
-Build:
-
-- add provider interfaces for commit, PR/merge-request, and pushed-by metadata.
-- implement GitHub first if it is the fastest validated adapter.
-- add GitLab and OCI DevOps through the same interface when credentials and API
-  behavior are available to test.
-- preserve generic local Git fallback.
-- label the source of every person claim as Git author, Git committer, PR
-  author, pushed-by user, or unknown.
-
-Acceptance:
-
-- GitHub PR author metadata can produce `evidence_source=pr_author`.
-- pushed-by metadata is used only when the provider explicitly exposes it.
-- lack of provider metadata produces missing info or weaker confidence, not a
-  fabricated pusher or PR author.
+- Do not publish the npm 0.1.6 package until the release process is run
+  separately.
+- GitLab, OCI DevOps, Jira/issue metadata, automatic CODEOWNERS parsing, and
+  write-capable work-item creation remain future work.
+- Historical customer-specific eval cases should stay private/downstream; public
+  evals should remain generic.
 
 ## Phased Roadmap
 
@@ -1611,9 +1417,9 @@ features.
 
 ## Future TODOs
 
-The manager-owner triage milestones above are the next version priority. The
-following items remain outside that customer-requested scope unless they are
-needed to complete those milestones:
+The 0.1.6 manager-owner triage scope above is implemented. The following items
+remain future work and should stay aligned with PM/manager triage as the primary
+product surface:
 
 1. Parse CODEOWNERS and optional `firsttrace.owners.yaml` automatically, then
    map team aliases to Slack users, emails, Jira components, or escalation
@@ -1626,8 +1432,8 @@ needed to complete those milestones:
    provider extension API for enterprise-specific repository sources.
 5. Add the later `codex-cli` investigator adapter only after the built-in agent
    path has clear quality gaps, using the same `FIRSTTRACE_MODEL_CHAT` value.
-6. Add broader release gates beyond the manager-owner schema once there are more
-   public and private historical-bug eval cases.
+6. Add broader release gates once there are more public and private
+   historical-bug eval cases.
 
 ## Open Questions
 
