@@ -2,7 +2,7 @@
   "name": "firsttrace",
   "version": "0.1.5",
   "type": "module",
-  "description": "Self-hosted bug localization for teams with private, internal, or public git repos.",
+  "description": "Self-hosted manager-owner bug triage for teams with private, internal, or public git repos.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

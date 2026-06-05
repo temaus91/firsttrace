@@ -3,6 +3,12 @@
 This directory contains the reusable OCI deployment path for FirstTrace. It is
 intended for real deployments, not a one-off environment.
 
+FirstTrace is a PM/manager-facing manager-owner bug triage service. The next
+version priority is a built-in `manager-owner-triage` response that reports the
+user-facing issue, evidence-backed owner candidates, exact code/commit evidence,
+likely root cause, user impact, and recommended manager action without requiring
+a custom prompt overlay.
+
 The preferred runtime image is package-based: `deploy/oci/Dockerfile.package`
 installs `firsttrace@<version>` from npm and copies one deployment config file
 into the image. OCI still runs Container Instances, but the image does not need
@@ -275,19 +281,19 @@ Upload or create your deployment config as `~/firsttrace/firsttrace.config.yaml`
 It should contain your `repos`, `owners`, and Slack channel configuration, but
 not secrets.
 
-If you need domain-specific investigation behavior, add an optional prompt
-overlay to the same config:
+Current package versions support optional prompt overlays in the same config:
 
 ```yaml
 investigation:
   prompt:
-    profile: enterprise-triage
+    profile: manager-owner-triage
     overlay_files:
-      - ./prompts/company-investigation.md
+      - ./prompts/company-style.md
 ```
 
-Prompt overlays are additive and cannot remove FirstTrace safety, citation, or
-output-schema rules.
+Prompt overlays are additive. Use them only for local style or domain wording.
+They should not be required for the core manager-owner triage workflow, and they
+cannot remove FirstTrace safety, citation, or output-schema rules.
 
 Create the base OCI infrastructure. Keep `container_image_url` empty for the
 first apply because the OCIR repository must exist before the image can be

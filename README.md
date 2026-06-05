@@ -1,11 +1,16 @@
 # FirstTrace
 
-Self-hosted bug localization for teams with private, internal, or public git repos.
+Self-hosted manager-owner bug triage for teams with private, internal, or public
+git repos.
 
-FirstTrace turns a messy bug report from chat, CLI, or another source into the
-first useful evidence trail: likely component, suspicious files, likely owner,
-related issues, and suggested next steps. It is meant to reduce the first hour
-of debugging, not replace engineers.
+FirstTrace turns a messy bug report from chat, CLI, or another source into a
+PM/manager-facing triage handoff: the user-facing issue, one or two
+evidence-backed owner candidates, the exact code and commit evidence behind each
+candidate, likely root cause, user impact, and recommended manager action.
+
+Engineers can use Codex or other AI/code tools later to debug and implement the
+fix. FirstTrace's primary job is to make the first assignment and escalation
+decision evidence-based.
 
 ## Why
 
@@ -13,57 +18,91 @@ Bug reports usually start in chat:
 
 > Checkout fails after retrying a failed payment. Buyer says the artwork is now held.
 
-The first engineer on the thread then burns time searching code, recent commits,
-ownership metadata, and Jira history before they can even ask the right owner for
-help. FirstTrace automates that first pass and replies with cited evidence.
+The first PM or manager on the thread needs to know what users are experiencing,
+which person should be asked first, and whether that assignment is backed by
+real code and change-history evidence. FirstTrace automates that first pass and
+refuses to invent a person owner when the evidence is missing.
 
 ## What It Does
 
 The current version is read-only:
 
-1. An engineer runs `firsttrace investigate` with a bug report and config file.
+1. A PM, manager, or operator runs `firsttrace investigate` with a bug report
+   and config file.
 2. FirstTrace prepares configured repositories, including local checkouts or
    read-only GitHub App materialized repositories.
 3. FirstTrace searches files, docs, issue exports, and recent git commits.
-4. It classifies the report, ranks likely evidence, maps owners, and prints a
-   concise investigation starting point with citations.
+4. It classifies the report, ranks likely evidence, maps owner metadata, and
+   prints a concise cited triage result.
 5. The same investigation path can run through local evals or the local worker
    queue under `.firsttrace/jobs`.
 
-The later channel-agent version is chat-triggered:
+The next version priority is to make `manager-owner-triage` the default
+bug-report response contract. That means a stable manager Markdown reply from
+validated JSON, no customer-specific prompt overlay required.
 
-1. An engineer posts a bug report in a chat channel.
+The hosted channel version is chat-triggered:
+
+1. A PM, manager, support lead, or engineer posts a bug report in a chat
+   channel.
 2. They ask `@FirstTrace investigate`.
 3. FirstTrace fetches the thread context.
-4. It searches configured git repos, Jira, and ownership metadata.
-5. It asks an LLM to rank the evidence.
-6. It replies in the thread with a concise investigation starting point.
+4. It searches configured git repos and ownership/change-history metadata.
+5. It asks an LLM to rank and explain only the gathered evidence.
+6. It replies in the thread with manager-readable owner candidates, evidence,
+   likely root cause, user impact, and recommended action.
 
 Example output:
 
 ```text
-Likely component: Checkout / Public Exhibition
-Confidence: 0.74
+Bug Triage
 
-Suspicious files:
-1. app/api/public-exhibitions/[slug]/checkout/route.ts
-   Reason: owns the checkout start path mentioned in the report.
-2. lib/server/checkout/resume-cookie.ts
-   Reason: handles retry recovery for held artwork.
-3. lib/server/checkout/reconcile-session.ts
-   Reason: recent checkout recovery changes touched reconciliation.
+Issue
+Entity detail links can fail when an entity ID contains "/", for example
+ACME/123. The UI builds a route with the raw ID, so the router treats the slash
+as a path separator.
 
-Likely owner:
-@checkout-platform
+Likely Owner Candidate
 
-Related Jira:
-- PAY-18342: checkout retry leaves sale held
-- PAY-17920: reconciliation job misses redirected sessions
+1. Dev Owner
+   Email: dev.owner@example.com
+   Confidence: High
+   Reason: Exact line blame points to the commit that inserted the raw ID into
+   the route path.
+   Evidence source: commit_author
 
-Suggested next steps:
-1. Ask @checkout-platform to inspect retry + held-state handling.
-2. Reproduce with a failed payment redirect followed by a second checkout click.
-3. Check whether the sale has an open Stripe session before creating a new one.
+   Evidence commits:
+   - Commit: 0123456789abcdef0123456789abcdef01234567
+     Commit time: 2026-05-20T17:15:30Z
+     Commit title: Add entity detail links
+     Repo: web-app
+     File: src/components/EntityLinks.tsx
+     Line: 42
+     Evidence: navigate(`/entities/${entity.id}/detail`)
+     Why relevant: This inserts a slash-containing entity ID directly into the
+     route path.
+
+Likely Root Cause
+Entity IDs containing reserved URL characters are inserted directly into route
+paths instead of being encoded or routed through a safe path helper.
+
+User Impact
+Users cannot reliably navigate from lists, alerts, or dashboards to affected
+entity detail pages.
+
+Recommended Manager Action
+Route first to Dev Owner because exact code and commit evidence points to that
+person. Ask the implementer to verify route encoding and update adjacent links
+using the same pattern.
+```
+
+If FirstTrace cannot find person-level evidence, the manager action should be
+explicitly non-assignment:
+
+```text
+Recommended Manager Action
+Do not assign a person yet. Collect Git blame, commit history, PR metadata, or
+provider pushed-by metadata for the suspected files.
 ```
 
 ## Architecture
@@ -103,7 +142,8 @@ Current runtime backend support:
 ## Product Plan
 
 See [docs/PRODUCT_PLAN.md](docs/PRODUCT_PLAN.md) for the working build plan,
-core architecture, eval strategy, runtime adapter strategy, and open questions.
+core architecture, eval strategy, runtime adapter strategy, and the next-version
+manager-owner triage milestones requested by the current customer.
 See [implement.md](implement.md) for implementation guidance meant for future
 engineering sessions.
 See [instructions.md](instructions.md) for the npm-first hosted setup workflow
@@ -225,28 +265,31 @@ OpenAI, OCI GenAI, and future model adapters use the same built-in FirstTrace
 investigation prompt contract by default. The default prompt is versioned and
 keeps safety, citation grounding, and output-schema rules inside the package.
 
-Advanced deployments can add prompt overlays without forking FirstTrace. Overlays
-are appended to the built-in prompt and cannot remove required safety, evidence,
-or schema rules.
+The next version priority is a built-in `manager-owner-triage` profile so
+enterprise teams do not need a custom prompt overlay for PM/manager bug triage.
+Advanced deployments can still add prompt overlays without forking FirstTrace,
+but overlays are an escape hatch for local language and domain preferences, not
+the mechanism for the core owner-triage behavior. Overlays are appended to the
+built-in prompt and cannot remove required safety, evidence, or schema rules.
 
 ```yaml
 investigation:
   prompt:
-    profile: enterprise-triage
+    profile: manager-owner-triage
     overlay_files:
-      - ./prompts/company-investigation.md
+      - ./prompts/company-style.md
 ```
 
 The same behavior can be configured with environment variables:
 
 ```bash
-FIRSTTRACE_PROMPT_PROFILE=enterprise-triage
-FIRSTTRACE_PROMPT_OVERLAY_FILES=./prompts/company-investigation.md
+FIRSTTRACE_PROMPT_PROFILE=manager-owner-triage
+FIRSTTRACE_PROMPT_OVERLAY_FILES=./prompts/company-style.md
 ```
 
-Use overlays for domain-specific handoff preferences, such as naming a business
-surface, preferred escalation language, or how to describe user impact. Keep
-repository secrets, customer data, and tokens out of prompt overlay files.
+Use overlays only for domain-specific handoff preferences, such as naming a
+business surface, preferred escalation language, or how to describe user impact.
+Keep repository secrets, customer data, and tokens out of prompt overlay files.
 
 Example compact Slack reply from a real UI/bootstrap report:
 
@@ -572,6 +615,9 @@ the full reusable deployment sequence.
 
 FirstTrace v0 should stay small:
 
+- manager-owner triage as the default bug-report product surface
+- stable PM/manager Markdown rendered from validated JSON
+- person owner candidates only when backed by Git/provider evidence
 - chat provider trigger, with Slack first and Teams or other providers later
 - one or more configured git repositories
 - local/internal git support, not only github.com
@@ -588,13 +634,14 @@ FirstTrace is not:
 
 - an autonomous code-writing or code-fixing agent
 - a ticket-writing system
-- a replacement for engineers
+- a replacement for engineers or code-level debugging tools
 - a generic workplace search tool
 - a SaaS-only product
 - a tool that needs write access to source code
 
-Write permissions, ticket creation, and fix suggestions can come later. The first
-product should earn trust by being read-only and evidence-cited.
+Write permissions, ticket creation, and fix suggestions can come later. The
+first product should earn trust by being read-only, manager-readable, and
+evidence-cited.
 
 ## Eval-First Development
 
@@ -731,9 +778,11 @@ firsttrace hosted accept \
 
 Next planned work:
 
-1. Deploy the npm-wrapper Vercel/Supabase backend and run live acceptance.
-2. Run OCI live acceptance before OCI release or infrastructure changes.
-3. Add GitHub Issues or another issue provider through the generic provider boundary.
+1. Execute the customer-requested manager-owner triage milestones in
+   [docs/PRODUCT_PLAN.md](docs/PRODUCT_PLAN.md) as the next version priority.
+2. Keep OCI and Vercel/Supabase hosted acceptance as release verification gates.
+3. Defer unrelated issue-provider work unless it directly supports the
+   manager-owner evidence contract.
 
 ## License
 
