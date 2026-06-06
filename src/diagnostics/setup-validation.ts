@@ -1,6 +1,6 @@
 import { loadConfig } from "../config.js";
 import { aiModelProviderFromEnv, resolveChatModelFromEnv } from "../ai/provider-factory.js";
-import type { FirstTraceConfig, GitHubRepoConfig } from "../types.js";
+import type { FirstTraceConfig, GitHubRepoConfig, GitRepoConfig } from "../types.js";
 
 export type SetupCheckLevel = "FAIL" | "PASS" | "WARN";
 
@@ -29,6 +29,9 @@ const hasEnv = (env: NodeJS.ProcessEnv, name: string) => Boolean(env[name]?.trim
 
 const githubRepos = (config: FirstTraceConfig) =>
   config.repos.filter((repo): repo is GitHubRepoConfig => repo.provider === "github");
+
+const gitRepos = (config: FirstTraceConfig) =>
+  config.repos.filter((repo): repo is GitRepoConfig => repo.provider === "git");
 
 const hasGitHubAccess = (env: NodeJS.ProcessEnv) =>
   hasEnv(env, "GITHUB_TOKEN") ||
@@ -97,7 +100,33 @@ export const validateFirstTraceSetup = ({
     return { checks, passed: false };
   }
 
-  checks.push(check("PASS", "Repositories", `${config.repos.length} repos configured; local repo paths are valid.`));
+  checks.push(check("PASS", "Repositories", `${config.repos.length} repos configured; local repo paths are valid where applicable.`));
+
+  const genericGit = gitRepos(config);
+  if (genericGit.length > 0) {
+    const missingTokenEnv = genericGit.flatMap((repo) =>
+      repo.credential?.type === "token" && !hasEnv(env, repo.credential.tokenEnv)
+        ? [`${repo.name}:${repo.credential.tokenEnv}`]
+        : [],
+    );
+    const missingSshEnv = genericGit.flatMap((repo) => {
+      if (repo.credential?.type !== "ssh") return [];
+      return [
+        ...(repo.credential.commandEnv && !hasEnv(env, repo.credential.commandEnv)
+          ? [`${repo.name}:${repo.credential.commandEnv}`]
+          : []),
+        ...(repo.credential.keyFileEnv && !hasEnv(env, repo.credential.keyFileEnv)
+          ? [`${repo.name}:${repo.credential.keyFileEnv}`]
+          : []),
+      ];
+    });
+    const missing = [...missingTokenEnv, ...missingSshEnv];
+    checks.push(
+      missing.length
+        ? check("FAIL", "Git repositories", `Generic git repos are missing credential env vars: ${missing.join(", ")}.`)
+        : check("PASS", "Git repositories", `${genericGit.length} generic git repos can be materialized or validated with doctor repos.`),
+    );
+  }
 
   const github = githubRepos(config);
   if (github.length > 0) {

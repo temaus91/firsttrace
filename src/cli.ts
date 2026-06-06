@@ -8,6 +8,7 @@ import {
   type SlackManifestProfile,
 } from "./chat/slack/manifest-validator.js";
 import { loadConfig } from "./config.js";
+import { diagnoseConfiguredRepositories, renderRepositoryDiagnostics } from "./diagnostics/repositories.js";
 import { renderSetupValidation, validateFirstTraceSetup } from "./diagnostics/setup-validation.js";
 import { loadLocalEnv } from "./env.js";
 import { loadEvalCases } from "./eval/cases.js";
@@ -33,6 +34,7 @@ type ParsedArgs = {
   channelId?: string;
   command?: string;
   configPath: string;
+  doctorAction?: string;
   expectedBuildRef?: string;
   gracePeriodMs?: number;
   help: boolean;
@@ -53,6 +55,7 @@ type ParsedArgs = {
 const usage = () => `Usage:
   firsttrace investigate --config firsttrace.config.yaml --report "bug text"
   firsttrace doctor --config firsttrace.config.yaml
+  firsttrace doctor repos --config firsttrace.config.yaml
   firsttrace investigate --config firsttrace.config.yaml --report "bug text" --ai
   firsttrace eval --config firsttrace.config.yaml --cases evals/example.yaml
   firsttrace eval --config firsttrace.config.yaml --cases evals/example.yaml --ai
@@ -112,6 +115,7 @@ const parseArgs = (argv: string[]): ParsedArgs => {
     ai: false,
     command,
     configPath: path.resolve("firsttrace.config.yaml"),
+    doctorAction: command === "doctor" && argv[1] && !argv[1].startsWith("--") ? argv[1] : undefined,
     help: false,
     hostedAction: command === "hosted" ? argv[1] : undefined,
     liveSlackPost: false,
@@ -120,11 +124,11 @@ const parseArgs = (argv: string[]): ParsedArgs => {
     workerAction: command === "worker" ? argv[1] : undefined,
   };
 
-  for (
-    let index = parsed.command === "worker" || parsed.command === "hosted" || parsed.command === "slack" ? 2 : 1;
-    index < argv.length;
-    index += 1
-  ) {
+  const startIndex =
+    parsed.command === "worker" || parsed.command === "hosted" || parsed.command === "slack" || parsed.doctorAction
+      ? 2
+      : 1;
+  for (let index = startIndex; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--help" || arg === "-h") {
       parsed.help = true;
@@ -282,6 +286,17 @@ const main = async () => {
   }
 
   if (args.command === "doctor") {
+    if (args.doctorAction && args.doctorAction !== "repos") {
+      throw new Error(`Unknown doctor action: ${args.doctorAction}.`);
+    }
+    if (args.doctorAction === "repos") {
+      const config = loadConfig(args.configPath);
+      const result = await diagnoseConfiguredRepositories(config);
+      console.log(renderRepositoryDiagnostics(result));
+      if (!result.passed) process.exit(1);
+      return;
+    }
+
     const result = validateFirstTraceSetup({
       aiRequested: args.ai,
       configPath: args.configPath,

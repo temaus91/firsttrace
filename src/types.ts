@@ -323,6 +323,36 @@ export type GitHubRepoConfig = {
   repo: string;
 };
 
+export type GitRepoCredentialConfig =
+  | {
+      tokenEnv: string;
+      type: "token";
+      usernameEnv?: string;
+    }
+  | {
+      commandEnv?: string;
+      keyFile?: string;
+      keyFileEnv?: string;
+      type: "ssh";
+    };
+
+export type GitRepoMaterializationConfig = {
+  includeGitHistory: boolean;
+  refresh: "startup" | "manual";
+  scrubRemoteCredentials: boolean;
+};
+
+export type GitRepoConfig = {
+  cloneDepth: "full" | number;
+  credential?: GitRepoCredentialConfig;
+  materialization: GitRepoMaterializationConfig;
+  name: string;
+  path: string;
+  provider: "git";
+  ref?: string;
+  url: string;
+};
+
 export type ArchiveRepoConfig = {
   archiveCommand: string;
   commandCwd: string;
@@ -332,16 +362,19 @@ export type ArchiveRepoConfig = {
   ref?: string;
 };
 
-export type RepoConfig = LocalRepoConfig | GitHubRepoConfig | ArchiveRepoConfig;
+export type RepoConfig = LocalRepoConfig | GitHubRepoConfig | GitRepoConfig | ArchiveRepoConfig;
 
 export type SearchableRepoConfig = {
+  cloneDepth?: "full" | number;
   defaultBranch?: string;
+  lastRefreshStatus?: "failed" | "not_run" | "succeeded";
   name: string;
   owner?: string;
   path: string;
   provider: "local";
+  ref?: string;
   remoteRepo?: string;
-  sourceProvider: "archive" | "local" | "github";
+  sourceProvider: "archive" | "local" | "github" | "git";
 };
 
 export type OwnerRule = {

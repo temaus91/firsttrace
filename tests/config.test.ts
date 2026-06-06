@@ -87,6 +87,54 @@ describe("config loading", () => {
     ]);
   });
 
+  it("accepts generic git repo config without requiring the target path to exist yet", () => {
+    const dir = tempConfigDir("git");
+    const configPath = path.join(dir, "firsttrace.config.yaml");
+    writeFileSync(
+      configPath,
+      [
+        "repos:",
+        "  - name: app",
+        "    provider: git",
+        "    url: https://example.com/internal/app.git",
+        "    ref: refs/heads/main",
+        "    path: repos/app",
+        "    clone_depth: full",
+        "    credential:",
+        "      type: token",
+        "      username_env: FIRSTTRACE_REPO_USERNAME",
+        "      token_env: FIRSTTRACE_REPO_TOKEN",
+        "    materialization:",
+        "      refresh: startup",
+        "      include_git_history: true",
+        "      scrub_remote_credentials: true",
+        "docs: []",
+        "issue_exports: []",
+      ].join("\n"),
+    );
+
+    expect(loadConfig(configPath).repos).toEqual([
+      {
+        cloneDepth: "full",
+        credential: {
+          tokenEnv: "FIRSTTRACE_REPO_TOKEN",
+          type: "token",
+          usernameEnv: "FIRSTTRACE_REPO_USERNAME",
+        },
+        materialization: {
+          includeGitHistory: true,
+          refresh: "startup",
+          scrubRemoteCredentials: true,
+        },
+        name: "app",
+        path: path.join(dir, "repos", "app"),
+        provider: "git",
+        ref: "refs/heads/main",
+        url: "https://example.com/internal/app.git",
+      },
+    ]);
+  });
+
   it("loads optional investigation prompt overlay config", () => {
     const dir = tempConfigDir("prompt-overlay");
     const repoDir = path.join(dir, "repo");
