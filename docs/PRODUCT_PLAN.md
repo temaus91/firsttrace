@@ -328,57 +328,174 @@ In this model, automatic triage can run on broad triggers, but write actions
 such as creating a bug should require a deliberate trigger or an explicit policy
 in the channel profile.
 
-## Version 0.1.6: Manager Owner Triage - Implemented
+## Version 0.1.6: Git History And Owner Evidence Milestones
 
-The customer-requested manager-owner triage workflow is implemented release
-scope on the `0-1-6-release` branch. It remains the
-product direction for FirstTrace: PMs and engineering managers are the primary
-users, and engineers receive enough evidence to start a later code-level debug
-or fix workflow.
+These are the remaining customer-requested priorities for the `0-1-6-release`
+branch. They make sense for an open-source project because they are generic,
+provider-neutral, read-only, and useful to any team that wants manager-facing
+bug-owner triage from private, internal, or public Git repositories without
+forking FirstTrace or patching deployed code.
 
-Implemented 0.1.6 scope:
+The 0.1.6 release stays PM/manager-first. Engineers can still use the cited
+evidence later in Codex or another debugging tool, but this release is about
+making the first owner assignment and escalation decision trustworthy.
 
-- `manager-owner-triage` is the default bug-report profile and public response
-  contract.
-- The manager output is rendered from a strict schema with issue, up to two
-  owner candidates, grouped evidence commits, likely root cause, user impact,
-  recommended manager action, and missing info.
-- Deterministic evidence search now uses explicit multi-pass search for raw
-  terms, UI journeys, route construction, identifiers, safe helpers, API
-  construction, and retry/idempotency state patterns.
-- Suspicious file citations preserve repo, path, exact line, snippet, query,
-  search pass, relevance, and why the line matters.
-- A dedicated owner evidence collector gathers exact-line blame, file history as
-  weak context, full commit metadata, identity dedupe, and at most two
-  evidence-backed person candidates.
-- Broad recent history, team aliases, and CODEOWNERS-only matches no longer
-  create person candidates. Missing git/provider metadata is surfaced as missing
-  info.
-- AI providers receive structured search and owner evidence. The manager triage
-  payload is normalized and validated so unsupported names, emails, commits,
-  timestamps, files, lines, or snippets are removed rather than invented.
-- Triage quality gates distinguish operational worker success from investigation
-  quality with execution status, strong/medium/weak/failed triage quality, exact
-  file/line/person/commit flags, team fallback detection, citation coverage,
-  actionability, and evidence warnings.
-- CLI, Slack, worker, hosted verification, and API result objects surface weak
-  triage quality and missing evidence.
-- Public synthetic eval fixtures cover slash-containing ID navigation, blank
-  existing-entity screens, route helper URL behavior, API request construction,
-  and retry/idempotency state-machine bugs without customer-specific names or
-  private workflow assumptions.
-- A provider metadata interface and GitHub adapter can enrich owner evidence
-  with PR author metadata. Pushed-by evidence is used only when a provider
-  explicitly exposes it; GitHub does not fabricate it.
+### Milestone 1: Repository Modes And Diagnostics
 
-Release boundary:
+Implement first-class repository evidence readiness so a deployer can tell
+before an investigation whether person-level owner evidence is possible.
 
-- Do not publish the npm 0.1.6 package until the release process is run
-  separately.
-- GitLab, OCI DevOps, Jira/issue metadata, automatic CODEOWNERS parsing, and
-  write-capable work-item creation remain future work.
-- Historical customer-specific eval cases should stay private/downstream; public
-  evals should remain generic.
+Required 0.1.6 work:
+
+- Support repository modes in config:
+  - `provider: local` for an already-mounted working tree.
+  - `provider: archive` for source-only materialization with an explicit warning
+    when `.git` history is absent.
+  - `provider: git` for generic read-only clone/fetch from a Git remote.
+  - `provider: github` remains a GitHub App adapter and should still enrich the
+    generic local materialized path without becoming the only supported Git
+    provider.
+- For `provider: git`, support:
+  - HTTPS token credentials from env vars.
+  - SSH command/private-key paths through env vars or mounted secret files.
+  - branch, tag, and commit SHA refs.
+  - full clone by default when owner evidence is expected.
+  - shallow clone only when explicitly configured, with a diagnostic warning.
+  - startup refresh and manual validation through `doctor repos`.
+  - credential scrubbing so tokenized URLs are not persisted in `.git/config` or
+    printed in logs.
+- Add `firsttrace doctor repos --config firsttrace.config.yaml`.
+- The repo diagnostic output must include each repo name, path, source provider,
+  Git history availability, shallow status, head SHA, ref, last refresh status,
+  and owner evidence source names such as `git_blame` and `git_log`.
+- Diagnostics must clearly report clone/fetch failures, archive-only missing
+  history, shallow history warnings, and missing provider metadata without
+  inventing owners.
+
+Acceptance tests:
+
+- A full local Git repo reports history available, not shallow, a head SHA, and
+  `ownerEvidenceReady: true`.
+- An archive/source-only repo reports missing `.git` history and
+  `ownerEvidenceReady: false`.
+- A shallow repo reports history available but warns that owner evidence may be
+  incomplete.
+- A tokenized Git remote is scrubbed from `.git/config` after clone/fetch and no
+  token value appears in command errors or rendered diagnostics.
+
+### Milestone 2: Deterministic Owner Evidence Collection
+
+Collect owner evidence before the model runs, then give the model and renderer
+structured facts instead of asking it to invent commit metadata.
+
+Required 0.1.6 work:
+
+- Use exact-line `git blame --line-porcelain` for suspicious cited lines.
+- Use `git log --follow` file history as supporting context, not as standalone
+  person assignment evidence unless exact-line or provider evidence exists.
+- Capture full commit SHA, commit title, author name/email, committer
+  name/email, author timestamp, commit timestamp, file, line, snippet, evidence
+  source, and why the evidence matters.
+- Group multiple relevant commits from the same person under one candidate.
+- Return at most two individual owner candidates.
+- Prefer exact-line blame over broad file activity.
+- Return no owner candidates when `.git` history and provider person metadata
+  are unavailable.
+- Keep provider metadata optional and additive. Local Git metadata must still
+  work when no provider adapter is configured.
+
+Acceptance tests:
+
+- Exact-line blame produces one owner candidate with name, email, full commit
+  SHA, timestamp, title, file, line, and snippet.
+- The same person with multiple relevant commits appears once with multiple
+  evidence commits.
+- Two relevant people produces at most two candidates.
+- Archive-only/source-only input produces no invented owner and reports missing
+  history.
+- Provider metadata unavailable does not block local Git evidence.
+
+### Milestone 3: Manager Owner Triage Contract Guardrails
+
+Make the manager-owner result contract strict enough that unsupported owners,
+commits, timestamps, files, lines, and snippets are removed or rejected rather
+than shown to managers.
+
+Required 0.1.6 work:
+
+- Use the built-in `manager-owner-triage` profile as the default bug-report
+  response contract.
+- Normalize the allowed evidence sources to:
+  - `exact_line_blame`
+  - `introduced_pattern`
+  - `related_file_history`
+  - `provider_pr_author`
+  - `provider_pushed_by`
+  - `commit_author`
+  - `committer`
+  - `unknown`
+- Render manager Markdown with issue, up to two owner candidates, grouped
+  evidence commits, likely root cause, user impact, recommended manager action,
+  and missing info.
+- Enforce no duplicate candidates for the same person.
+- Do not assign ownership to a team unless a later explicit config option allows
+  it.
+- When no person-level evidence exists, render a non-assignment manager action
+  and list missing metadata.
+- Ensure the model cannot add owner candidates that are absent from structured
+  evidence.
+
+Acceptance tests:
+
+- The schema rejects duplicate owner candidates.
+- The renderer shows missing metadata and a non-assignment manager action when
+  no owner evidence exists.
+- AI normalization drops unsupported owner candidates not present in structured
+  evidence.
+- The Markdown renderer always follows the manager-owner sections.
+
+### Milestone 4: Health, Packaging, And Documentation
+
+Expose owner-evidence readiness in runtime health output and document the
+package/deployment workflow for PM/manager-first open-source users.
+
+Required 0.1.6 work:
+
+- Add repository evidence readiness fields to `/healthz` or a readiness helper:
+  repo name, provider/source provider, history availability, shallow status,
+  head SHA, owner evidence readiness, and last refresh status.
+- Keep repository credentials as runtime secrets only:
+  - read tokens from env vars or secret files
+  - avoid credentialed URLs in diagnostics and evidence output
+  - document read-only credential guidance
+- Preserve nested configured repository `.git` history when packaging is
+  explicitly configured to include it, while continuing to exclude FirstTrace's
+  own root `.git`.
+- Document `provider: git`, archive/local behavior, `doctor repos`, and missing
+  owner evidence behavior in README/deployment docs.
+- Update `0-1-6-release-notes.md` with implemented 0.1.6 changes and remaining
+  non-goals.
+
+Acceptance tests:
+
+- Health/readiness includes repo owner-evidence fields for configured local
+  repositories.
+- Package ignore files or Docker packaging do not accidentally exclude nested
+  configured repo `.git` directories when include-history mode is enabled.
+- Documentation is PM/manager-targeted and does not describe FirstTrace as an
+  engineer-first debug chat tool.
+
+0.1.6 non-goals:
+
+- Do not publish the npm 0.1.6 package in this implementation pass.
+- Do not require one specific Git hosting provider.
+- Do not implement GitLab, Bitbucket, Azure DevOps, or OCI DevOps adapters in
+  this release; the generic Git provider and provider-neutral metadata boundary
+  are the open-source path.
+- Do not create tickets, write code, or mutate customer repositories.
+- Do not infer team ownership when person evidence is missing.
+- Keep historical customer-specific evals private/downstream; public evals must
+  stay generic.
 
 ## Phased Roadmap
 
