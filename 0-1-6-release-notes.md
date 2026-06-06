@@ -1,6 +1,6 @@
 # FirstTrace 0.1.6 Release Notes
 
-Status: implemented on `0-1-6-release`; npm package not published yet.
+Status: published to npm as `firsttrace@0.1.6`.
 
 ## Implemented
 
@@ -27,10 +27,10 @@ Status: implemented on `0-1-6-release`; npm package not published yet.
 - README and OCI deployment docs document generic Git repos, `doctor repos`,
   `/healthz` repo readiness, missing owner evidence behavior, read-only
   credentials, and package-history opt-in.
+- Published `firsttrace@0.1.6` to npm with the `latest` dist-tag.
 
 ## Not Implemented In 0.1.6
 
-- No npm `firsttrace@0.1.6` package has been created or published yet.
 - No GitLab, Bitbucket, Azure DevOps, or OCI DevOps provider adapter was added.
   Use generic `provider: git` for those hosts unless a provider adapter is
   needed later for host-specific PR/pusher metadata.

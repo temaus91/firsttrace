@@ -11,7 +11,7 @@ high level; this plan describes what to build and in what order.
 
 ## Current Validation Status
 
-- `firsttrace@0.1.5` is published on npm and is the preferred reusable install
+- `firsttrace@0.1.6` is published on npm and is the preferred reusable install
   artifact for new deployments.
 - The OCI backend has passed a clean npm-install acceptance flow: a fresh
   operations directory installed the package, copied the packaged Terraform and
@@ -384,8 +384,8 @@ Implemented 0.1.6 scope:
 
 Release boundary:
 
-- Do not publish the npm 0.1.6 package until the release process is run
-  separately.
+- The npm 0.1.6 package is published; follow-on hosted image rebuilds and live
+  hosted acceptance runs should use `npm:firsttrace@0.1.6` as the build ref.
 - GitLab, Bitbucket, Azure DevOps, OCI DevOps, Jira/issue metadata, automatic
   CODEOWNERS parsing, and write-capable work-item creation remain future work.
 - Historical customer-specific eval cases should stay private/downstream; public
@@ -1104,7 +1104,7 @@ The preferred customer installation path is an npm package plus a small
 operations wrapper:
 
 ```bash
-npm install firsttrace@0.1.5
+npm install firsttrace@0.1.6
 ```
 
 Vercel/Supabase deployments should copy `node_modules/firsttrace/deploy/vercel`
