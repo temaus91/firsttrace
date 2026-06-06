@@ -379,8 +379,6 @@ Implemented 0.1.6 scope:
 - README and OCI deployment docs describe `provider: git`, archive/local
   behavior, `doctor repos`, `/healthz` repo readiness, missing owner evidence,
   read-only credentials, and packaged `.git` history opt-in.
-- `0-1-6-release-notes.md` tracks the implemented changes and release
-  boundaries for this branch.
 
 Release boundary:
 
