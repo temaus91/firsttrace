@@ -38,6 +38,7 @@ export {
   rankOwnerEvidenceCandidates,
 } from "./owner-evidence.js";
 export {
+  createProviderMetadataAdapterFromEnv,
   enrichOwnerEvidenceWithProviderMetadata,
   GitHubProviderMetadataAdapter,
 } from "./provider-metadata.js";

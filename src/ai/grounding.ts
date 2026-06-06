@@ -262,6 +262,7 @@ const triageQualityFor = ({
   foundExactFile,
   foundExactLine,
   foundPersonOwner,
+  usedWeakManagerTriageFallback,
 }: {
   citationCoverage: number;
   executionStatus: "succeeded" | "failed";
@@ -269,8 +270,10 @@ const triageQualityFor = ({
   foundExactFile: boolean;
   foundExactLine: boolean;
   foundPersonOwner: boolean;
+  usedWeakManagerTriageFallback: boolean;
 }) => {
   if (executionStatus === "failed") return "failed";
+  if (usedWeakManagerTriageFallback) return "weak";
   if (foundExactFile && foundExactLine && foundPersonOwner && foundCommitEvidence && citationCoverage >= 0.8) {
     return "strong";
   }
@@ -309,6 +312,9 @@ export const groundAiResult = (
     ),
   }));
   const managerTriage = normalizeManagerTriage(result, request, warnings);
+  const usedWeakManagerTriageFallback = !result.managerTriage &&
+    result.promptProfile === MANAGER_OWNER_TRIAGE_PROFILE &&
+    Boolean(managerTriage);
   const managerOwnerNames = managerTriage?.likely_owner_candidates.map((candidate) => candidate.name || candidate.email) ?? [];
   const likelyOwners = result.promptProfile === MANAGER_OWNER_TRIAGE_PROFILE && managerTriage
     ? managerOwnerNames
@@ -345,6 +351,7 @@ export const groundAiResult = (
     foundExactFile,
     foundExactLine,
     foundPersonOwner,
+    usedWeakManagerTriageFallback,
   });
 
   return {

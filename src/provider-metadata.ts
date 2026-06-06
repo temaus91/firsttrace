@@ -21,6 +21,13 @@ export type ProviderMetadataAdapter = {
   getCommitMetadata(repo: SearchableRepoConfig, commitId: string): Promise<ProviderCommitMetadata | undefined>;
 };
 
+const hasGitHubProviderMetadataCredentials = (env: NodeJS.ProcessEnv) =>
+  Boolean(
+    env.GITHUB_TOKEN?.trim() ||
+    env.GH_TOKEN?.trim() ||
+    (env.GITHUB_APP_ID?.trim() && env.GITHUB_APP_INSTALLATION_ID?.trim() && env.GITHUB_APP_PRIVATE_KEY?.trim()),
+  );
+
 type GitHubPullResponse = {
   user?: {
     login?: string;
@@ -84,6 +91,15 @@ export const enrichOwnerEvidenceWithProviderMetadata = async (
           "Provider metadata was unavailable for owner evidence commits; FirstTrace kept local Git author evidence.",
         ],
   };
+};
+
+export const createProviderMetadataAdapterFromEnv = (
+  repos: SearchableRepoConfig[],
+  env: NodeJS.ProcessEnv = process.env,
+): ProviderMetadataAdapter | undefined => {
+  if (!repos.some((repo) => repo.sourceProvider === "github")) return undefined;
+  if (!hasGitHubProviderMetadataCredentials(env)) return undefined;
+  return new GitHubProviderMetadataAdapter({ tokenProvider: createGitHubTokenProviderFromEnv(env) });
 };
 
 export class GitHubProviderMetadataAdapter implements ProviderMetadataAdapter {

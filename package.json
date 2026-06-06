@@ -1,6 +1,6 @@
 {
   "name": "firsttrace",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "type": "module",
   "description": "Self-hosted manager-owner bug triage for teams with private, internal, or public git repos.",
   "license": "Apache-2.0",

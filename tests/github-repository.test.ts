@@ -1,7 +1,8 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { runEval } from "../src/eval/runner.js";
 import { executeInvestigation } from "../src/investigation-runner.js";
 import {
@@ -36,6 +37,37 @@ const createSearchableRepo = () => {
   const dir = tempDir("repo");
   mkdirSync(dir, { recursive: true });
   writeFileSync(path.join(dir, "README.md"), "README deployment plan is unclear in this example.\n");
+  return dir;
+};
+
+const createGitBackedRouteRepo = () => {
+  const dir = tempDir("route-repo");
+  const filePath = "src/components/EntityLinks.tsx";
+  mkdirSync(path.join(dir, "src", "components"), { recursive: true });
+  execFileSync("git", ["init"], { cwd: dir, stdio: "ignore" });
+  writeFileSync(
+    path.join(dir, filePath),
+    [
+      "export function EntityLinks({ entity, navigate }) {",
+      "  return <button onClick={() => navigate(`/entities/${entity.id}/detail`)}>Open</button>;",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  execFileSync("git", ["add", filePath], { cwd: dir, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "Add entity detail route"], {
+    cwd: dir,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_DATE: "2026-05-20T17:15:30Z",
+      GIT_AUTHOR_EMAIL: "git-author@example.com",
+      GIT_AUTHOR_NAME: "Git Author",
+      GIT_COMMITTER_DATE: "2026-05-20T17:15:30Z",
+      GIT_COMMITTER_EMAIL: "git-author@example.com",
+      GIT_COMMITTER_NAME: "Git Author",
+    },
+    stdio: "ignore",
+  });
   return dir;
 };
 
@@ -133,6 +165,11 @@ const githubSearchableRepo = (): SearchableRepoConfig => ({
   provider: "local",
   remoteRepo: "web-app",
   sourceProvider: "github",
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 const ownerCommit = (overrides: Partial<OwnerEvidenceCommit> = {}): OwnerEvidenceCommit => ({
@@ -245,6 +282,47 @@ describe("GitHub repository provider", () => {
     expect(result.likelyComponent).toBe("README.md");
     expect(result.suspiciousFiles[0]?.path).toBe("README.md");
     expect(result.likelyOwners).toContain("@project-docs");
+  });
+
+  it("automatically enriches GitHub owner evidence with PR metadata when credentials are present", async () => {
+    const repoPath = createGitBackedRouteRepo();
+    const requests: Array<{ headers?: HeadersInit; url: string }> = [];
+    vi.stubGlobal(
+      "fetch",
+      (async (url, init) => {
+        requests.push({ headers: init?.headers, url: String(url) });
+        if (String(url).includes("/pulls")) {
+          return new Response(JSON.stringify([{ user: { login: "pr-author" } }]), { status: 200 });
+        }
+        return new Response(JSON.stringify([]), { status: 200 });
+      }) as typeof fetch,
+    );
+
+    const result = await executeInvestigation({
+      config: githubConfig(),
+      env: { GITHUB_TOKEN: "github-token" },
+      report: "Entity detail links fail for ID ACME/123 when clicking dashboard links.",
+      repoPreparation: { githubMaterializer: fakeMaterializer(repoPath) },
+    });
+
+    const pullRequest = requests.find((request) => request.url.includes("/pulls"));
+    expect(result.ownerEvidence?.candidates[0]).toMatchObject({
+      email: "",
+      evidenceSource: "pr_author",
+      name: "pr-author",
+    });
+    expect(result.ownerEvidence?.candidates[0]?.evidenceCommits[0]).toMatchObject({
+      authorName: "pr-author",
+      evidenceSource: "pr_author",
+      file: "src/components/EntityLinks.tsx",
+    });
+    expect(pullRequest?.url).toMatch(
+      /https:\/\/api\.github\.com\/repos\/exampleco\/web-app\/commits\/[a-f0-9]{40}\/pulls/,
+    );
+    expect(pullRequest?.headers).toMatchObject({
+      authorization: "Bearer github-token",
+    });
+    expect(result.warnings.join("\n")).not.toContain("Provider metadata was unavailable");
   });
 
   it("runs eval through a fake GitHub materializer", async () => {

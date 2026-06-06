@@ -610,6 +610,6 @@ describe("AI provider support", () => {
       rank: 1,
     });
     expect(grounded.managerTriage?.recommended_manager_action).toContain("weak normalized handoff");
-    expect(grounded.quality?.triageQuality).toBe("strong");
+    expect(grounded.quality?.triageQuality).toBe("weak");
   });
 });
