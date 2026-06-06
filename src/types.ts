@@ -1,13 +1,22 @@
+import type { ManagerOwnerTriageCandidate, ManagerOwnerTriageResult } from "./manager-triage.js";
+import type { OwnerEvidenceResult } from "./owner-evidence.js";
+
 export type Classification = "bug" | "feature_request" | "support_question" | "unknown";
 
 export type EvidenceType = "file" | "commit" | "doc" | "issue";
 
 export type Citation = {
   commit?: string;
+  query?: string;
+  relevance?: string;
   label: string;
   line?: number;
   path?: string;
   repo: string;
+  score?: number;
+  searchPass?: string;
+  snippet?: string;
+  whyRelevant?: string;
 };
 
 export type EvidenceItem = {
@@ -27,6 +36,7 @@ export type InvestigationResult = {
   classification: Classification;
   likelyComponent: string;
   likelyOwners: string[];
+  ownerEvidence?: OwnerEvidenceResult;
   relatedCommits: EvidenceItem[];
   relatedDocs: EvidenceItem[];
   report: string;
@@ -40,6 +50,7 @@ export type AiEvidenceKind =
   | "suspicious_file"
   | "related_commit"
   | "related_doc"
+  | "owner_evidence"
   | "agent_observation"
   | "warning";
 
@@ -48,7 +59,9 @@ export type AiEvidenceItem = {
   id: string;
   kind: AiEvidenceKind;
   metadata?: Record<string, string | number | boolean | null>;
+  missingInfo?: string[];
   owner?: string;
+  ownerCandidate?: ManagerOwnerTriageCandidate;
   path?: string;
   repo?: string;
   score?: number;
@@ -86,9 +99,16 @@ export type AiImplementerHint = {
 export type AiInvestigationQuality = {
   actionability: number;
   citationCoverage: number;
+  evidenceWarnings: string[];
+  executionStatus: "succeeded" | "failed";
   foundExactFile: boolean;
+  foundExactLine: boolean;
+  foundCommitEvidence: boolean;
   foundOwner: boolean;
+  foundPersonOwner: boolean;
   foundRelatedCommit: boolean;
+  triageQuality: "strong" | "medium" | "weak" | "failed";
+  usedTeamFallback: boolean;
 };
 
 export type AiInvestigationResult = {
@@ -101,6 +121,7 @@ export type AiInvestigationResult = {
   likelyComponent: string;
   likelyFiles: AiFileFinding[];
   likelyOwners: string[];
+  managerTriage?: ManagerOwnerTriageResult;
   missingInfoQuestions: string[];
   provider: string;
   promptProfile?: string;
@@ -302,6 +323,36 @@ export type GitHubRepoConfig = {
   repo: string;
 };
 
+export type GitRepoCredentialConfig =
+  | {
+      tokenEnv: string;
+      type: "token";
+      usernameEnv?: string;
+    }
+  | {
+      commandEnv?: string;
+      keyFile?: string;
+      keyFileEnv?: string;
+      type: "ssh";
+    };
+
+export type GitRepoMaterializationConfig = {
+  includeGitHistory: boolean;
+  refresh: "startup" | "manual";
+  scrubRemoteCredentials: boolean;
+};
+
+export type GitRepoConfig = {
+  cloneDepth: "full" | number;
+  credential?: GitRepoCredentialConfig;
+  materialization: GitRepoMaterializationConfig;
+  name: string;
+  path: string;
+  provider: "git";
+  ref?: string;
+  url: string;
+};
+
 export type ArchiveRepoConfig = {
   archiveCommand: string;
   commandCwd: string;
@@ -311,16 +362,19 @@ export type ArchiveRepoConfig = {
   ref?: string;
 };
 
-export type RepoConfig = LocalRepoConfig | GitHubRepoConfig | ArchiveRepoConfig;
+export type RepoConfig = LocalRepoConfig | GitHubRepoConfig | GitRepoConfig | ArchiveRepoConfig;
 
 export type SearchableRepoConfig = {
+  cloneDepth?: "full" | number;
   defaultBranch?: string;
+  lastRefreshStatus?: "failed" | "not_run" | "succeeded";
   name: string;
   owner?: string;
   path: string;
   provider: "local";
+  ref?: string;
   remoteRepo?: string;
-  sourceProvider: "archive" | "local" | "github";
+  sourceProvider: "archive" | "local" | "github" | "git";
 };
 
 export type OwnerRule = {

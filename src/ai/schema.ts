@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ManagerOwnerTriageResultSchema } from "../manager-triage.js";
 
 export const Confidence = z.number().min(0).max(1);
 
@@ -34,6 +35,7 @@ export const AiInvestigationResultPayloadSchema = z.object({
     )
     .max(5),
   likelyOwners: z.array(z.string()).max(8),
+  managerTriage: ManagerOwnerTriageResultSchema.optional(),
   missingInfoQuestions: z.array(z.string()).max(5),
   relatedChange: z.string().nullable().optional(),
   userImpact: z.string().nullable().optional(),
@@ -41,3 +43,38 @@ export const AiInvestigationResultPayloadSchema = z.object({
 });
 
 export type AiInvestigationResultPayload = z.infer<typeof AiInvestigationResultPayloadSchema>;
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const withNormalizationWarning = (payload: AiInvestigationResultPayload, warning: string) => ({
+  ...payload,
+  warnings: [...payload.warnings, warning].slice(0, 8),
+});
+
+export const normalizeAiInvestigationResultPayload = (payload: unknown): AiInvestigationResultPayload => {
+  const strict = AiInvestigationResultPayloadSchema.safeParse(payload);
+  if (strict.success) return strict.data;
+
+  if (isObject(payload) && payload.type === "final" && isObject(payload.result)) {
+    const turnResult = AiInvestigationResultPayloadSchema.safeParse(payload.result);
+    if (turnResult.success) {
+      return withNormalizationWarning(
+        turnResult.data,
+        "Provider returned an agent final turn; FirstTrace normalized it to the investigation result schema.",
+      );
+    }
+  }
+
+  if (isObject(payload) && isObject(payload.result)) {
+    const nested = AiInvestigationResultPayloadSchema.safeParse(payload.result);
+    if (nested.success) {
+      return withNormalizationWarning(
+        nested.data,
+        "Provider returned a nested final payload; FirstTrace normalized it to the investigation result schema.",
+      );
+    }
+  }
+
+  return AiInvestigationResultPayloadSchema.parse(payload);
+};

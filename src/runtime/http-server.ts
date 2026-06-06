@@ -8,6 +8,11 @@ import { SlackWebApiClient } from "../chat/slack/client.js";
 import { handleSlackEventsRequest, loadSlackConfigFromPath, runtimeAiEnabledFromEnv } from "../chat/slack/events.js";
 import { createJobProgressNotifierFromEnv, createJobResultNotifierFromEnv } from "../chat/slack/notifier.js";
 import { loadConfig } from "../config.js";
+import {
+  diagnoseConfiguredRepositoryPaths,
+  repositoryReadinessFromDiagnostics,
+  type RepositoryReadiness,
+} from "../diagnostics/repositories.js";
 import { loadLocalEnv } from "../env.js";
 import { createOciSlackNotifiersFromEnv } from "../oci/notifiers.js";
 import { loadOciVaultSecretsIntoEnv } from "../oci/secrets.js";
@@ -64,11 +69,18 @@ const jsonResponse = (status: number, body: unknown) =>
     status,
   });
 
-const promptConfigForHealth = (configPath: string) => {
+const readinessForHealth = (configPath: string): {
+  promptConfig?: ReturnType<typeof loadConfig>["investigation"]["prompt"];
+  repos: RepositoryReadiness[];
+} => {
   try {
-    return loadConfig(configPath).investigation.prompt;
+    const config = loadConfig(configPath);
+    return {
+      promptConfig: config.investigation.prompt,
+      repos: repositoryReadinessFromDiagnostics(diagnoseConfiguredRepositoryPaths(config)),
+    };
   } catch {
-    return undefined;
+    return { repos: [] };
   }
 };
 
@@ -91,13 +103,15 @@ export const createFirstTraceHttpServer = async () => {
       const pathname = new URL(request.url).pathname;
 
       if (pathname === "/healthz") {
+        const readiness = readinessForHealth(configPath);
         await writeResponse(
           outgoing,
           jsonResponse(200, {
             buildRef: buildRef(),
-            ai: aiReadinessMetadataFromEnv(process.env, promptConfigForHealth(configPath)),
+            ai: aiReadinessMetadataFromEnv(process.env, readiness.promptConfig),
             ok: true,
             queueProvider: queueSelection.provider,
+            repos: readiness.repos,
             slackReplyFormat: slackReplyFormat(),
           }),
         );

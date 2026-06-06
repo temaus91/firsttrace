@@ -215,6 +215,34 @@ describe("worker queue", () => {
     expect(result.job?.status).toBe("succeeded");
     expect(result.job?.result?.ai?.provider).toBe("fake-investigator");
     expect(renderJobStatus(result.job)).toContain("AI provider: `fake-investigator`");
+
+    const jobWithQuality: InvestigationJob = {
+      ...result.job!,
+      result: {
+        ...result.job!.result!,
+        ai: {
+          ...result.job!.result!.ai!,
+          quality: {
+            actionability: 0.2,
+            citationCoverage: 0,
+            evidenceWarnings: ["Git history is unavailable for app."],
+            executionStatus: "succeeded",
+            foundCommitEvidence: false,
+            foundExactFile: true,
+            foundExactLine: false,
+            foundOwner: false,
+            foundPersonOwner: false,
+            foundRelatedCommit: false,
+            triageQuality: "weak",
+            usedTeamFallback: true,
+          },
+        },
+      },
+    };
+    const rendered = renderJobStatus(jobWithQuality);
+    expect(rendered).toContain("Status: `succeeded`");
+    expect(rendered).toContain("Triage quality: `weak`");
+    expect(rendered).toContain("Evidence warnings: Git history is unavailable for app.");
   });
 
   it("records failed jobs with errors and attempt counts", async () => {

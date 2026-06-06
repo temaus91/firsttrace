@@ -742,6 +742,7 @@ const retryStateCorrectionObservation = (observations: AgentObservation[]): Agen
 
 const needsOwnerEnrichment = (payload: AiInvestigationResultPayload) =>
   payload.likelyFiles.length > 0 &&
+  payload.likelyFiles.some((file) => file.citations.some((citation) => /^.+:\d+$/.test(citation))) &&
   !(
     payload.implementerHints[0]?.commit &&
     payload.implementerHints[0].citations.some((citation) => citation.startsWith("commit "))
@@ -751,30 +752,42 @@ type CommitSignal = {
   author: string;
   citation: string;
   date: string;
+  email?: string;
   hash: string;
   path: string;
   repo: string;
   subject: string;
 };
 
-const commitSignalFromGitLog = (
+const lineTargetFromFile = (file: AiInvestigationResultPayload["likelyFiles"][number]) => {
+  const citation = file.citations.find((item) => /^.+:\d+$/.test(item));
+  if (!citation) return undefined;
+  const match = /^(.+):(\d+)$/.exec(citation);
+  if (!match) return undefined;
+  return { line: Number(match[2]), path: match[1] ?? file.path };
+};
+
+const commitSignalFromGitBlame = (
   file: AiInvestigationResultPayload["likelyFiles"][number],
   toolResult: InvestigationToolResult,
 ): CommitSignal | undefined => {
   const citation = toolResult.citations.find((item) => item.startsWith("commit "));
   if (!citation) return undefined;
 
-  const row = toolResult.summary.split("\n").find(Boolean);
-  const match = row ? /^([a-f0-9]+)\s+(\d{4}-\d{2}-\d{2})\s+(.+?):\s+(.*)$/.exec(row) : undefined;
+  const summary = toolResult.summary.split("\n").find(Boolean);
+  const match = summary
+    ? /^(.+):(\d+) was last changed by (.*?) <([^>]*)> on (\S+) \(committer .*?\): (.*)$/.exec(summary)
+    : undefined;
   const hash = citation.replace("commit ", "");
   return {
     author: match?.[3]?.trim().replace(/\s+/g, " ") || "unknown",
     citation,
-    date: match?.[2] || "unknown date",
+    date: match?.[5] || "unknown date",
+    email: match?.[4]?.trim() || undefined,
     hash,
-    path: file.path,
+    path: match?.[1] ?? file.path,
     repo: file.repo,
-    subject: match?.[4]?.trim() || "Recent file history",
+    subject: match?.[6]?.trim() || "Exact line blame",
   };
 };
 
@@ -838,18 +851,20 @@ const enrichOwnerSignals = async (
     .slice(0, 3);
 
   for (const file of files) {
+    const target = lineTargetFromFile(file);
+    if (!target) continue;
     let toolResult: InvestigationToolResult;
     try {
-      toolResult = await toolset.execute("gitLog", { path: file.path, repo: file.repo });
+      toolResult = await toolset.execute("gitBlame", { line: target.line, path: target.path, repo: file.repo });
     } catch (error) {
-      toolResult = toolErrorResult("gitLog", error);
+      toolResult = toolErrorResult("gitBlame", error);
     }
     observations.push({
       ...toolResult,
       id: `tool-${observations.length + 1}`,
-      tool: "gitLog",
+      tool: "gitBlame",
     });
-    const signal = commitSignalFromGitLog(file, toolResult);
+    const signal = commitSignalFromGitBlame(file, toolResult);
     if (signal && signal.author !== "unknown") {
       commitSignals.push(signal);
     }
@@ -860,9 +875,9 @@ const enrichOwnerSignals = async (
   const implementerHints = commitSignals.slice(0, 3).map((signal) => ({
     citations: [signal.citation],
     commit: signal.hash,
-    email: null,
+    email: signal.email ?? null,
     name: signal.author,
-    reason: `Recent history for ${signal.path} points to this person: commit ${signal.hash} on ${signal.date}, "${signal.subject}".`,
+    reason: `Exact line blame for ${signal.path} points to this person: commit ${signal.hash} on ${signal.date}, "${signal.subject}".`,
   }));
   const likelyOwners = [...new Set(implementerHints.map((hint) => hint.name).filter(Boolean))].slice(0, 8) as string[];
 

@@ -153,7 +153,7 @@ describe("investigation agent tools", () => {
     const blame = await toolset.execute("gitBlame", { line: 1, path: "src/render.ts" });
 
     expect(search.citations).toContain("src/render.ts:2");
-    expect(log.citations[0]).toMatch(/^commit [a-f0-9]{7}$/);
+    expect(log.citations[0]).toMatch(/^commit [a-f0-9]{40}$/);
     expect(blame.citations).toContain("src/render.ts:1");
     expect(blame.citations.find((citation) => citation.startsWith("commit "))).toBeTruthy();
   });
@@ -905,6 +905,7 @@ describe("read-only investigation agent", () => {
 
     expect(result.provider).toBe("agent");
     expect(result.likelyFiles[0]?.citations).toEqual(["src/render.ts:1"]);
+    expect(result.implementerHints[0]?.email).toBe("dev@example.com");
     expect(result.implementerHints[0]?.name).toBe("Dev Owner");
     expect(result.warnings).toEqual([]);
   });

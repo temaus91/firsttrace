@@ -1,9 +1,15 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { runEval } from "../src/eval/runner.js";
 import { executeInvestigation } from "../src/investigation-runner.js";
+import {
+  enrichOwnerEvidenceWithProviderMetadata,
+  GitHubProviderMetadataAdapter,
+  type ProviderMetadataAdapter,
+} from "../src/provider-metadata.js";
 import { CommandArchiveRepoMaterializer } from "../src/repositories/archive-materializer.js";
 import {
   GitHubAppRepoMaterializer,
@@ -21,7 +27,8 @@ import {
 } from "../src/repositories/github-auth.js";
 import { FileSystemJobQueue } from "../src/worker/fs-queue.js";
 import { runWorkerOnce } from "../src/worker/runner.js";
-import type { ArchiveRepoConfig, FirstTraceConfig, GitHubRepoConfig } from "../src/types.js";
+import type { ArchiveRepoConfig, FirstTraceConfig, GitHubRepoConfig, SearchableRepoConfig } from "../src/types.js";
+import type { OwnerEvidenceCommit, OwnerEvidenceResult } from "../src/owner-evidence.js";
 
 const tempDir = (name: string) =>
   path.join(tmpdir(), `firsttrace-github-${name}-${Date.now()}-${Math.random().toString(16).slice(2)}`);
@@ -30,6 +37,37 @@ const createSearchableRepo = () => {
   const dir = tempDir("repo");
   mkdirSync(dir, { recursive: true });
   writeFileSync(path.join(dir, "README.md"), "README deployment plan is unclear in this example.\n");
+  return dir;
+};
+
+const createGitBackedRouteRepo = () => {
+  const dir = tempDir("route-repo");
+  const filePath = "src/components/EntityLinks.tsx";
+  mkdirSync(path.join(dir, "src", "components"), { recursive: true });
+  execFileSync("git", ["init"], { cwd: dir, stdio: "ignore" });
+  writeFileSync(
+    path.join(dir, filePath),
+    [
+      "export function EntityLinks({ entity, navigate }) {",
+      "  return <button onClick={() => navigate(`/entities/${entity.id}/detail`)}>Open</button>;",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  execFileSync("git", ["add", filePath], { cwd: dir, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "Add entity detail route"], {
+    cwd: dir,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_DATE: "2026-05-20T17:15:30Z",
+      GIT_AUTHOR_EMAIL: "git-author@example.com",
+      GIT_AUTHOR_NAME: "Git Author",
+      GIT_COMMITTER_DATE: "2026-05-20T17:15:30Z",
+      GIT_COMMITTER_EMAIL: "git-author@example.com",
+      GIT_COMMITTER_NAME: "Git Author",
+    },
+    stdio: "ignore",
+  });
   return dir;
 };
 
@@ -119,6 +157,60 @@ const fakeArchiveMaterializer = (repoPath: string) => ({
   },
 });
 
+const githubSearchableRepo = (): SearchableRepoConfig => ({
+  defaultBranch: "main",
+  name: "example-app",
+  owner: "exampleco",
+  path: "/tmp/example-app",
+  provider: "local",
+  remoteRepo: "web-app",
+  sourceProvider: "github",
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+const ownerCommit = (overrides: Partial<OwnerEvidenceCommit> = {}): OwnerEvidenceCommit => ({
+  authorEmail: "git-author@example.com",
+  authorName: "Git Author",
+  authorTime: "2026-05-20T00:00:00Z",
+  commitId: "abcdef1234567890abcdef1234567890abcdef12",
+  commitTime: "2026-05-20T00:00:00Z",
+  commitTitle: "Add entity route",
+  committerEmail: "committer@example.com",
+  committerName: "Committer",
+  committerTime: "2026-05-20T00:00:00Z",
+  evidenceCode: "navigate(`/entities/${entity.id}/detail`)",
+  evidenceKind: "exact_line_blame",
+  evidenceSource: "exact_line_blame",
+  file: "src/components/EntityLinks.tsx",
+  line: 4,
+  repo: "example-app",
+  score: 100,
+  whyRelevant: "Exact-line blame for the route interpolation.",
+  ...overrides,
+});
+
+const ownerEvidence = (): OwnerEvidenceResult => ({
+  candidates: [
+    {
+      confidence: "High",
+      email: "git-author@example.com",
+      evidenceCommits: [ownerCommit()],
+      evidenceSource: "exact_line_blame",
+      name: "Git Author",
+      rank: 1,
+      reason: "Exact-line blame points to src/components/EntityLinks.tsx:4.",
+      score: 100,
+    },
+  ],
+  missingInfo: [],
+  warnings: [],
+  weakCommits: [],
+});
+
 describe("GitHub repository provider", () => {
   it("normalizes escaped private key newlines", () => {
     expect(normalizeGitHubPrivateKey("-----BEGIN KEY-----\\nabc\\n-----END KEY-----")).toBe(
@@ -192,6 +284,47 @@ describe("GitHub repository provider", () => {
     expect(result.likelyOwners).toContain("@project-docs");
   });
 
+  it("automatically enriches GitHub owner evidence with PR metadata when credentials are present", async () => {
+    const repoPath = createGitBackedRouteRepo();
+    const requests: Array<{ headers?: HeadersInit; url: string }> = [];
+    vi.stubGlobal(
+      "fetch",
+      (async (url, init) => {
+        requests.push({ headers: init?.headers, url: String(url) });
+        if (String(url).includes("/pulls")) {
+          return new Response(JSON.stringify([{ user: { login: "pr-author" } }]), { status: 200 });
+        }
+        return new Response(JSON.stringify([]), { status: 200 });
+      }) as typeof fetch,
+    );
+
+    const result = await executeInvestigation({
+      config: githubConfig(),
+      env: { GITHUB_TOKEN: "github-token" },
+      report: "Entity detail links fail for ID ACME/123 when clicking dashboard links.",
+      repoPreparation: { githubMaterializer: fakeMaterializer(repoPath) },
+    });
+
+    const pullRequest = requests.find((request) => request.url.includes("/pulls"));
+    expect(result.ownerEvidence?.candidates[0]).toMatchObject({
+      email: "",
+      evidenceSource: "provider_pr_author",
+      name: "pr-author",
+    });
+    expect(result.ownerEvidence?.candidates[0]?.evidenceCommits[0]).toMatchObject({
+      authorName: "pr-author",
+      evidenceSource: "provider_pr_author",
+      file: "src/components/EntityLinks.tsx",
+    });
+    expect(pullRequest?.url).toMatch(
+      /https:\/\/api\.github\.com\/repos\/exampleco\/web-app\/commits\/[a-f0-9]{40}\/pulls/,
+    );
+    expect(pullRequest?.headers).toMatchObject({
+      authorization: "Bearer github-token",
+    });
+    expect(result.warnings.join("\n")).not.toContain("Provider metadata was unavailable");
+  });
+
   it("runs eval through a fake GitHub materializer", async () => {
     const repoPath = createSearchableRepo();
     const result = await runEval({
@@ -224,6 +357,97 @@ describe("GitHub repository provider", () => {
     expect(result.likelyComponent).toBe("README.md");
     expect(result.suspiciousFiles[0]?.repo).toBe("example-app");
     expect(result.likelyOwners).toContain("@project-docs");
+  });
+
+  it("fetches GitHub PR author metadata for a commit", async () => {
+    const requests: Array<{ headers?: HeadersInit; url: string }> = [];
+    const adapter = new GitHubProviderMetadataAdapter({
+      fetchImpl: (async (url, init) => {
+        requests.push({ headers: init?.headers, url: String(url) });
+        return new Response(JSON.stringify([{ user: { login: "pr-author" } }]), { status: 200 });
+      }) as typeof fetch,
+      tokenProvider: {
+        async getInstallationToken(repositoryName) {
+          expect(repositoryName).toBe("web-app");
+          return "github-token";
+        },
+      },
+    });
+
+    const metadata = await adapter.getCommitMetadata(githubSearchableRepo(), "abcdef1234567890abcdef1234567890abcdef12");
+
+    expect(metadata).toEqual({
+      commitId: "abcdef1234567890abcdef1234567890abcdef12",
+      email: "",
+      evidenceSource: "provider_pr_author",
+      name: "pr-author",
+    });
+    expect(requests[0]?.url).toBe(
+      "https://api.github.com/repos/exampleco/web-app/commits/abcdef1234567890abcdef1234567890abcdef12/pulls",
+    );
+    expect(requests[0]?.headers).toMatchObject({
+      authorization: "Bearer github-token",
+    });
+  });
+
+  it("does not fabricate pushed-by metadata when GitHub does not expose it", async () => {
+    const adapter = new GitHubProviderMetadataAdapter({
+      fetchImpl: (async () => new Response(JSON.stringify([]), { status: 200 })) as typeof fetch,
+      tokenProvider: {
+        async getInstallationToken() {
+          return "github-token";
+        },
+      },
+    });
+
+    await expect(
+      adapter.getCommitMetadata(githubSearchableRepo(), "abcdef1234567890abcdef1234567890abcdef12"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("enriches owner evidence with explicit provider metadata", async () => {
+    const adapter: ProviderMetadataAdapter = {
+      async getCommitMetadata() {
+        return {
+          commitId: "abcdef1234567890abcdef1234567890abcdef12",
+          email: "",
+          evidenceSource: "provider_pr_author",
+          name: "pr-author",
+        };
+      },
+    };
+
+    const enriched = await enrichOwnerEvidenceWithProviderMetadata(ownerEvidence(), [githubSearchableRepo()], adapter);
+
+    expect(enriched.candidates[0]).toMatchObject({
+      email: "",
+      evidenceSource: "provider_pr_author",
+      name: "pr-author",
+      rank: 1,
+    });
+    expect(enriched.candidates[0]?.evidenceCommits[0]).toMatchObject({
+      authorName: "pr-author",
+      evidenceSource: "provider_pr_author",
+    });
+    expect(enriched.candidates[0]?.evidenceCommits[0]?.whyRelevant).toContain("Provider metadata identifies provider_pr_author");
+    expect(enriched.missingInfo).toEqual([]);
+  });
+
+  it("keeps local Git owner evidence when provider metadata is unavailable", async () => {
+    const adapter: ProviderMetadataAdapter = {
+      async getCommitMetadata() {
+        return undefined;
+      },
+    };
+
+    const enriched = await enrichOwnerEvidenceWithProviderMetadata(ownerEvidence(), [githubSearchableRepo()], adapter);
+
+    expect(enriched.candidates[0]).toMatchObject({
+      email: "git-author@example.com",
+      evidenceSource: "exact_line_blame",
+      name: "Git Author",
+    });
+    expect(enriched.missingInfo.join("\n")).toContain("Provider metadata was unavailable");
   });
 
   it("runs archive commands with target path and ref environment variables", async () => {

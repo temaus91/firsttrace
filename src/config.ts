@@ -1,11 +1,15 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { parse } from "yaml";
+import { MANAGER_OWNER_TRIAGE_PROFILE } from "./manager-triage.js";
 import type {
   ArchiveRepoConfig,
   ChatConfig,
   ChatTrigger,
   FirstTraceConfig,
+  GitRepoConfig,
+  GitRepoCredentialConfig,
+  GitRepoMaterializationConfig,
   InvestigationConfig,
   OwnerRule,
   RepoConfig,
@@ -60,6 +64,64 @@ const positiveInteger = (value: unknown, label: string, fallback: number) => {
   return value as number;
 };
 
+const optionalBoolean = (value: unknown, label: string, fallback: boolean) => {
+  if (value === undefined) return fallback;
+  if (typeof value !== "boolean") {
+    throw new Error(`${label} must be a boolean when provided.`);
+  }
+  return value;
+};
+
+const gitCloneDepthFrom = (value: unknown, label: string): GitRepoConfig["cloneDepth"] => {
+  if (value === undefined || value === "full") return "full";
+  if (value === "shallow") return 1;
+  if (!Number.isInteger(value) || (value as number) <= 0) {
+    throw new Error(`${label} must be "full", "shallow", or a positive integer.`);
+  }
+  return value as number;
+};
+
+const gitCredentialFrom = (value: unknown, label: string): GitRepoCredentialConfig | undefined => {
+  if (value === undefined) return undefined;
+  const item = asObject(value, label);
+  if (item.type === "token") {
+    return {
+      tokenEnv: optionalString(item.token_env, `${label}.token_env`) ?? "FIRSTTRACE_REPO_TOKEN",
+      type: "token",
+      usernameEnv: optionalString(item.username_env, `${label}.username_env`),
+    };
+  }
+  if (item.type === "ssh") {
+    return {
+      commandEnv: optionalString(item.command_env, `${label}.command_env`),
+      keyFile: optionalString(item.key_file, `${label}.key_file`),
+      keyFileEnv: optionalString(item.key_file_env, `${label}.key_file_env`),
+      type: "ssh",
+    };
+  }
+  throw new Error(`${label}.type must be "token" or "ssh" when credential is provided.`);
+};
+
+const gitMaterializationFrom = (value: unknown, label: string): GitRepoMaterializationConfig => {
+  if (value === undefined) {
+    return {
+      includeGitHistory: true,
+      refresh: "startup",
+      scrubRemoteCredentials: true,
+    };
+  }
+  const item = asObject(value, label);
+  const refresh = optionalString(item.refresh, `${label}.refresh`) ?? "startup";
+  if (refresh !== "startup" && refresh !== "manual") {
+    throw new Error(`${label}.refresh must be "startup" or "manual".`);
+  }
+  return {
+    includeGitHistory: optionalBoolean(item.include_git_history, `${label}.include_git_history`, true),
+    refresh,
+    scrubRemoteCredentials: optionalBoolean(item.scrub_remote_credentials, `${label}.scrub_remote_credentials`, true),
+  };
+};
+
 const reposFrom = (value: unknown, configDir: string): RepoConfig[] => {
   if (!Array.isArray(value) || value.length === 0) {
     throw new Error("repos must be a non-empty array.");
@@ -72,8 +134,8 @@ const reposFrom = (value: unknown, configDir: string): RepoConfig[] => {
     }
 
     const provider = typeof item.provider === "string" ? item.provider : item.path !== undefined ? "local" : undefined;
-    if (provider !== "local" && provider !== "github" && provider !== "archive") {
-      throw new Error(`repos[${index}].provider must be "local", "github", or "archive".`);
+    if (provider !== "local" && provider !== "github" && provider !== "git" && provider !== "archive") {
+      throw new Error(`repos[${index}].provider must be "local", "github", "git", or "archive".`);
     }
 
     if (provider === "local") {
@@ -104,6 +166,28 @@ const reposFrom = (value: unknown, configDir: string): RepoConfig[] => {
         name: item.name,
         path: path.resolve(configDir, item.path),
         provider: "archive",
+      };
+      if (item.ref !== undefined) {
+        repo.ref = optionalString(item.ref, `repos[${index}].ref`);
+      }
+      return repo;
+    }
+
+    if (provider === "git") {
+      if (typeof item.url !== "string" || !item.url.trim()) {
+        throw new Error(`repos[${index}].url must be a non-empty string for git repos.`);
+      }
+      if (typeof item.path !== "string" || !item.path.trim()) {
+        throw new Error(`repos[${index}].path must be a non-empty string for git repos.`);
+      }
+      const repo: GitRepoConfig = {
+        cloneDepth: gitCloneDepthFrom(item.clone_depth, `repos[${index}].clone_depth`),
+        credential: gitCredentialFrom(item.credential, `repos[${index}].credential`),
+        materialization: gitMaterializationFrom(item.materialization, `repos[${index}].materialization`),
+        name: item.name,
+        path: path.resolve(configDir, item.path),
+        provider: "git",
+        url: item.url,
       };
       if (item.ref !== undefined) {
         repo.ref = optionalString(item.ref, `repos[${index}].ref`);
@@ -164,7 +248,7 @@ const searchFrom = (value: unknown): SearchConfig => {
 const DEFAULT_INVESTIGATION: InvestigationConfig = {
   prompt: {
     overlayFiles: [],
-    profile: "default",
+    profile: MANAGER_OWNER_TRIAGE_PROFILE,
   },
 };
 
@@ -172,7 +256,7 @@ const investigationFrom = (value: unknown, configDir: string): InvestigationConf
   if (value === undefined) return DEFAULT_INVESTIGATION;
   const item = asObject(value, "investigation");
   const promptRaw = item.prompt === undefined ? {} : asObject(item.prompt, "investigation.prompt");
-  const profile = optionalString(promptRaw.profile, "investigation.prompt.profile") ?? "default";
+  const profile = optionalString(promptRaw.profile, "investigation.prompt.profile") ?? MANAGER_OWNER_TRIAGE_PROFILE;
   const overlayFiles = stringArray(
     promptRaw.overlay_files,
     "investigation.prompt.overlay_files",

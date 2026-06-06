@@ -1,4 +1,5 @@
 import { citationListText } from "./citations.js";
+import { renderManagerOwnerTriage } from "./manager-triage.js";
 import type { AiInvestigationResult, EvidenceItem, InvestigationResult } from "./types.js";
 
 const empty = "_None found._";
@@ -30,6 +31,31 @@ const aiNextSteps = (ai: AiInvestigationResult) =>
     .filter((step): step is string => Boolean(step))
     .slice(0, 4);
 
+const renderTriageQuality = (ai: AiInvestigationResult) => {
+  const quality = ai.quality;
+  if (!quality) return "";
+
+  return section(
+    "Triage Quality",
+    [
+      `execution_status: \`${quality.executionStatus}\``,
+      `triage_quality: \`${quality.triageQuality}\``,
+      `found_exact_file: \`${quality.foundExactFile}\``,
+      `found_exact_line: \`${quality.foundExactLine}\``,
+      `found_person_owner: \`${quality.foundPersonOwner}\``,
+      `found_commit_evidence: \`${quality.foundCommitEvidence}\``,
+      `used_team_fallback: \`${quality.usedTeamFallback}\``,
+      `citation_coverage: \`${quality.citationCoverage.toFixed(2)}\``,
+      `actionability: \`${quality.actionability.toFixed(2)}\``,
+      quality.evidenceWarnings.length
+        ? section("Evidence Warnings", quality.evidenceWarnings.map((warning) => `- ${warning}`).join("\n"))
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+};
+
 const renderAiReasoning = (ai: AiInvestigationResult) =>
   section(
     "AI Reasoning",
@@ -44,7 +70,7 @@ const renderAiReasoning = (ai: AiInvestigationResult) =>
       ai.firstContact ? `First contact: \`${ai.firstContact}\`` : "",
       ai.relatedChange ? `Related change: ${ai.relatedChange}` : "",
       ai.quality
-        ? `Quality: exact_file=\`${ai.quality.foundExactFile}\`, owner=\`${ai.quality.foundOwner}\`, related_commit=\`${ai.quality.foundRelatedCommit}\`, citation_coverage=\`${ai.quality.citationCoverage.toFixed(2)}\`, actionability=\`${ai.quality.actionability.toFixed(2)}\``
+        ? `Quality: execution_status=\`${ai.quality.executionStatus}\`, triage_quality=\`${ai.quality.triageQuality}\`, exact_file=\`${ai.quality.foundExactFile}\`, exact_line=\`${ai.quality.foundExactLine}\`, person_owner=\`${ai.quality.foundPersonOwner}\`, commit_evidence=\`${ai.quality.foundCommitEvidence}\`, team_fallback=\`${ai.quality.usedTeamFallback}\`, citation_coverage=\`${ai.quality.citationCoverage.toFixed(2)}\`, actionability=\`${ai.quality.actionability.toFixed(2)}\``
         : "",
       `Likely owners: ${
         ai.likelyOwners.length ? ai.likelyOwners.map((owner) => `\`${owner}\``).join(", ") : empty
@@ -79,8 +105,14 @@ const renderAiReasoning = (ai: AiInvestigationResult) =>
       .join("\n\n"),
   );
 
-export const renderInvestigation = (result: InvestigationResult) =>
-  [
+export const renderInvestigation = (result: InvestigationResult) => {
+  if (result.ai?.managerTriage) {
+    return [renderManagerOwnerTriage(result.ai.managerTriage), renderTriageQuality(result.ai)]
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
+  return [
     "# FirstTrace Investigation",
     `Classification: \`${result.classification}\``,
     `Likely component: \`${result.likelyComponent}\``,
@@ -104,3 +136,4 @@ export const renderInvestigation = (result: InvestigationResult) =>
   ]
     .filter(Boolean)
     .join("\n\n");
+};

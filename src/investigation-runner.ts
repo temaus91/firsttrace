@@ -5,6 +5,11 @@ import {
   type AiSafetyResult,
 } from "./ai/safety.js";
 import { investigate } from "./investigate.js";
+import {
+  createProviderMetadataAdapterFromEnv,
+  enrichOwnerEvidenceWithProviderMetadata,
+  type ProviderMetadataAdapter,
+} from "./provider-metadata.js";
 import { prepareConfigForInvestigation, type RepoPreparationOptions } from "./repositories/prepare.js";
 import type { FirstTraceConfig, InvestigationJobSource, InvestigationResult, InvestigatorProvider } from "./types.js";
 
@@ -13,6 +18,7 @@ export type ExecuteInvestigationOptions = {
   config: FirstTraceConfig;
   env?: NodeJS.ProcessEnv;
   investigatorProvider?: InvestigatorProvider;
+  providerMetadataAdapter?: ProviderMetadataAdapter;
   report: string;
   repoPreparation?: RepoPreparationOptions;
   source?: InvestigationJobSource;
@@ -22,6 +28,8 @@ const slackChannelFor = (config: FirstTraceConfig, source?: InvestigationJobSour
   source?.provider === "slack" && source.channelId
     ? config.chat?.channels.find((channel) => channel.id === source.channelId)
     : undefined;
+
+const uniqueStrings = (items: string[]) => [...new Set(items.filter(Boolean))];
 
 const dryRunAiResult = (
   result: InvestigationResult,
@@ -54,12 +62,22 @@ export const executeInvestigation = async ({
   config,
   env = process.env,
   investigatorProvider,
+  providerMetadataAdapter,
   report,
   repoPreparation,
   source,
 }: ExecuteInvestigationOptions): Promise<InvestigationResult> => {
   const preparedConfig = await prepareConfigForInvestigation(config, repoPreparation);
   const result = await investigate(report, preparedConfig);
+  const ownerMetadataAdapter = providerMetadataAdapter ?? createProviderMetadataAdapterFromEnv(preparedConfig.repos, env);
+  if (ownerMetadataAdapter && result.ownerEvidence) {
+    result.ownerEvidence = await enrichOwnerEvidenceWithProviderMetadata(
+      result.ownerEvidence,
+      preparedConfig.repos,
+      ownerMetadataAdapter,
+    );
+    result.warnings = uniqueStrings([...result.warnings, ...result.ownerEvidence.missingInfo]);
+  }
 
   if (investigatorProvider) {
     const slackChannel = slackChannelFor(config, source);

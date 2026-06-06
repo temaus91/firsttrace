@@ -3,6 +3,8 @@
 .firsttrace
 .git
 .github
+!firsttrace-repos-context/**/.git
+!firsttrace-repos-context/**/.git/**
 coverage
 dist
 node_modules

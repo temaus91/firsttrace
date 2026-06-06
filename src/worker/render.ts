@@ -22,8 +22,13 @@ export const renderJobSummary = (job: InvestigationJob) =>
     job.result ? `Result component: \`${job.result.likelyComponent}\`` : "",
     job.result?.ai ? `AI provider: \`${job.result.ai.provider}\`` : "",
     job.result?.ai ? `AI confidence: \`${job.result.ai.confidence.toFixed(2)}\`` : "",
+    job.result?.ai?.quality ? `Triage quality: \`${job.result.ai.quality.triageQuality}\`` : "",
+    job.result?.ai?.quality ? `Triage execution: \`${job.result.ai.quality.executionStatus}\`` : "",
     job.result?.likelyOwners.length
       ? `Result owners: ${job.result.likelyOwners.map((owner) => `\`${owner}\``).join(", ")}`
+      : "",
+    job.result?.ai?.quality?.evidenceWarnings.length
+      ? `Evidence warnings: ${job.result.ai.quality.evidenceWarnings.join("; ")}`
       : "",
     job.result?.warnings.length ? `Warnings: ${job.result.warnings.join("; ")}` : "",
   ]

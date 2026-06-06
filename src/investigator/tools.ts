@@ -94,7 +94,7 @@ const safeRepoPath = (repo: SearchableRepoConfig, requestedPath: string) => {
 
 const lineCitation = (relativePath: string, line: number) => `${relativePath}:${line}`;
 
-const gitCommitCitation = (hash: string) => `commit ${hash.slice(0, 7)}`;
+const gitCommitCitation = (hash: string) => `commit ${hash}`;
 
 const IGNORED_DIRS = new Set([".git", ".next", "build", "coverage", "dist", "node_modules"]);
 
@@ -262,10 +262,19 @@ const gitLogTool = (config: PreparedFirstTraceConfig, args: unknown): Investigat
   const parsed = GitLogArg.parse(args);
   const repo = repoByName(config, parsed.repo);
   const pathArgs = parsed.path ? ["--", safeRepoPath(repo, parsed.path).relativePath] : [];
+  const followArgs = parsed.path ? ["--follow"] : [];
   const result = runCommand(
     repo.path,
     "git",
-    ["log", "--date=short", "--max-count", "6", "--pretty=format:%h%x09%ad%x09%an%x09%s", ...pathArgs],
+    [
+      "log",
+      ...followArgs,
+      "--date=iso-strict",
+      "--max-count",
+      "6",
+      "--pretty=format:%H%x09%aI%x09%an%x09%ae%x09%cI%x09%cn%x09%ce%x09%s",
+      ...pathArgs,
+    ],
     { allowExitCodes: [128], maxBuffer: 1024 * 1024, timeoutMs: TOOL_COMMAND_TIMEOUT_MS },
   );
   if (result.status === 128) {
@@ -279,8 +288,8 @@ const gitLogTool = (config: PreparedFirstTraceConfig, args: unknown): Investigat
   });
   const summary = rows
     .map((row) => {
-      const [hash, date, author, ...subject] = row.split("\t");
-      return `${hash} ${date} ${author}: ${subject.join("\t")}`;
+      const [hash, authorDate, author, authorEmail, committerDate, committer, committerEmail, ...subject] = row.split("\t");
+      return `${hash} ${authorDate} ${author} <${authorEmail}> (committer ${committer} <${committerEmail}> ${committerDate}): ${subject.join("\t")}`;
     })
     .join("\n");
 
@@ -306,16 +315,22 @@ const gitBlameTool = (config: PreparedFirstTraceConfig, args: unknown): Investig
   }
 
   const lines = result.stdout.split("\n");
-  const hash = lines[0]?.split(" ")[0]?.slice(0, 7);
+  const rawHash = lines[0]?.split(" ")[0];
+  const hash = rawHash && !/^0+$/.test(rawHash) ? rawHash : undefined;
   const field = (name: string) => lines.find((line) => line.startsWith(`${name} `))?.slice(name.length + 1);
   const author = field("author") ?? "unknown";
+  const authorEmail = field("author-mail")?.replace(/^<|>$/g, "") ?? "unknown email";
+  const committer = field("committer") ?? "unknown committer";
+  const committerEmail = field("committer-mail")?.replace(/^<|>$/g, "") ?? "unknown email";
   const summary = field("summary") ?? "Line change";
   const authorTime = field("author-time");
-  const date = authorTime ? new Date(Number(authorTime) * 1000).toISOString().slice(0, 10) : "unknown date";
+  const committerTime = field("committer-time");
+  const date = authorTime ? new Date(Number(authorTime) * 1000).toISOString() : "unknown date";
+  const commitDate = committerTime ? new Date(Number(committerTime) * 1000).toISOString() : "unknown committer date";
 
   return {
     citations: [lineCitation(relativePath, parsed.line), ...(hash ? [gitCommitCitation(hash)] : [])],
-    summary: `${relativePath}:${parsed.line} was last changed by ${author} on ${date}: ${summary}`,
+    summary: `${relativePath}:${parsed.line} was last changed by ${author} <${authorEmail}> on ${date} (committer ${committer} <${committerEmail}> ${commitDate}): ${summary}`,
     title: `Git blame ${repo.name}:${relativePath}:${parsed.line}`,
   };
 };

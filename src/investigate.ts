@@ -1,4 +1,5 @@
 import { classifyReport } from "./classify.js";
+import { collectOwnerEvidence } from "./owner-evidence.js";
 import { extractTerms } from "./terms.js";
 import { searchCommits, searchDocs, searchFiles, searchIssueExports, sortEvidenceItems } from "./search.js";
 import type { EvidenceItem, InvestigationResult, PreparedFirstTraceConfig } from "./types.js";
@@ -55,7 +56,7 @@ export const investigate = async (report: string, config: PreparedFirstTraceConf
   }
 
   const suspiciousFiles = sortEvidenceItems(
-    config.repos.flatMap((repo) => searchFiles(repo, searchTerms, config)),
+    config.repos.flatMap((repo) => searchFiles(repo, searchTerms, config, { report })),
   ).slice(0, config.search.maxFiles);
 
   const relatedDocs = sortEvidenceItems(
@@ -77,10 +78,14 @@ export const investigate = async (report: string, config: PreparedFirstTraceConf
     warnings.push("No suspicious files matched the report terms.");
   }
 
+  const ownerEvidence = collectOwnerEvidence(config.repos, suspiciousFiles);
+  warnings.push(...ownerEvidence.missingInfo);
+
   return {
     classification: classifyReport(report),
     likelyComponent: likelyComponentFrom(suspiciousFiles.length ? suspiciousFiles : relatedDocs),
     likelyOwners: uniqueOwnersFrom([...suspiciousFiles, ...relatedDocs]),
+    ownerEvidence,
     relatedCommits,
     relatedDocs,
     report,

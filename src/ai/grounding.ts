@@ -1,3 +1,10 @@
+import {
+  MANAGER_OWNER_TRIAGE_PROFILE,
+  parseManagerOwnerTriageResult,
+  type ManagerOwnerTriageCandidate,
+  type ManagerOwnerTriageEvidenceCommit,
+  type ManagerOwnerTriageResult,
+} from "../manager-triage.js";
 import type { AiImplementerHint, AiInvestigationResult, AiReasonerRequest } from "../types.js";
 
 const allowedCitationSet = (request: AiReasonerRequest) =>
@@ -85,31 +92,196 @@ const isTeamAlias = (value: string | null | undefined) => Boolean(value?.trim().
 
 const hasHumanOwner = (hint: AiImplementerHint) => Boolean((hint.name && !isTeamAlias(hint.name)) || hint.email);
 
+const isExactLineCitation = (citation: string) => /^.+:\d+$/.test(citation);
+
+const ownerEvidenceCandidatesFrom = (request: AiReasonerRequest) =>
+  request.evidence.flatMap((item) => item.ownerCandidate ? [item.ownerCandidate] : []);
+
+const ownerEvidenceMissingInfoFrom = (request: AiReasonerRequest) =>
+  request.evidence.flatMap((item) => item.missingInfo ?? []);
+
+const ownerIdentity = (candidate: Pick<ManagerOwnerTriageCandidate, "email" | "name">) =>
+  (candidate.email.trim() || candidate.name.trim()).toLowerCase();
+
+const uniqueStrings = (items: string[]) => [...new Set(items.filter(Boolean))];
+
+const uniqueEvidenceCommits = (commits: ManagerOwnerTriageEvidenceCommit[]) => {
+  const byCommit = new Map<string, ManagerOwnerTriageEvidenceCommit>();
+  for (const commit of commits) {
+    const key = `${commit.commit_id}\t${commit.repo}\t${commit.file}\t${commit.line ?? ""}`;
+    if (!byCommit.has(key)) byCommit.set(key, commit);
+  }
+  return [...byCommit.values()];
+};
+
+const findSupportedOwnerCandidate = (
+  candidate: ManagerOwnerTriageCandidate,
+  supportedCandidates: ManagerOwnerTriageCandidate[],
+) => {
+  const identity = ownerIdentity(candidate);
+  const byIdentity = supportedCandidates.find((supported) => ownerIdentity(supported) === identity);
+  if (byIdentity) return byIdentity;
+
+  const candidateCommitIds = new Set(candidate.evidence_commits.map((commit) => commit.commit_id));
+  return supportedCandidates.find((supported) =>
+    supported.evidence_commits.some((commit) => candidateCommitIds.has(commit.commit_id)),
+  );
+};
+
+const weakManagerTriageFrom = (
+  result: AiInvestigationResult,
+  request: AiReasonerRequest,
+  missingInfo: string[],
+): ManagerOwnerTriageResult => {
+  const ownerCandidates = ownerEvidenceCandidatesFrom(request)
+    .slice(0, 2)
+    .map((candidate, index) => ({ ...candidate, rank: index + 1 }));
+  const firstCandidate = ownerCandidates[0];
+
+  return parseManagerOwnerTriageResult({
+    issue: result.explanation || request.report,
+    likely_owner_candidates: ownerCandidates,
+    likely_root_cause: result.explanation || "FirstTrace could not validate a likely root cause from supported evidence.",
+    missing_info: uniqueStrings([
+      ...missingInfo,
+      ...ownerEvidenceMissingInfoFrom(request),
+      "The provider did not return the strict manager-owner triage payload; FirstTrace normalized only supported evidence.",
+    ]),
+    recommended_manager_action: firstCandidate
+      ? `Route the first pass to ${firstCandidate.name || firstCandidate.email}, but treat this as a weak normalized handoff because the provider did not return managerTriage.`
+      : "Do not assign a person yet. Collect exact-line blame, PR metadata, or pushed-by provider metadata, then rerun triage.",
+    title: "Bug Triage",
+    user_impact: result.userImpact ?? "User impact needs confirmation from the report and supported evidence.",
+  });
+};
+
+const normalizeManagerTriage = (
+  result: AiInvestigationResult,
+  request: AiReasonerRequest,
+  warnings: string[],
+): ManagerOwnerTriageResult | undefined => {
+  if (!result.managerTriage && result.promptProfile !== MANAGER_OWNER_TRIAGE_PROFILE) return undefined;
+  if (!result.managerTriage) {
+    warnings.push("Provider did not return managerTriage for the manager-owner-triage profile.");
+    return weakManagerTriageFrom(result, request, ["Provider returned a simplified answer without managerTriage."]);
+  }
+
+  const supportedCandidates = ownerEvidenceCandidatesFrom(request);
+  const grouped = new Map<string, ManagerOwnerTriageCandidate>();
+  const missingInfo = [...result.managerTriage.missing_info];
+
+  for (const candidate of result.managerTriage.likely_owner_candidates) {
+    const supported = findSupportedOwnerCandidate(candidate, supportedCandidates);
+    if (!supported) {
+      warnings.push(`Removed unsupported manager owner candidate: ${candidate.name || candidate.email || "unknown"}.`);
+      missingInfo.push(`Removed unsupported person owner candidate ${candidate.name || candidate.email || "unknown"} because no matching owner evidence was available.`);
+      continue;
+    }
+
+    const supportedCommits = new Map(supported.evidence_commits.map((commit) => [commit.commit_id, commit]));
+    const evidenceCommits = uniqueEvidenceCommits(
+      candidate.evidence_commits.flatMap((commit) => {
+        const supportedCommit = supportedCommits.get(commit.commit_id);
+        if (supportedCommit) return [supportedCommit];
+        warnings.push(`Removed unsupported manager owner evidence commit: ${commit.commit_id}.`);
+        return [];
+      }),
+    );
+    if (!evidenceCommits.length) {
+      warnings.push(`Removed manager owner candidate without supported evidence commits: ${candidate.name || candidate.email || "unknown"}.`);
+      missingInfo.push(`Removed ${candidate.name || candidate.email || "unknown"} because none of its evidence commits were supported.`);
+      continue;
+    }
+
+    const normalized: ManagerOwnerTriageCandidate = {
+      confidence: supported.confidence,
+      email: supported.email,
+      evidence_commits: evidenceCommits,
+      evidence_source: supported.evidence_source,
+      name: supported.name,
+      rank: 0,
+      reason: candidate.reason || supported.reason,
+    };
+    const identity = ownerIdentity(normalized);
+    const existing = grouped.get(identity);
+    if (existing) {
+      grouped.set(identity, {
+        ...existing,
+        evidence_commits: uniqueEvidenceCommits([...existing.evidence_commits, ...normalized.evidence_commits]),
+      });
+    } else {
+      grouped.set(identity, normalized);
+    }
+  }
+
+  const likelyOwnerCandidates = [...grouped.values()]
+    .slice(0, 2)
+    .map((candidate, index) => ({ ...candidate, rank: index + 1 }));
+
+  if (!likelyOwnerCandidates.length && result.managerTriage.likely_owner_candidates.length) {
+    missingInfo.push("No evidence-backed person owner candidate remained after validation.");
+  }
+
+  return parseManagerOwnerTriageResult({
+    ...result.managerTriage,
+    likely_owner_candidates: likelyOwnerCandidates,
+    missing_info: uniqueStrings([...missingInfo, ...ownerEvidenceMissingInfoFrom(request)]),
+  });
+};
+
 const computeActionability = ({
   citationCoverage,
   confidence,
   foundExactFile,
-  foundOwner,
-  foundRelatedCommit,
+  foundPersonOwner,
+  foundCommitEvidence,
 }: {
   citationCoverage: number;
   confidence: number;
   foundExactFile: boolean;
-  foundOwner: boolean;
-  foundRelatedCommit: boolean;
+  foundPersonOwner: boolean;
+  foundCommitEvidence: boolean;
 }) =>
   Math.min(
     1,
     Number(
       (
         (foundExactFile ? 0.35 : 0) +
-        (foundOwner ? 0.25 : 0) +
-        (foundRelatedCommit ? 0.2 : 0) +
+        (foundPersonOwner ? 0.25 : 0) +
+        (foundCommitEvidence ? 0.2 : 0) +
         Math.min(0.1, citationCoverage * 0.1) +
         Math.min(0.1, confidence * 0.1)
       ).toFixed(2),
     ),
   );
+
+const triageQualityFor = ({
+  citationCoverage,
+  executionStatus,
+  foundCommitEvidence,
+  foundExactFile,
+  foundExactLine,
+  foundPersonOwner,
+  usedWeakManagerTriageFallback,
+}: {
+  citationCoverage: number;
+  executionStatus: "succeeded" | "failed";
+  foundCommitEvidence: boolean;
+  foundExactFile: boolean;
+  foundExactLine: boolean;
+  foundPersonOwner: boolean;
+  usedWeakManagerTriageFallback: boolean;
+}) => {
+  if (executionStatus === "failed") return "failed";
+  if (usedWeakManagerTriageFallback) return "weak";
+  if (foundExactFile && foundExactLine && foundPersonOwner && foundCommitEvidence && citationCoverage >= 0.8) {
+    return "strong";
+  }
+  if (foundExactFile && (foundPersonOwner || foundCommitEvidence) && citationCoverage >= 0.5) {
+    return "medium";
+  }
+  return "weak";
+};
 
 export const groundAiResult = (
   result: AiInvestigationResult,
@@ -139,30 +311,74 @@ export const groundAiResult = (
       qualityCounts,
     ),
   }));
-  const citationCoverage = qualityCounts.total
-    ? Number((qualityCounts.supported / qualityCounts.total).toFixed(2))
+  const managerTriage = normalizeManagerTriage(result, request, warnings);
+  const usedWeakManagerTriageFallback = !result.managerTriage &&
+    result.promptProfile === MANAGER_OWNER_TRIAGE_PROFILE &&
+    Boolean(managerTriage);
+  const managerOwnerNames = managerTriage?.likely_owner_candidates.map((candidate) => candidate.name || candidate.email) ?? [];
+  const likelyOwners = result.promptProfile === MANAGER_OWNER_TRIAGE_PROFILE && managerTriage
+    ? managerOwnerNames
+    : result.likelyOwners;
+  const managerEvidenceCommitCount = managerTriage?.likely_owner_candidates.reduce(
+    (sum, candidate) => sum + candidate.evidence_commits.length,
+    0,
+  ) ?? 0;
+  const totalCitationChecks = qualityCounts.total + managerEvidenceCommitCount;
+  const supportedCitationChecks = qualityCounts.supported + managerEvidenceCommitCount;
+  const citationCoverage = totalCitationChecks
+    ? Number((supportedCitationChecks / totalCitationChecks).toFixed(2))
     : 0;
-  const foundExactFile = likelyFiles.some((file) => file.citations.length > 0);
-  const foundOwner = implementerHints.some((hint) => hint.citations.length > 0 && hasHumanOwner(hint)) ||
-    result.likelyOwners.some((owner) => !isTeamAlias(owner));
-  const foundRelatedCommit = implementerHints.some((hint) => hint.commit && hint.citations.length > 0);
+  const foundExactFile = likelyFiles.some((file) => file.citations.length > 0) ||
+    Boolean(managerTriage?.likely_owner_candidates.some((candidate) =>
+      candidate.evidence_commits.some((commit) => Boolean(commit.file)),
+    ));
+  const foundExactLine = likelyFiles.some((file) => file.citations.some(isExactLineCitation)) ||
+    Boolean(managerTriage?.likely_owner_candidates.some((candidate) =>
+      candidate.evidence_commits.some((commit) => commit.line !== null),
+    ));
+  const foundPersonOwner = implementerHints.some((hint) => hint.citations.length > 0 && hasHumanOwner(hint)) ||
+    managerOwnerNames.length > 0;
+  const foundCommitEvidence = implementerHints.some((hint) => hint.commit && hint.citations.length > 0) ||
+    Boolean(managerTriage?.likely_owner_candidates.some((candidate) => candidate.evidence_commits.length > 0));
+  const usedTeamFallback = !foundPersonOwner &&
+    (request.likelyOwners.some(isTeamAlias) || request.evidence.some((item) => isTeamAlias(item.owner)));
+  const executionStatus = "succeeded" as const;
+  const evidenceWarnings = uniqueStrings([...warnings, ...ownerEvidenceMissingInfoFrom(request)]).slice(0, 8);
+  const triageQuality = triageQualityFor({
+    citationCoverage,
+    executionStatus,
+    foundCommitEvidence,
+    foundExactFile,
+    foundExactLine,
+    foundPersonOwner,
+    usedWeakManagerTriageFallback,
+  });
 
   return {
     ...result,
     implementerHints,
+    likelyOwners,
     likelyFiles,
+    managerTriage,
     quality: {
       actionability: computeActionability({
         citationCoverage,
         confidence: result.confidence,
         foundExactFile,
-        foundOwner,
-        foundRelatedCommit,
+        foundPersonOwner,
+        foundCommitEvidence,
       }),
       citationCoverage,
+      evidenceWarnings,
+      executionStatus,
+      foundCommitEvidence,
       foundExactFile,
-      foundOwner,
-      foundRelatedCommit,
+      foundExactLine,
+      foundOwner: foundPersonOwner,
+      foundPersonOwner,
+      foundRelatedCommit: foundCommitEvidence,
+      triageQuality,
+      usedTeamFallback,
     },
     warnings,
   };

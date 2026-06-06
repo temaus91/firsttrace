@@ -1,11 +1,16 @@
 # FirstTrace
 
-Self-hosted bug localization for teams with private, internal, or public git repos.
+Self-hosted manager-owner bug triage for teams with private, internal, or public
+git repos.
 
-FirstTrace turns a messy bug report from chat, CLI, or another source into the
-first useful evidence trail: likely component, suspicious files, likely owner,
-related issues, and suggested next steps. It is meant to reduce the first hour
-of debugging, not replace engineers.
+FirstTrace turns a messy bug report from chat, CLI, or another source into a
+PM/manager-facing triage handoff: the user-facing issue, one or two
+evidence-backed owner candidates, the exact code and commit evidence behind each
+candidate, likely root cause, user impact, and recommended manager action.
+
+Engineers can use Codex or other AI/code tools later to debug and implement the
+fix. FirstTrace's primary job is to make the first assignment and escalation
+decision evidence-based.
 
 ## Why
 
@@ -13,57 +18,91 @@ Bug reports usually start in chat:
 
 > Checkout fails after retrying a failed payment. Buyer says the artwork is now held.
 
-The first engineer on the thread then burns time searching code, recent commits,
-ownership metadata, and Jira history before they can even ask the right owner for
-help. FirstTrace automates that first pass and replies with cited evidence.
+The first PM or manager on the thread needs to know what users are experiencing,
+which person should be asked first, and whether that assignment is backed by
+real code and change-history evidence. FirstTrace automates that first pass and
+refuses to invent a person owner when the evidence is missing.
 
 ## What It Does
 
 The current version is read-only:
 
-1. An engineer runs `firsttrace investigate` with a bug report and config file.
+1. A PM, manager, or operator runs `firsttrace investigate` with a bug report
+   and config file.
 2. FirstTrace prepares configured repositories, including local checkouts or
    read-only GitHub App materialized repositories.
 3. FirstTrace searches files, docs, issue exports, and recent git commits.
-4. It classifies the report, ranks likely evidence, maps owners, and prints a
-   concise investigation starting point with citations.
+4. It classifies the report, ranks likely evidence, maps owner metadata, and
+   prints a concise cited triage result.
 5. The same investigation path can run through local evals or the local worker
    queue under `.firsttrace/jobs`.
 
-The later channel-agent version is chat-triggered:
+The `0-1-6-release` branch makes `manager-owner-triage` the default bug-report
+response contract. That means a stable manager Markdown reply from validated
+JSON, no customer-specific prompt overlay required.
 
-1. An engineer posts a bug report in a chat channel.
+The hosted channel version is chat-triggered:
+
+1. A PM, manager, support lead, or engineer posts a bug report in a chat
+   channel.
 2. They ask `@FirstTrace investigate`.
 3. FirstTrace fetches the thread context.
-4. It searches configured git repos, Jira, and ownership metadata.
-5. It asks an LLM to rank the evidence.
-6. It replies in the thread with a concise investigation starting point.
+4. It searches configured git repos and ownership/change-history metadata.
+5. It asks an LLM to rank and explain only the gathered evidence.
+6. It replies in the thread with manager-readable owner candidates, evidence,
+   likely root cause, user impact, and recommended action.
 
 Example output:
 
 ```text
-Likely component: Checkout / Public Exhibition
-Confidence: 0.74
+Bug Triage
 
-Suspicious files:
-1. app/api/public-exhibitions/[slug]/checkout/route.ts
-   Reason: owns the checkout start path mentioned in the report.
-2. lib/server/checkout/resume-cookie.ts
-   Reason: handles retry recovery for held artwork.
-3. lib/server/checkout/reconcile-session.ts
-   Reason: recent checkout recovery changes touched reconciliation.
+Issue
+Entity detail links can fail when an entity ID contains "/", for example
+ACME/123. The UI builds a route with the raw ID, so the router treats the slash
+as a path separator.
 
-Likely owner:
-@checkout-platform
+Likely Owner Candidate
 
-Related Jira:
-- PAY-18342: checkout retry leaves sale held
-- PAY-17920: reconciliation job misses redirected sessions
+1. Dev Owner
+   Email: dev.owner@example.com
+   Confidence: High
+   Reason: Exact line blame points to the commit that inserted the raw ID into
+   the route path.
+   Evidence source: exact_line_blame
 
-Suggested next steps:
-1. Ask @checkout-platform to inspect retry + held-state handling.
-2. Reproduce with a failed payment redirect followed by a second checkout click.
-3. Check whether the sale has an open Stripe session before creating a new one.
+   Evidence commits:
+   - Commit: 0123456789abcdef0123456789abcdef01234567
+     Commit time: 2026-05-20T17:15:30Z
+     Commit title: Add entity detail links
+     Repo: web-app
+     File: src/components/EntityLinks.tsx
+     Line: 42
+     Evidence: navigate(`/entities/${entity.id}/detail`)
+     Why relevant: This inserts a slash-containing entity ID directly into the
+     route path.
+
+Likely Root Cause
+Entity IDs containing reserved URL characters are inserted directly into route
+paths instead of being encoded or routed through a safe path helper.
+
+User Impact
+Users cannot reliably navigate from lists, alerts, or dashboards to affected
+entity detail pages.
+
+Recommended Manager Action
+Route first to Dev Owner because exact code and commit evidence points to that
+person. Ask the implementer to verify route encoding and update adjacent links
+using the same pattern.
+```
+
+If FirstTrace cannot find person-level evidence, the manager action should be
+explicitly non-assignment:
+
+```text
+Recommended Manager Action
+Do not assign a person yet. Collect Git blame, commit history, PR metadata, or
+provider pushed-by metadata for the suspected files.
 ```
 
 ## Architecture
@@ -103,7 +142,8 @@ Current runtime backend support:
 ## Product Plan
 
 See [docs/PRODUCT_PLAN.md](docs/PRODUCT_PLAN.md) for the working build plan,
-core architecture, eval strategy, runtime adapter strategy, and open questions.
+core architecture, eval strategy, runtime adapter strategy, and the next-version
+manager-owner triage milestones requested by the current customer.
 See [implement.md](implement.md) for implementation guidance meant for future
 engineering sessions.
 See [instructions.md](instructions.md) for the npm-first hosted setup workflow
@@ -116,7 +156,7 @@ deployment guide lives under [deploy/oci](deploy/oci).
 For an external project or deployment wrapper, install FirstTrace from npm:
 
 ```bash
-npm install firsttrace@0.1.5
+npm install firsttrace@0.1.6
 ```
 
 The package provides:
@@ -135,7 +175,7 @@ template:
 mkdir firsttrace-vercel
 cd firsttrace-vercel
 npm init -y
-npm install firsttrace@0.1.5
+npm install firsttrace@0.1.6
 cp -R node_modules/firsttrace/deploy/vercel/* .
 cp node_modules/firsttrace/deploy/vercel/gitignore.template .gitignore
 npm install
@@ -225,28 +265,31 @@ OpenAI, OCI GenAI, and future model adapters use the same built-in FirstTrace
 investigation prompt contract by default. The default prompt is versioned and
 keeps safety, citation grounding, and output-schema rules inside the package.
 
-Advanced deployments can add prompt overlays without forking FirstTrace. Overlays
-are appended to the built-in prompt and cannot remove required safety, evidence,
-or schema rules.
+The built-in `manager-owner-triage` profile means enterprise teams do not need a
+custom prompt overlay for PM/manager bug triage. Advanced deployments can still
+add prompt overlays without forking FirstTrace, but overlays are an escape hatch
+for local language and domain preferences, not the mechanism for the core
+owner-triage behavior. Overlays are appended to the built-in prompt and cannot
+remove required safety, evidence, or schema rules.
 
 ```yaml
 investigation:
   prompt:
-    profile: enterprise-triage
+    profile: manager-owner-triage
     overlay_files:
-      - ./prompts/company-investigation.md
+      - ./prompts/company-style.md
 ```
 
 The same behavior can be configured with environment variables:
 
 ```bash
-FIRSTTRACE_PROMPT_PROFILE=enterprise-triage
-FIRSTTRACE_PROMPT_OVERLAY_FILES=./prompts/company-investigation.md
+FIRSTTRACE_PROMPT_PROFILE=manager-owner-triage
+FIRSTTRACE_PROMPT_OVERLAY_FILES=./prompts/company-style.md
 ```
 
-Use overlays for domain-specific handoff preferences, such as naming a business
-surface, preferred escalation language, or how to describe user impact. Keep
-repository secrets, customer data, and tokens out of prompt overlay files.
+Use overlays only for domain-specific handoff preferences, such as naming a
+business surface, preferred escalation language, or how to describe user impact.
+Keep repository secrets, customer data, and tokens out of prompt overlay files.
 
 Example compact Slack reply from a real UI/bootstrap report:
 
@@ -316,6 +359,32 @@ plus `GET /api/jobs?id=<job-id>`. Those generic HTTP endpoints require
 `FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=true` only for local development
 when you intentionally want to test them without bearer auth.
 
+Generic read-only Git repo config:
+
+```yaml
+repos:
+  - name: example-app
+    provider: git
+    url: ${FIRSTTRACE_REPO_EXAMPLE_URL}
+    ref: refs/heads/main
+    path: repos/example-app
+    clone_depth: full
+    credential:
+      type: token
+      username_env: FIRSTTRACE_REPO_EXAMPLE_USERNAME
+      token_env: FIRSTTRACE_REPO_EXAMPLE_TOKEN
+    materialization:
+      refresh: startup
+      include_git_history: true
+      scrub_remote_credentials: true
+```
+
+Use read-only repository credentials. HTTPS token credentials come from
+environment variables; SSH deployments can use an SSH command or mounted key
+file through config. FirstTrace clones and fetches without writing credentials
+into evidence output, and `scrub_remote_credentials: true` keeps tokenized
+remote URLs out of `.git/config` after materialization.
+
 GitHub App-backed repo config:
 
 ```yaml
@@ -376,6 +445,12 @@ GITHUB_TOKEN=
 FirstTrace creates or reads a runtime token, clones or fetches with a
 one-command HTTP auth header, and stores the working cache under ignored
 `.firsttrace/github/`. Tokens are not embedded in the remote URL or git config.
+
+Archive-backed repos are useful when a company already has an internal source
+export path. They are source-only unless the archive command also preserves
+`.git` history. When `.git` history is missing, FirstTrace still searches code
+but returns no person owner candidate and lists the missing metadata in the
+manager handoff.
 
 Slack channel config:
 
@@ -447,12 +522,23 @@ Hosted readiness verification:
 
 ```bash
 firsttrace doctor --config examples/minimal.local.config.yaml
+firsttrace doctor repos --config firsttrace.config.yaml
 ```
 
 `doctor` validates that the config loads, local repository paths exist, Slack
 receiver/reply environment variables are present when Slack is configured, and
 the selected AI provider is available when AI is requested. Missing AI credentials
 are a warning unless `--ai` is passed or Slack-originated AI is enabled.
+`doctor repos` actively materializes configured Git/archive/GitHub repositories
+when applicable and prints JSON readiness fields for each repo, including
+`git_history_available`, `is_shallow`, `head_sha`,
+`owner_evidence_ready`, `last_refresh_status`, missing metadata, and the
+available owner evidence sources. Use it before deployment when managers expect
+person-level owner candidates.
+
+Hosted `/healthz` also includes passive repository readiness in a `repos` array
+for already-mounted or already-materialized repositories. It does not clone or
+fetch on every health request; use `doctor repos` for active refresh/validation.
 
 ```bash
 firsttrace hosted verify \
@@ -474,7 +560,7 @@ firsttrace hosted accept \
   --config firsttrace.config.yaml \
   --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
   --report "README deployment plan is unclear" \
-  --expected-build-ref "npm:firsttrace@0.1.5"
+  --expected-build-ref "npm:firsttrace@0.1.6"
 ```
 
 The acceptance command posts a real Slack seed message, sends the same signed
@@ -502,7 +588,7 @@ package:
    off by default; FirstTrace is built for hosted Slack Events delivery.
 4. Install the Slack app, copy `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET`,
    and invite the bot to the triage channel.
-5. Create a small operations wrapper, install `firsttrace@0.1.5`, and copy
+5. Create a small operations wrapper, install `firsttrace@0.1.6`, and copy
    `node_modules/firsttrace/deploy/vercel` into that wrapper.
 6. Create a Supabase project and apply every packaged migration from
    `node_modules/firsttrace/supabase/migrations` with the Supabase CLI.
@@ -511,7 +597,7 @@ package:
 8. Store `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
    `FIRSTTRACE_QUEUE_PROVIDER=supabase`, `FIRSTTRACE_RECEIVER_TOKEN`,
    `FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false`, and
-   `FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.5` in Vercel.
+   `FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.6` in Vercel.
 9. Configure repositories with either a read-only GitHub App
    (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`) or
    local validation `GITHUB_TOKEN`.
@@ -542,7 +628,7 @@ config into the image. A user deploying from a separate operations repo can star
 with:
 
 ```bash
-npm install firsttrace@0.1.5
+npm install firsttrace@0.1.6
 cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
 ```
 
@@ -556,7 +642,7 @@ Runtime secrets should be stored in OCI Vault, not Terraform state. After the
 Terraform stack creates Vault/KMS, run:
 
 ```bash
-npm install firsttrace@0.1.5
+npm install firsttrace@0.1.6
 npx firsttrace-oci-sync-secrets --prompt
 ```
 
@@ -572,6 +658,9 @@ the full reusable deployment sequence.
 
 FirstTrace v0 should stay small:
 
+- manager-owner triage as the default bug-report product surface
+- stable PM/manager Markdown rendered from validated JSON
+- person owner candidates only when backed by Git/provider evidence
 - chat provider trigger, with Slack first and Teams or other providers later
 - one or more configured git repositories
 - local/internal git support, not only github.com
@@ -588,13 +677,14 @@ FirstTrace is not:
 
 - an autonomous code-writing or code-fixing agent
 - a ticket-writing system
-- a replacement for engineers
+- a replacement for engineers or code-level debugging tools
 - a generic workplace search tool
 - a SaaS-only product
 - a tool that needs write access to source code
 
-Write permissions, ticket creation, and fix suggestions can come later. The first
-product should earn trust by being read-only and evidence-cited.
+Write permissions, ticket creation, and fix suggestions can come later. The
+first product should earn trust by being read-only, manager-readable, and
+evidence-cited.
 
 ## Eval-First Development
 
@@ -714,7 +804,7 @@ firsttrace hosted accept \
   --config firsttrace.config.yaml \
   --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
   --report "README deployment plan is unclear" \
-  --expected-build-ref "npm:firsttrace@0.1.5"
+  --expected-build-ref "npm:firsttrace@0.1.6"
 ```
 
 The Vercel/Supabase live acceptance command is:
@@ -726,14 +816,14 @@ firsttrace hosted accept \
   --config firsttrace.config.yaml \
   --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
   --report "README deployment plan is unclear" \
-  --expected-build-ref "npm:firsttrace@0.1.5"
+  --expected-build-ref "npm:firsttrace@0.1.6"
 ```
 
-Next planned work:
+Release follow-up:
 
-1. Deploy the npm-wrapper Vercel/Supabase backend and run live acceptance.
-2. Run OCI live acceptance before OCI release or infrastructure changes.
-3. Add GitHub Issues or another issue provider through the generic provider boundary.
+1. Keep OCI and Vercel/Supabase hosted acceptance as release verification gates.
+2. Defer unrelated issue-provider work unless it directly supports the
+   manager-owner evidence contract.
 
 ## License
 

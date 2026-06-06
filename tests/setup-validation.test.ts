@@ -151,6 +151,58 @@ describe("setup validation", () => {
     });
   });
 
+  it("requires configured token env vars for generic git repos", () => {
+    const dir = tempConfigDir("git-token");
+    const configPath = writeConfig(dir, [
+      "repos:",
+      "  - name: app",
+      "    provider: git",
+      "    url: https://example.com/internal/app.git",
+      "    path: repos/app",
+      "    credential:",
+      "      type: token",
+      "      token_env: FIRSTTRACE_APP_REPO_TOKEN",
+      "docs: []",
+      "issue_exports: []",
+    ]);
+
+    const result = validateFirstTraceSetup({ configPath, env: {} });
+
+    expect(result.passed).toBe(false);
+    expect(result.checks).toContainEqual({
+      level: "FAIL",
+      message: "Generic git repos are missing credential env vars: app:FIRSTTRACE_APP_REPO_TOKEN.",
+      name: "Git repositories",
+    });
+  });
+
+  it("passes generic git repo setup when configured token env vars are present", () => {
+    const dir = tempConfigDir("git-token-present");
+    const configPath = writeConfig(dir, [
+      "repos:",
+      "  - name: app",
+      "    provider: git",
+      "    url: https://example.com/internal/app.git",
+      "    path: repos/app",
+      "    credential:",
+      "      type: token",
+      "      token_env: FIRSTTRACE_APP_REPO_TOKEN",
+      "docs: []",
+      "issue_exports: []",
+    ]);
+
+    const result = validateFirstTraceSetup({
+      configPath,
+      env: { FIRSTTRACE_APP_REPO_TOKEN: "repo-token" },
+    });
+
+    expect(result.checks).toContainEqual({
+      level: "PASS",
+      message: "1 generic git repos can be materialized or validated with doctor repos.",
+      name: "Git repositories",
+    });
+  });
+
   it("renders a compact checklist", () => {
     const rendered = renderSetupValidation({
       checks: [{ level: "PASS", message: "Loaded config.", name: "Config" }],

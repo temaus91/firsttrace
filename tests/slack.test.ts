@@ -823,9 +823,16 @@ describe("Slack result notification", () => {
         quality: {
           actionability: 0.6,
           citationCoverage: 0.5,
+          evidenceWarnings: ["AI quality: no evidence-backed human owner."],
+          executionStatus: "succeeded",
+          foundCommitEvidence: false,
           foundExactFile: true,
+          foundExactLine: true,
           foundOwner: false,
+          foundPersonOwner: false,
           foundRelatedCommit: false,
+          triageQuality: "weak",
+          usedTeamFallback: true,
         },
         relatedChange: "Commit abc123 changed alert navigation.",
         userImpact: "Home alert links for study IDs containing slashes can open a broken portfolio route.",
@@ -845,6 +852,7 @@ describe("Slack result notification", () => {
 
     expect(rendered).toContain("User impact: Home alert links for study IDs containing slashes can open a broken portfolio route.");
     expect(rendered).toContain("Likely owner: `Jane Doe`");
+    expect(rendered).toContain("Triage quality: `weak`");
     expect(rendered).toContain("1. Related change: Commit abc123 changed alert navigation.");
     expect(rendered).toContain("AI quality: no evidence-backed human owner.");
     expect(rendered).not.toContain("fake.ts:1");

@@ -19,10 +19,14 @@ build_args=()
 container_runtime="${CONTAINER_RUNTIME:-docker}"
 repos_dir="${FIRSTTRACE_REPOS_DIR:-repos}"
 empty_repos_dir=""
+repo_history_context_dir=""
 
 cleanup() {
   if [[ -n "${empty_repos_dir}" ]]; then
     rm -rf "${empty_repos_dir}"
+  fi
+  if [[ -n "${repo_history_context_dir}" ]]; then
+    rm -rf "${repo_history_context_dir}"
   fi
 }
 trap cleanup EXIT
@@ -49,6 +53,12 @@ if [[ ! -d "${repos_dir}" ]]; then
   mkdir -p "${empty_repos_dir}"
   touch "${empty_repos_dir}/.keep"
   repos_dir="${empty_repos_dir}"
+elif [[ "${FIRSTTRACE_INCLUDE_REPO_GIT_HISTORY:-false}" == "true" ]]; then
+  repo_history_context_dir="firsttrace-repos-context"
+  rm -rf "${repo_history_context_dir}"
+  mkdir -p "${repo_history_context_dir}"
+  cp -a "${repos_dir}/." "${repo_history_context_dir}/"
+  repos_dir="${repo_history_context_dir}"
 fi
 
 build_args+=(--build-arg "FIRSTTRACE_REPOS_DIR=${repos_dir}")

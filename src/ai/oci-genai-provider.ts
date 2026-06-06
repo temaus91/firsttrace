@@ -1,7 +1,7 @@
 import { groundAiResult } from "./grounding.js";
 import { createOciGenAiJsonClient, type OciGenAiJsonClient } from "./oci-genai-json-client.js";
 import { evidenceBaseSystemPrompt, evidenceUserPrompt } from "./prompts.js";
-import { AiInvestigationResultPayloadSchema } from "./schema.js";
+import { normalizeAiInvestigationResultPayload } from "./schema.js";
 import { buildSystemPrompt } from "../investigator/prompt-contract.js";
 import type { AiInvestigationResult, AiProvider, AiReasonerRequest } from "../types.js";
 
@@ -24,7 +24,7 @@ export const createOciGenAiProvider = ({
       config: promptConfig,
       env,
     });
-    const payload = AiInvestigationResultPayloadSchema.parse(
+    const payload = normalizeAiInvestigationResultPayload(
       await jsonClient.generateJson({
         responseName: "firsttrace_ai_investigation_result",
         systemPrompt: prompt.systemPrompt,

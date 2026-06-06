@@ -4,6 +4,12 @@ This directory is the reusable npm-first Vercel/Supabase deployment template for
 FirstTrace. It is meant to be copied from the published npm package into an
 operations repository. The deployed runtime imports FirstTrace from npm.
 
+FirstTrace is positioned as a PM/manager-facing manager-owner triage service.
+The next version priority is a built-in `manager-owner-triage` response that
+identifies the user-facing issue, evidence-backed owner candidates, likely root
+cause, user impact, and recommended manager action without requiring a custom
+prompt overlay.
+
 ## What This Template Provides
 
 - Vercel API routes for Slack Events, generic investigation submission, job
@@ -22,7 +28,7 @@ Supabase schema migrations are provided by the npm package under
 mkdir firsttrace-vercel
 cd firsttrace-vercel
 npm init -y
-npm install firsttrace@0.1.5
+npm install firsttrace@0.1.6
 cp -R node_modules/firsttrace/deploy/vercel/* .
 cp node_modules/firsttrace/deploy/vercel/gitignore.template .gitignore
 npm install
@@ -31,18 +37,19 @@ npm install
 Edit `firsttrace.config.yaml` for your Slack channel, repositories, and owners.
 Do not put secrets in that file.
 
-Optional prompt overlays can be configured in the same file:
+Current package versions support optional prompt overlays in the same file:
 
 ```yaml
 investigation:
   prompt:
-    profile: enterprise-triage
+    profile: manager-owner-triage
     overlay_files:
-      - ./prompts/company-investigation.md
+      - ./prompts/company-style.md
 ```
 
-Overlays are additive. They customize the built-in prompt contract without
-removing FirstTrace safety, citation, or output-schema rules.
+Overlays are additive. Use them only for local style or domain wording. They
+should not be required for the core manager-owner triage workflow, and they
+cannot remove FirstTrace safety, citation, or output-schema rules.
 
 ## Apply Supabase Migrations
 
@@ -86,7 +93,7 @@ The Terraform defaults set:
 FIRSTTRACE_QUEUE_PROVIDER=supabase
 FIRSTTRACE_CONFIG_PATH=firsttrace.config.yaml
 FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false
-FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.5
+FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.6
 FIRSTTRACE_SLACK_REPLY_FORMAT=compact-v1
 ```
 

@@ -7,7 +7,7 @@ import {
   createGitHubTokenProviderFromEnv,
   type GitHubInstallationTokenProvider,
 } from "./repositories/github-auth.js";
-import type { EvidenceItem, PreparedFirstTraceConfig, SearchableRepoConfig } from "./types.js";
+import type { Citation, EvidenceItem, PreparedFirstTraceConfig, SearchableRepoConfig } from "./types.js";
 
 const EXCLUDE_GLOBS = [
   "!**/.git/**",
@@ -52,10 +52,37 @@ type Match = {
   text: string;
 };
 
+export type SearchPass =
+  | "raw_report_term"
+  | "ui_journey_route"
+  | "identifier_expansion"
+  | "code_pattern_expansion"
+  | "safe_pattern_search";
+
+export type EvidenceRelevance =
+  | "exact_cause"
+  | "url_or_route_construction"
+  | "existing_safe_helper"
+  | "adjacent_pattern"
+  | "broad_context";
+
+export type SearchQuery = {
+  pass: SearchPass;
+  query: string;
+  relevance: EvidenceRelevance;
+  weight: number;
+  whyRelevant: string;
+};
+
+export type SearchFilesOptions = {
+  report?: string;
+};
+
 type CommitSignalSource = "term" | "path_history" | "line_blame" | "github_term" | "github_path_history";
 
 type CommitSignal = {
   author: string;
+  authorEmail?: string;
   date: string;
   hash: string;
   line?: number;
@@ -72,6 +99,107 @@ export type CommitSearchOptions = {
 
 const lineSummary = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 220);
 
+const normalizedText = (value: string) => value.toLowerCase();
+
+const ROUTE_BUG_TERMS = [
+  "dashboard",
+  "deep link",
+  "detail",
+  "entity",
+  "href",
+  "id",
+  "link",
+  "navigate",
+  "navigation",
+  "page",
+  "route",
+  "routing",
+  "screen",
+  "slug",
+  "tab",
+  "url",
+];
+
+const reportLooksLikeRouteBug = (report: string, terms: string[]) => {
+  const text = normalizedText(`${report} ${terms.join(" ")}`);
+  return ROUTE_BUG_TERMS.some((term) => text.includes(term));
+};
+
+const reportMentionsSlashId = (report: string, terms: string[]) => {
+  const text = normalizedText(`${report} ${terms.join(" ")}`);
+  return text.includes("/") || text.includes("slash") || text.includes("reserved url");
+};
+
+const addQuery = (queries: SearchQuery[], query: SearchQuery) => {
+  const normalized = query.query.toLowerCase();
+  if (!query.query.trim() || queries.some((item) => item.query.toLowerCase() === normalized && item.pass === query.pass)) {
+    return;
+  }
+  queries.push(query);
+};
+
+export const deriveSearchQueries = (report: string, terms: string[]): SearchQuery[] => {
+  const queries: SearchQuery[] = [];
+
+  for (const term of terms) {
+    addQuery(queries, {
+      pass: "raw_report_term",
+      query: term,
+      relevance: "broad_context",
+      weight: 2,
+      whyRelevant: "The term came directly from the bug report.",
+    });
+  }
+
+  if (!reportLooksLikeRouteBug(report, terms)) return queries;
+
+  const routeConstructionQueries = ["navigate(", "router.push", "href=", "to=", "generatePath"];
+  for (const query of routeConstructionQueries) {
+    addQuery(queries, {
+      pass: "ui_journey_route",
+      query,
+      relevance: "url_or_route_construction",
+      weight: 14,
+      whyRelevant: "The report mentions navigation or routing, and this pattern constructs a URL or route.",
+    });
+  }
+
+  const interpolationQueries = reportMentionsSlashId(report, terms)
+    ? ["${", "${id}", "${slug}", ".id}", "Id}", "slug}"]
+    : ["${id}", "${slug}", ".id}", "Id}", "slug}"];
+  for (const query of interpolationQueries) {
+    addQuery(queries, {
+      pass: "code_pattern_expansion",
+      query,
+      relevance: "exact_cause",
+      weight: 18,
+      whyRelevant: "The report points to identifier interpolation in a route path.",
+    });
+  }
+
+  for (const query of ["encodeURIComponent", "decodeURIComponent", "URLSearchParams"]) {
+    addQuery(queries, {
+      pass: "safe_pattern_search",
+      query,
+      relevance: "existing_safe_helper",
+      weight: 10,
+      whyRelevant: "Safe URL helper usage is relevant when checking whether identifiers are encoded or parsed safely.",
+    });
+  }
+
+  for (const term of terms.filter((term) => /id$|slug|uuid|key/.test(term)).slice(0, 4)) {
+    addQuery(queries, {
+      pass: "identifier_expansion",
+      query: term,
+      relevance: "adjacent_pattern",
+      weight: 6,
+      whyRelevant: "Identifier-like report terms can point to route params, slugs, or URL construction.",
+    });
+  }
+
+  return queries;
+};
+
 const isSearchableFile = (filePath: string) =>
   SEARCHABLE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
 
@@ -83,6 +211,49 @@ export const scoreTextLine = (line: string, terms: string[]) => 2 + countTermHit
 
 export const sortEvidenceItems = (items: EvidenceItem[]) =>
   [...items].sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+
+const scoreSearchMatch = (line: string, query: SearchQuery) =>
+  query.weight + countTermHits(line, [query.query]);
+
+const citationFromSearchMatch = (
+  repo: SearchableRepoConfig,
+  match: Match,
+  query: SearchQuery,
+  score: number,
+): Citation => ({
+  label: `${repo.name}:${match.path}:${match.line}`,
+  line: match.line,
+  path: match.path,
+  query: query.query,
+  relevance: query.relevance,
+  repo: repo.name,
+  score,
+  searchPass: query.pass,
+  snippet: lineSummary(match.text),
+  whyRelevant: query.whyRelevant,
+});
+
+const citationSortScore = (citation: Citation) => citation.score ?? 0;
+
+const bestCitation = (item: EvidenceItem) =>
+  item.citations
+    .filter((citation) => citation.line !== undefined)
+    .sort((a, b) => citationSortScore(b) - citationSortScore(a))[0];
+
+const applyBestCitationMetadata = (item: EvidenceItem) => {
+  const citation = bestCitation(item);
+  if (!citation) return;
+  item.summary = citation.snippet ?? item.summary;
+  item.metadata = {
+    ...item.metadata,
+    evidenceLine: citation.line ?? null,
+    evidenceQuery: citation.query ?? null,
+    evidenceRelevance: citation.relevance ?? null,
+    evidenceSearchPass: citation.searchPass ?? null,
+    evidenceSnippet: citation.snippet ?? null,
+    whyRelevant: citation.whyRelevant ?? null,
+  };
+};
 
 const shortHash = (hash: string) => hash.slice(0, 7);
 
@@ -106,9 +277,10 @@ const commitSignalSummary = (signal: CommitSignal) => {
 };
 
 const commitSignalToEvidence = (repo: SearchableRepoConfig, signal: CommitSignal): EvidenceItem => ({
-  citations: [{ commit: shortHash(signal.hash), label: `${repo.name}:${shortHash(signal.hash)}`, repo: repo.name }],
+  citations: [{ commit: signal.hash, label: `${repo.name}:${signal.hash}`, repo: repo.name }],
   metadata: {
     author: signal.author,
+    authorEmail: signal.authorEmail ?? null,
     date: signal.date,
     line: signal.line ?? null,
     path: signal.path ?? null,
@@ -123,7 +295,7 @@ const commitSignalToEvidence = (repo: SearchableRepoConfig, signal: CommitSignal
 
 const parseGitLogRows = (
   stdout: string,
-  scoreFor: (index: number, row: { author: string; date: string; hash: string; subject: string }) => number,
+  scoreFor: (index: number, row: { author: string; authorEmail?: string; date: string; hash: string; subject: string }) => number,
   source: CommitSignalSource,
   pathValue?: string,
 ): CommitSignal[] =>
@@ -131,18 +303,22 @@ const parseGitLogRows = (
     .split("\n")
     .filter(Boolean)
     .flatMap((row, index) => {
-      const [hash, date, author, ...subjectParts] = row.split("\t");
-      const subject = subjectParts.join("\t");
-      if (!hash || !date || !author || !subject) return [];
+      const [hash, date, author, maybeEmail, ...subjectParts] = row.split("\t");
+      const hasEmail = maybeEmail?.includes("@");
+      const authorEmail = hasEmail ? maybeEmail : undefined;
+      const normalizedSubjectParts = hasEmail ? subjectParts : [maybeEmail, ...subjectParts];
+      const normalizedSubject = normalizedSubjectParts.filter(Boolean).join("\t");
+      if (!hash || !date || !author || !normalizedSubject) return [];
       return [
         {
           author,
+          authorEmail,
           date,
           hash,
           path: pathValue,
-          score: scoreFor(index, { author, date, hash, subject }),
+          score: scoreFor(index, { author, authorEmail, date, hash, subject: normalizedSubject }),
           source,
-          subject,
+          subject: normalizedSubject,
         },
       ];
     });
@@ -201,12 +377,13 @@ const gitBlameSignal = (
 
   const show = gitOutput(
     repo.path,
-    ["show", "-s", "--date=short", "--pretty=format:%h%x09%ad%x09%an%x09%s", blame.hash],
+    ["show", "-s", "--date=iso-strict", "--pretty=format:%H%x09%aI%x09%an%x09%ae%x09%s", blame.hash],
   );
   const [shown] = show ? parseGitLogRows(show, () => score, "line_blame", pathValue) : [];
 
   return {
     author: shown?.author ?? blame.author,
+    authorEmail: shown?.authorEmail,
     date: shown?.date ?? blame.date,
     hash: shown?.hash ?? blame.hash,
     line,
@@ -230,9 +407,9 @@ const gitCommitSignals = (
     const stdout = gitOutput(repo.path, [
       "log",
       "--all",
-      "--date=short",
+      "--date=iso-strict",
       "--max-count=250",
-      "--pretty=format:%h%x09%ad%x09%an%x09%s",
+      "--pretty=format:%H%x09%aI%x09%an%x09%ae%x09%s",
     ]);
     if (stdout !== undefined) {
       gitAvailable = true;
@@ -251,10 +428,10 @@ const gitCommitSignals = (
   candidatePaths.forEach((pathValue, pathIndex) => {
     const stdout = gitOutput(repo.path, [
       "log",
-      "--date=short",
+      "--date=iso-strict",
       "--max-count",
       String(perPathLimit),
-      "--pretty=format:%h%x09%ad%x09%an%x09%s",
+      "--pretty=format:%H%x09%aI%x09%an%x09%ae%x09%s",
       "--",
       pathValue,
     ]);
@@ -289,6 +466,7 @@ type GitHubCommitResponse = {
   commit?: {
     author?: {
       date?: string;
+      email?: string;
       name?: string;
     } | null;
     message?: string;
@@ -308,7 +486,8 @@ const githubCommitSignalFrom = (
 
   return {
     author: commit.commit?.author?.name ?? commit.author?.login ?? "unknown",
-    date: commit.commit?.author?.date?.slice(0, 10) ?? "",
+    authorEmail: commit.commit?.author?.email,
+    date: commit.commit?.author?.date ?? "",
     hash,
     path: pathValue,
     score,
@@ -396,8 +575,8 @@ const githubCommitSignals = async (
 const dedupeCommitSignals = (signals: CommitSignal[]) => {
   const byHash = new Map<string, CommitSignal>();
   for (const signal of signals) {
-    const current = byHash.get(shortHash(signal.hash));
-    if (!current || signal.score > current.score) byHash.set(shortHash(signal.hash), signal);
+    const current = byHash.get(signal.hash);
+    if (!current || signal.score > current.score) byHash.set(signal.hash, signal);
   }
   return [...byHash.values()];
 };
@@ -518,30 +697,35 @@ export const searchFiles = (
   repo: SearchableRepoConfig,
   terms: string[],
   config: PreparedFirstTraceConfig,
+  options: SearchFilesOptions = {},
 ) => {
   const byPath = new Map<string, EvidenceItem>();
+  const searchQueries = deriveSearchQueries(options.report ?? terms.join(" "), terms);
 
   for (const filePath of listFiles(repo.path)) {
     const score = scorePath(filePath, terms);
     if (score > 0) byPath.set(filePath, itemFromPath(repo, filePath, score, config));
   }
 
-  for (const match of rgSearch(repo.path, terms, [], config.search.maxEvidencePerFile)) {
-    if (!isSearchableFile(match.path)) continue;
-    const item =
-      byPath.get(match.path) ?? itemFromPath(repo, match.path, scorePath(match.path, terms), config);
-    item.score += scoreTextLine(match.text, terms);
-    item.summary = lineSummary(match.text);
-    item.citations = [
-      ...item.citations.filter((citation) => citation.line !== undefined),
-      {
-        label: `${repo.name}:${match.path}:${match.line}`,
-        line: match.line,
-        path: match.path,
-        repo: repo.name,
-      },
-    ].slice(0, config.search.maxEvidencePerFile);
-    byPath.set(match.path, item);
+  for (const query of searchQueries) {
+    for (const match of rgSearch(repo.path, [query.query], [], config.search.maxEvidencePerFile)) {
+      if (!isSearchableFile(match.path)) continue;
+      const item =
+        byPath.get(match.path) ?? itemFromPath(repo, match.path, scorePath(match.path, terms), config);
+      const matchScore = scoreSearchMatch(match.text, query);
+      item.score += matchScore;
+      const citation = citationFromSearchMatch(repo, match, query, matchScore);
+      item.citations = [
+        ...item.citations.filter(
+          (existing) => !(existing.path === citation.path && existing.line === citation.line && existing.query === citation.query),
+        ),
+        citation,
+      ]
+        .sort((a, b) => citationSortScore(b) - citationSortScore(a))
+        .slice(0, config.search.maxEvidencePerFile);
+      applyBestCitationMetadata(item);
+      byPath.set(match.path, item);
+    }
   }
 
   return sortEvidenceItems([...byPath.values()]).slice(0, config.search.maxFiles);

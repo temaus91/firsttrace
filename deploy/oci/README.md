@@ -3,6 +3,12 @@
 This directory contains the reusable OCI deployment path for FirstTrace. It is
 intended for real deployments, not a one-off environment.
 
+FirstTrace is a PM/manager-facing manager-owner bug triage service. The next
+version priority is a built-in `manager-owner-triage` response that reports the
+user-facing issue, evidence-backed owner candidates, exact code/commit evidence,
+likely root cause, user impact, and recommended manager action without requiring
+a custom prompt overlay.
+
 The preferred runtime image is package-based: `deploy/oci/Dockerfile.package`
 installs `firsttrace@<version>` from npm and copies one deployment config file
 into the image. OCI still runs Container Instances, but the image does not need
@@ -39,7 +45,7 @@ it does not require `OPENAI_API_KEY`.
    mkdir firsttrace-oci
    cd firsttrace-oci
    npm init -y
-   npm install firsttrace@0.1.5
+   npm install firsttrace@0.1.6
    cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
    ```
 
@@ -138,11 +144,12 @@ it does not require `OPENAI_API_KEY`.
 
    ```bash
    export FIRSTTRACE_DOCKERFILE="deploy/oci/Dockerfile.package"
-   export FIRSTTRACE_PACKAGE_SPEC="firsttrace@0.1.5"
-   export FIRSTTRACE_BUILD_REF="npm:firsttrace@0.1.5"
+   export FIRSTTRACE_PACKAGE_SPEC="firsttrace@0.1.6"
+   export FIRSTTRACE_BUILD_REF="npm:firsttrace@0.1.6"
    export FIRSTTRACE_CONFIG_FILE="firsttrace.oci.config.yaml"
    export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
    export FIRSTTRACE_REPOS_DIR="repos" # Optional local repo snapshots copied to /app/repos.
+   export FIRSTTRACE_INCLUDE_REPO_GIT_HISTORY="false" # Set true only for packaged snapshots that need git blame/log evidence.
    export FIRSTTRACE_CONTAINER_PLATFORM="linux/arm64" # Use linux/amd64 for CI.Standard.E4.Flex.
    export CONTAINER_RUNTIME="docker" # Or podman.
 
@@ -235,7 +242,7 @@ it does not require `OPENAI_API_KEY`.
      --config firsttrace.oci.config.yaml \
      --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
      --report "README deployment plan is unclear" \
-     --expected-build-ref "npm:firsttrace@0.1.5"
+     --expected-build-ref "npm:firsttrace@0.1.6"
    ```
 
    This posts a real Slack seed message, sends the same signed event to OCI
@@ -275,19 +282,19 @@ Upload or create your deployment config as `~/firsttrace/firsttrace.config.yaml`
 It should contain your `repos`, `owners`, and Slack channel configuration, but
 not secrets.
 
-If you need domain-specific investigation behavior, add an optional prompt
-overlay to the same config:
+Current package versions support optional prompt overlays in the same config:
 
 ```yaml
 investigation:
   prompt:
-    profile: enterprise-triage
+    profile: manager-owner-triage
     overlay_files:
-      - ./prompts/company-investigation.md
+      - ./prompts/company-style.md
 ```
 
-Prompt overlays are additive and cannot remove FirstTrace safety, citation, or
-output-schema rules.
+Prompt overlays are additive. Use them only for local style or domain wording.
+They should not be required for the core manager-owner triage workflow, and they
+cannot remove FirstTrace safety, citation, or output-schema rules.
 
 Create the base OCI infrastructure. Keep `container_image_url` empty for the
 first apply because the OCIR repository must exist before the image can be
@@ -400,6 +407,7 @@ export FIRSTTRACE_PACKAGE_SPEC="firsttrace@${FIRSTTRACE_VERSION}"
 export FIRSTTRACE_CONFIG_FILE="firsttrace.config.yaml"
 export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
 export FIRSTTRACE_REPOS_DIR="repos"
+export FIRSTTRACE_INCLUDE_REPO_GIT_HISTORY="false"
 export FIRSTTRACE_BUILD_REF="npm:firsttrace@${FIRSTTRACE_VERSION}"
 
 ./deploy/oci/scripts/build-and-push.sh \
@@ -408,6 +416,15 @@ export FIRSTTRACE_BUILD_REF="npm:firsttrace@${FIRSTTRACE_VERSION}"
   "$OCI_REPOSITORY" \
   "$IMAGE_TAG"
 ```
+
+`FIRSTTRACE_REPOS_DIR` is optional when repositories are materialized at runtime
+through `provider: git` or `provider: github`. When you package local repository
+snapshots, the default image build excludes nested `.git` directories so source
+archives do not accidentally carry history or remote metadata. Set
+`FIRSTTRACE_INCLUDE_REPO_GIT_HISTORY=true` only when manager-owner triage needs
+person-level Git blame/log evidence from the packaged snapshots. Before enabling
+it, make sure configured repo remotes are scrubbed and credentials are not stored
+in `.git/config`.
 
 If `CI.Standard.A1.Flex` is out of capacity, or if you need an AMD64 image from
 an ARM Cloud Shell where Docker Buildx emulation is not available, use the
