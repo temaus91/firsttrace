@@ -124,6 +124,8 @@ const fullCommitMetadata = (repo: SearchableRepoConfig, commitId: string): GitCo
   return stdout ? parseGitLogMetadata(stdout) : undefined;
 };
 
+const commitTimestampFrom = (metadata: GitCommitMetadata) => metadata.committerTime || metadata.authorTime;
+
 const lineText = (repo: SearchableRepoConfig, filePath: string, line: number, fallback?: string) => {
   if (fallback?.trim()) return fallback.trim();
   const absolutePath = path.resolve(repo.path, filePath);
@@ -168,7 +170,7 @@ const blameCommitForLine = (
 
   return {
     ...metadata,
-    commitTime: metadata.authorTime,
+    commitTime: commitTimestampFrom(metadata),
     evidenceCode: lineText(repo, filePath, line, citation.snippet),
     evidenceKind: "exact_line_blame",
     evidenceSource: "commit_author",
@@ -201,7 +203,7 @@ const fileHistoryCommits = (repo: SearchableRepoConfig, filePath: string, limit:
       if (!metadata) return [];
       return [{
         ...metadata,
-        commitTime: metadata.authorTime,
+        commitTime: commitTimestampFrom(metadata),
         evidenceCode: "",
         evidenceKind: "file_history" as const,
         evidenceSource: "commit_author" as const,
