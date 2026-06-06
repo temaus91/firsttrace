@@ -184,7 +184,7 @@ const ownerCommit = (overrides: Partial<OwnerEvidenceCommit> = {}): OwnerEvidenc
   committerTime: "2026-05-20T00:00:00Z",
   evidenceCode: "navigate(`/entities/${entity.id}/detail`)",
   evidenceKind: "exact_line_blame",
-  evidenceSource: "commit_author",
+  evidenceSource: "exact_line_blame",
   file: "src/components/EntityLinks.tsx",
   line: 4,
   repo: "example-app",
@@ -199,7 +199,7 @@ const ownerEvidence = (): OwnerEvidenceResult => ({
       confidence: "High",
       email: "git-author@example.com",
       evidenceCommits: [ownerCommit()],
-      evidenceSource: "commit_author",
+      evidenceSource: "exact_line_blame",
       name: "Git Author",
       rank: 1,
       reason: "Exact-line blame points to src/components/EntityLinks.tsx:4.",
@@ -308,12 +308,12 @@ describe("GitHub repository provider", () => {
     const pullRequest = requests.find((request) => request.url.includes("/pulls"));
     expect(result.ownerEvidence?.candidates[0]).toMatchObject({
       email: "",
-      evidenceSource: "pr_author",
+      evidenceSource: "provider_pr_author",
       name: "pr-author",
     });
     expect(result.ownerEvidence?.candidates[0]?.evidenceCommits[0]).toMatchObject({
       authorName: "pr-author",
-      evidenceSource: "pr_author",
+      evidenceSource: "provider_pr_author",
       file: "src/components/EntityLinks.tsx",
     });
     expect(pullRequest?.url).toMatch(
@@ -379,7 +379,7 @@ describe("GitHub repository provider", () => {
     expect(metadata).toEqual({
       commitId: "abcdef1234567890abcdef1234567890abcdef12",
       email: "",
-      evidenceSource: "pr_author",
+      evidenceSource: "provider_pr_author",
       name: "pr-author",
     });
     expect(requests[0]?.url).toBe(
@@ -411,7 +411,7 @@ describe("GitHub repository provider", () => {
         return {
           commitId: "abcdef1234567890abcdef1234567890abcdef12",
           email: "",
-          evidenceSource: "pr_author",
+          evidenceSource: "provider_pr_author",
           name: "pr-author",
         };
       },
@@ -421,15 +421,15 @@ describe("GitHub repository provider", () => {
 
     expect(enriched.candidates[0]).toMatchObject({
       email: "",
-      evidenceSource: "pr_author",
+      evidenceSource: "provider_pr_author",
       name: "pr-author",
       rank: 1,
     });
     expect(enriched.candidates[0]?.evidenceCommits[0]).toMatchObject({
       authorName: "pr-author",
-      evidenceSource: "pr_author",
+      evidenceSource: "provider_pr_author",
     });
-    expect(enriched.candidates[0]?.evidenceCommits[0]?.whyRelevant).toContain("Provider metadata identifies pr_author");
+    expect(enriched.candidates[0]?.evidenceCommits[0]?.whyRelevant).toContain("Provider metadata identifies provider_pr_author");
     expect(enriched.missingInfo).toEqual([]);
   });
 
@@ -444,7 +444,7 @@ describe("GitHub repository provider", () => {
 
     expect(enriched.candidates[0]).toMatchObject({
       email: "git-author@example.com",
-      evidenceSource: "commit_author",
+      evidenceSource: "exact_line_blame",
       name: "Git Author",
     });
     expect(enriched.missingInfo.join("\n")).toContain("Provider metadata was unavailable");

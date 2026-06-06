@@ -35,7 +35,7 @@ const managerTriage = (): ManagerOwnerTriageResult => ({
           why_relevant: "This repeats the same raw route interpolation pattern.",
         },
       ],
-      evidence_source: "commit_author",
+      evidence_source: "exact_line_blame",
       name: "Dev Owner",
       rank: 1,
       reason: "Exact code and commit evidence point to the raw route interpolation owner.",
@@ -91,6 +91,16 @@ describe("manager owner triage contract", () => {
     expect(() => ManagerOwnerTriageResultSchema.parse(payload)).toThrow();
   });
 
+  it("rejects retired provider-short evidence source names", () => {
+    const payload = managerTriage();
+    payload.likely_owner_candidates[0] = {
+      ...payload.likely_owner_candidates[0]!,
+      evidence_source: "pr_author" as never,
+    };
+
+    expect(() => ManagerOwnerTriageResultSchema.parse(payload)).toThrow();
+  });
+
   it("renders stable manager markdown", () => {
     expect(renderManagerOwnerTriage(managerTriage())).toMatchInlineSnapshot(`
       "Bug Triage
@@ -104,7 +114,7 @@ describe("manager owner triage contract", () => {
          Email: dev.owner@example.com
          Confidence: High
          Reason: Exact code and commit evidence point to the raw route interpolation owner.
-         Evidence source: commit_author
+         Evidence source: exact_line_blame
 
          Evidence commits:
          - Commit: 0123456789abcdef0123456789abcdef01234567
@@ -140,13 +150,15 @@ describe("manager owner triage contract", () => {
       ...managerTriage(),
       likely_owner_candidates: [],
       missing_info: ["Collect Git blame for src/components/EntityLinks.tsx:42."],
-      recommended_manager_action: "Do not assign a person yet.",
+      recommended_manager_action: "Route to the owning team.",
     };
 
     const rendered = renderManagerOwnerTriage(payload);
 
     expect(rendered).toContain("Likely Owner Candidates");
-    expect(rendered).toContain("Recommended Manager Action\nDo not assign a person yet.");
+    expect(rendered).toContain(
+      "Recommended Manager Action\nDo not assign a person yet. Collect exact-line blame, commit history, PR metadata, or provider pushed-by metadata for the suspected files.",
+    );
     expect(rendered).toContain("Missing Info\n- Collect Git blame for src/components/EntityLinks.tsx:42.");
   });
 });

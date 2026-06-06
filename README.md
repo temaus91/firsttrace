@@ -69,7 +69,7 @@ Likely Owner Candidate
    Confidence: High
    Reason: Exact line blame points to the commit that inserted the raw ID into
    the route path.
-   Evidence source: commit_author
+   Evidence source: exact_line_blame
 
    Evidence commits:
    - Commit: 0123456789abcdef0123456789abcdef01234567

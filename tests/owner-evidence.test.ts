@@ -112,7 +112,7 @@ describe("owner evidence collection", () => {
     expect(result.candidates[0]).toMatchObject({
       confidence: "High",
       email: "dev.owner@example.com",
-      evidenceSource: "commit_author",
+      evidenceSource: "exact_line_blame",
       name: "Dev Owner",
       rank: 1,
     });

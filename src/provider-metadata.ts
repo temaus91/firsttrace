@@ -143,7 +143,7 @@ export class GitHubProviderMetadataAdapter implements ProviderMetadataAdapter {
     return {
       commitId,
       email: "",
-      evidenceSource: "pr_author",
+      evidenceSource: "provider_pr_author",
       name: login,
     };
   }

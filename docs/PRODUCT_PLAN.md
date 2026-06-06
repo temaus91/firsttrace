@@ -151,7 +151,9 @@ ManagerOwnerTriageResult
     email
     confidence: High | Medium | Low
     reason
-    evidenceSource: pushed_by | pr_author | committer | commit_author | unknown
+    evidenceSource: exact_line_blame | introduced_pattern |
+      related_file_history | provider_pr_author | provider_pushed_by |
+      commit_author | committer | unknown
     evidenceCommits[]
       commitId
       commitTime

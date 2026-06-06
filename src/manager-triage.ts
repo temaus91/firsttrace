@@ -3,10 +3,13 @@ import { z } from "zod";
 export const MANAGER_OWNER_TRIAGE_PROFILE = "manager-owner-triage";
 
 export const ManagerOwnerTriageEvidenceSourceSchema = z.enum([
-  "pushed_by",
-  "pr_author",
-  "committer",
+  "exact_line_blame",
+  "introduced_pattern",
+  "related_file_history",
+  "provider_pr_author",
+  "provider_pushed_by",
   "commit_author",
+  "committer",
   "unknown",
 ]);
 
@@ -84,9 +87,15 @@ export const parseManagerOwnerTriageResult = (value: unknown) =>
 
 const lineValue = (line: number | null) => line?.toString() ?? "";
 
+const noPersonOwnerAction =
+  "Do not assign a person yet. Collect exact-line blame, commit history, PR metadata, or provider pushed-by metadata for the suspected files.";
+
 export const renderManagerOwnerTriage = (value: ManagerOwnerTriageResult) => {
   const result = parseManagerOwnerTriageResult(value);
   const pluralSuffix = result.likely_owner_candidates.length === 1 ? "" : "s";
+  const recommendedManagerAction = result.likely_owner_candidates.length
+    ? result.recommended_manager_action
+    : noPersonOwnerAction;
   const candidateBlocks = result.likely_owner_candidates.map((candidate) => {
     const commits = candidate.evidence_commits
       .map((commit) =>
@@ -131,7 +140,7 @@ export const renderManagerOwnerTriage = (value: ManagerOwnerTriageResult) => {
     result.user_impact,
     "",
     "Recommended Manager Action",
-    result.recommended_manager_action,
+    recommendedManagerAction,
     ...(result.missing_info.length
       ? [
           "",
