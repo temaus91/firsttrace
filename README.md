@@ -156,7 +156,7 @@ deployment guide lives under [deploy/oci](deploy/oci).
 For an external project or deployment wrapper, install FirstTrace from npm:
 
 ```bash
-npm install firsttrace@0.1.5
+npm install firsttrace@0.1.6
 ```
 
 The package provides:
@@ -175,7 +175,7 @@ template:
 mkdir firsttrace-vercel
 cd firsttrace-vercel
 npm init -y
-npm install firsttrace@0.1.5
+npm install firsttrace@0.1.6
 cp -R node_modules/firsttrace/deploy/vercel/* .
 cp node_modules/firsttrace/deploy/vercel/gitignore.template .gitignore
 npm install
@@ -560,7 +560,7 @@ firsttrace hosted accept \
   --config firsttrace.config.yaml \
   --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
   --report "README deployment plan is unclear" \
-  --expected-build-ref "npm:firsttrace@0.1.5"
+  --expected-build-ref "npm:firsttrace@0.1.6"
 ```
 
 The acceptance command posts a real Slack seed message, sends the same signed
@@ -588,7 +588,7 @@ package:
    off by default; FirstTrace is built for hosted Slack Events delivery.
 4. Install the Slack app, copy `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET`,
    and invite the bot to the triage channel.
-5. Create a small operations wrapper, install `firsttrace@0.1.5`, and copy
+5. Create a small operations wrapper, install `firsttrace@0.1.6`, and copy
    `node_modules/firsttrace/deploy/vercel` into that wrapper.
 6. Create a Supabase project and apply every packaged migration from
    `node_modules/firsttrace/supabase/migrations` with the Supabase CLI.
@@ -597,7 +597,7 @@ package:
 8. Store `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
    `FIRSTTRACE_QUEUE_PROVIDER=supabase`, `FIRSTTRACE_RECEIVER_TOKEN`,
    `FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false`, and
-   `FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.5` in Vercel.
+   `FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.6` in Vercel.
 9. Configure repositories with either a read-only GitHub App
    (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`) or
    local validation `GITHUB_TOKEN`.
@@ -628,7 +628,7 @@ config into the image. A user deploying from a separate operations repo can star
 with:
 
 ```bash
-npm install firsttrace@0.1.5
+npm install firsttrace@0.1.6
 cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
 ```
 
@@ -642,7 +642,7 @@ Runtime secrets should be stored in OCI Vault, not Terraform state. After the
 Terraform stack creates Vault/KMS, run:
 
 ```bash
-npm install firsttrace@0.1.5
+npm install firsttrace@0.1.6
 npx firsttrace-oci-sync-secrets --prompt
 ```
 
@@ -804,7 +804,7 @@ firsttrace hosted accept \
   --config firsttrace.config.yaml \
   --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
   --report "README deployment plan is unclear" \
-  --expected-build-ref "npm:firsttrace@0.1.5"
+  --expected-build-ref "npm:firsttrace@0.1.6"
 ```
 
 The Vercel/Supabase live acceptance command is:
@@ -816,7 +816,7 @@ firsttrace hosted accept \
   --config firsttrace.config.yaml \
   --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
   --report "README deployment plan is unclear" \
-  --expected-build-ref "npm:firsttrace@0.1.5"
+  --expected-build-ref "npm:firsttrace@0.1.6"
 ```
 
 Release follow-up:

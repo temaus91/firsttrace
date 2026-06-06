@@ -45,7 +45,7 @@ it does not require `OPENAI_API_KEY`.
    mkdir firsttrace-oci
    cd firsttrace-oci
    npm init -y
-   npm install firsttrace@0.1.5
+   npm install firsttrace@0.1.6
    cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
    ```
 
@@ -144,8 +144,8 @@ it does not require `OPENAI_API_KEY`.
 
    ```bash
    export FIRSTTRACE_DOCKERFILE="deploy/oci/Dockerfile.package"
-   export FIRSTTRACE_PACKAGE_SPEC="firsttrace@0.1.5"
-   export FIRSTTRACE_BUILD_REF="npm:firsttrace@0.1.5"
+   export FIRSTTRACE_PACKAGE_SPEC="firsttrace@0.1.6"
+   export FIRSTTRACE_BUILD_REF="npm:firsttrace@0.1.6"
    export FIRSTTRACE_CONFIG_FILE="firsttrace.oci.config.yaml"
    export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
    export FIRSTTRACE_REPOS_DIR="repos" # Optional local repo snapshots copied to /app/repos.
@@ -242,7 +242,7 @@ it does not require `OPENAI_API_KEY`.
      --config firsttrace.oci.config.yaml \
      --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
      --report "README deployment plan is unclear" \
-     --expected-build-ref "npm:firsttrace@0.1.5"
+     --expected-build-ref "npm:firsttrace@0.1.6"
    ```
 
    This posts a real Slack seed message, sends the same signed event to OCI
