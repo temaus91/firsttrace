@@ -149,6 +149,7 @@ it does not require `OPENAI_API_KEY`.
    export FIRSTTRACE_CONFIG_FILE="firsttrace.oci.config.yaml"
    export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
    export FIRSTTRACE_REPOS_DIR="repos" # Optional local repo snapshots copied to /app/repos.
+   export FIRSTTRACE_INCLUDE_REPO_GIT_HISTORY="false" # Set true only for packaged snapshots that need git blame/log evidence.
    export FIRSTTRACE_CONTAINER_PLATFORM="linux/arm64" # Use linux/amd64 for CI.Standard.E4.Flex.
    export CONTAINER_RUNTIME="docker" # Or podman.
 
@@ -406,6 +407,7 @@ export FIRSTTRACE_PACKAGE_SPEC="firsttrace@${FIRSTTRACE_VERSION}"
 export FIRSTTRACE_CONFIG_FILE="firsttrace.config.yaml"
 export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
 export FIRSTTRACE_REPOS_DIR="repos"
+export FIRSTTRACE_INCLUDE_REPO_GIT_HISTORY="false"
 export FIRSTTRACE_BUILD_REF="npm:firsttrace@${FIRSTTRACE_VERSION}"
 
 ./deploy/oci/scripts/build-and-push.sh \
@@ -414,6 +416,15 @@ export FIRSTTRACE_BUILD_REF="npm:firsttrace@${FIRSTTRACE_VERSION}"
   "$OCI_REPOSITORY" \
   "$IMAGE_TAG"
 ```
+
+`FIRSTTRACE_REPOS_DIR` is optional when repositories are materialized at runtime
+through `provider: git` or `provider: github`. When you package local repository
+snapshots, the default image build excludes nested `.git` directories so source
+archives do not accidentally carry history or remote metadata. Set
+`FIRSTTRACE_INCLUDE_REPO_GIT_HISTORY=true` only when manager-owner triage needs
+person-level Git blame/log evidence from the packaged snapshots. Before enabling
+it, make sure configured repo remotes are scrubbed and credentials are not stored
+in `.git/config`.
 
 If `CI.Standard.A1.Flex` is out of capacity, or if you need an AMD64 image from
 an ARM Cloud Shell where Docker Buildx emulation is not available, use the

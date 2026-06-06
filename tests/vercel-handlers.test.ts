@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
@@ -37,6 +38,42 @@ const tempConfigPath = () => {
   return configPath;
 };
 
+const tempGitConfigPath = () => {
+  const dir = path.join(tmpdir(), `firsttrace-vercel-health-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  const repoPath = path.join(dir, "repo");
+  mkdirSync(repoPath, { recursive: true });
+  execFileSync("git", ["init"], { cwd: repoPath, stdio: "ignore" });
+  writeFileSync(path.join(repoPath, "README.md"), "README deployment plan is unclear.\n");
+  execFileSync("git", ["add", "README.md"], { cwd: repoPath, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "Add README"], {
+    cwd: repoPath,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_DATE: "2026-05-20T17:15:30Z",
+      GIT_AUTHOR_EMAIL: "owner@example.com",
+      GIT_AUTHOR_NAME: "Repo Owner",
+      GIT_COMMITTER_DATE: "2026-05-20T17:15:30Z",
+      GIT_COMMITTER_EMAIL: "owner@example.com",
+      GIT_COMMITTER_NAME: "Repo Owner",
+    },
+    stdio: "ignore",
+  });
+  const configPath = path.join(dir, "firsttrace.config.yaml");
+  writeFileSync(
+    configPath,
+    [
+      "repos:",
+      "  - name: app",
+      "    path: repo",
+      "docs:",
+      "  - README.md",
+      "issue_exports: []",
+      "owners: []",
+    ].join("\n"),
+  );
+  return configPath;
+};
+
 describe("packaged Vercel handlers", () => {
   it("exports all Vercel route handlers", () => {
     expect(handleHealth).toEqual(expect.any(Function));
@@ -50,6 +87,7 @@ describe("packaged Vercel handlers", () => {
     process.env.FIRSTTRACE_BUILD_REF = "npm:firsttrace@0.1.5";
     process.env.FIRSTTRACE_AI_ENABLED = "true";
     process.env.FIRSTTRACE_AI_PROVIDER = "oci-genai";
+    process.env.FIRSTTRACE_CONFIG_PATH = tempGitConfigPath();
     process.env.FIRSTTRACE_MODEL_CHAT = "openai.gpt-oss-120b";
     process.env.FIRSTTRACE_INVESTIGATOR = "agent";
     process.env.FIRSTTRACE_QUEUE_PROVIDER = "supabase";
@@ -74,8 +112,21 @@ describe("packaged Vercel handlers", () => {
       buildRef: "npm:firsttrace@0.1.5",
       ok: true,
       queueProvider: "supabase",
+      repos: [
+        {
+          historyAvailable: true,
+          lastRefreshStatus: "not_run",
+          name: "app",
+          ownerEvidenceReady: true,
+          ownerEvidenceSources: ["git_blame", "git_log"],
+          provider: "local",
+          shallow: false,
+          sourceProvider: "local",
+        },
+      ],
       slackReplyFormat: "compact-v1",
     });
+    expect((body.repos as Array<{ headSha?: string }>)[0]?.headSha).toMatch(/^[a-f0-9]{40}$/);
   });
 
   it("routes generic investigation requests through the packaged handler", async () => {

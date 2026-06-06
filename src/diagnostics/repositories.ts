@@ -1,3 +1,4 @@
+import { existsSync, statSync } from "node:fs";
 import type { FirstTraceConfig, RepoConfig, SearchableRepoConfig } from "../types.js";
 import { runCommand } from "../shell.js";
 import {
@@ -25,6 +26,22 @@ export type RepositoryDiagnostic = {
 export type RepositoryDiagnosticsResult = {
   passed: boolean;
   repos: RepositoryDiagnostic[];
+};
+
+export type RepositoryReadiness = {
+  headSha: string | null;
+  historyAvailable: boolean;
+  lastRefreshStatus: RepositoryDiagnostic["last_refresh_status"];
+  missingInfo: string[];
+  name: string;
+  ownerEvidenceReady: boolean;
+  ownerEvidenceSources: string[];
+  path: string | null;
+  provider: RepositoryDiagnostic["provider"];
+  ref: string | null;
+  shallow: boolean;
+  sourceProvider: RepositoryDiagnostic["source_provider"];
+  warnings: string[];
 };
 
 const providerName = (repo: RepoConfig): RepoConfig["provider"] => repo.provider ?? "local";
@@ -82,11 +99,15 @@ export const diagnoseSearchableRepository = (
   };
 };
 
-const failedDiagnostic = (repo: RepoConfig, error: unknown): RepositoryDiagnostic => ({
+const failedDiagnostic = (
+  repo: RepoConfig,
+  error: unknown,
+  lastRefreshStatus: RepositoryDiagnostic["last_refresh_status"] = "failed",
+): RepositoryDiagnostic => ({
   git_history_available: false,
   head_sha: null,
   is_shallow: false,
-  last_refresh_status: "failed",
+  last_refresh_status: lastRefreshStatus,
   missing_info: [(error as Error).message],
   owner_evidence_ready: false,
   owner_evidence_sources: [],
@@ -97,6 +118,25 @@ const failedDiagnostic = (repo: RepoConfig, error: unknown): RepositoryDiagnosti
   source_provider: providerName(repo),
   warnings: [],
 });
+
+const materializedSearchableRepo = (repo: RepoConfig): SearchableRepoConfig => {
+  if (providerName(repo) === "local") return localSearchableRepo(repo);
+  const repoPath = configuredPath(repo);
+  if (!repoPath || !existsSync(repoPath) || !statSync(repoPath).isDirectory()) {
+    throw new Error(
+      `Repository ${repo.name} is not materialized at ${repoPath ?? "<provider cache>"}. Run firsttrace doctor repos to materialize or validate it.`,
+    );
+  }
+  return {
+    cloneDepth: "cloneDepth" in repo ? repo.cloneDepth : undefined,
+    defaultBranch: "defaultBranch" in repo ? repo.defaultBranch : undefined,
+    name: repo.name,
+    path: repoPath,
+    provider: "local",
+    ref: configuredRef(repo) ?? undefined,
+    sourceProvider: providerName(repo) as SearchableRepoConfig["sourceProvider"],
+  };
+};
 
 export const diagnoseConfiguredRepositories = async (
   config: FirstTraceConfig,
@@ -122,6 +162,37 @@ export const diagnoseConfiguredRepositories = async (
     repos,
   };
 };
+
+export const diagnoseConfiguredRepositoryPaths = (config: FirstTraceConfig): RepositoryDiagnosticsResult => {
+  const repos = config.repos.map((repo) => {
+    try {
+      return diagnoseSearchableRepository(materializedSearchableRepo(repo), providerName(repo));
+    } catch (error) {
+      return failedDiagnostic(repo, error, "not_run");
+    }
+  });
+  return {
+    passed: repos.every((repo) => repo.owner_evidence_ready),
+    repos,
+  };
+};
+
+export const repositoryReadinessFromDiagnostics = (result: RepositoryDiagnosticsResult): RepositoryReadiness[] =>
+  result.repos.map((repo) => ({
+    headSha: repo.head_sha,
+    historyAvailable: repo.git_history_available,
+    lastRefreshStatus: repo.last_refresh_status,
+    missingInfo: repo.missing_info,
+    name: repo.repo,
+    ownerEvidenceReady: repo.owner_evidence_ready,
+    ownerEvidenceSources: repo.owner_evidence_sources,
+    path: repo.path,
+    provider: repo.provider,
+    ref: repo.ref,
+    shallow: repo.is_shallow,
+    sourceProvider: repo.source_provider,
+    warnings: repo.warnings,
+  }));
 
 export const renderRepositoryDiagnostics = (result: RepositoryDiagnosticsResult) =>
   JSON.stringify(result, null, 2);

@@ -1,5 +1,10 @@
 import { aiReadinessMetadataFromEnv } from "../ai/readiness.js";
 import { loadConfig } from "../config.js";
+import {
+  diagnoseConfiguredRepositoryPaths,
+  repositoryReadinessFromDiagnostics,
+  type RepositoryReadiness,
+} from "../diagnostics/repositories.js";
 import { runVercelHandler, type VercelRequestLike, type VercelResponseLike } from "../http/vercel-adapter.js";
 import { buildRef, hostedConfigPath, hostedQueueProviderName, jsonResponse, slackReplyFormat } from "./shared.js";
 
@@ -10,8 +15,11 @@ export const config = {
 const handleHealthRequest = async (request: Request) => {
   if (request.method !== "GET") return jsonResponse(405, { error: "Method not allowed." });
   let promptConfig;
+  let repos: RepositoryReadiness[] = [];
   try {
-    promptConfig = loadConfig(hostedConfigPath()).investigation.prompt;
+    const config = loadConfig(hostedConfigPath());
+    promptConfig = config.investigation.prompt;
+    repos = repositoryReadinessFromDiagnostics(diagnoseConfiguredRepositoryPaths(config));
   } catch {
     promptConfig = undefined;
   }
@@ -20,6 +28,7 @@ const handleHealthRequest = async (request: Request) => {
     buildRef: buildRef(),
     ok: true,
     queueProvider: hostedQueueProviderName(),
+    repos,
     slackReplyFormat: slackReplyFormat(),
   });
 };

@@ -359,6 +359,32 @@ plus `GET /api/jobs?id=<job-id>`. Those generic HTTP endpoints require
 `FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=true` only for local development
 when you intentionally want to test them without bearer auth.
 
+Generic read-only Git repo config:
+
+```yaml
+repos:
+  - name: example-app
+    provider: git
+    url: ${FIRSTTRACE_REPO_EXAMPLE_URL}
+    ref: refs/heads/main
+    path: repos/example-app
+    clone_depth: full
+    credential:
+      type: token
+      username_env: FIRSTTRACE_REPO_EXAMPLE_USERNAME
+      token_env: FIRSTTRACE_REPO_EXAMPLE_TOKEN
+    materialization:
+      refresh: startup
+      include_git_history: true
+      scrub_remote_credentials: true
+```
+
+Use read-only repository credentials. HTTPS token credentials come from
+environment variables; SSH deployments can use an SSH command or mounted key
+file through config. FirstTrace clones and fetches without writing credentials
+into evidence output, and `scrub_remote_credentials: true` keeps tokenized
+remote URLs out of `.git/config` after materialization.
+
 GitHub App-backed repo config:
 
 ```yaml
@@ -419,6 +445,12 @@ GITHUB_TOKEN=
 FirstTrace creates or reads a runtime token, clones or fetches with a
 one-command HTTP auth header, and stores the working cache under ignored
 `.firsttrace/github/`. Tokens are not embedded in the remote URL or git config.
+
+Archive-backed repos are useful when a company already has an internal source
+export path. They are source-only unless the archive command also preserves
+`.git` history. When `.git` history is missing, FirstTrace still searches code
+but returns no person owner candidate and lists the missing metadata in the
+manager handoff.
 
 Slack channel config:
 
@@ -490,12 +522,23 @@ Hosted readiness verification:
 
 ```bash
 firsttrace doctor --config examples/minimal.local.config.yaml
+firsttrace doctor repos --config firsttrace.config.yaml
 ```
 
 `doctor` validates that the config loads, local repository paths exist, Slack
 receiver/reply environment variables are present when Slack is configured, and
 the selected AI provider is available when AI is requested. Missing AI credentials
 are a warning unless `--ai` is passed or Slack-originated AI is enabled.
+`doctor repos` actively materializes configured Git/archive/GitHub repositories
+when applicable and prints JSON readiness fields for each repo, including
+`git_history_available`, `is_shallow`, `head_sha`,
+`owner_evidence_ready`, `last_refresh_status`, missing metadata, and the
+available owner evidence sources. Use it before deployment when managers expect
+person-level owner candidates.
+
+Hosted `/healthz` also includes passive repository readiness in a `repos` array
+for already-mounted or already-materialized repositories. It does not clone or
+fetch on every health request; use `doctor repos` for active refresh/validation.
 
 ```bash
 firsttrace hosted verify \
