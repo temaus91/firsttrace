@@ -12,6 +12,14 @@ export type { SetupCheck, SetupCheckLevel, SetupValidationOptions, SetupValidati
 export { createAiProviderFromEnv } from "./ai/provider-factory.js";
 export { createOciGenAiJsonClient } from "./ai/oci-genai-json-client.js";
 export type { OciGenAiJsonClient, OciGenAiJsonClientOptions } from "./ai/oci-genai-json-client.js";
+export {
+  aiRequestConfigFromEnv,
+  applyOciGenAiGenericChatRequestOptions,
+  applyOpenAiResponsesRequestOptions,
+  normalizeAiRequestField,
+  resolveAiRequestOptions,
+} from "./ai/request-options.js";
+export type { AiRequestProvider, ResolvedAiRequestOptions } from "./ai/request-options.js";
 export { aiDryRunFromEnv, aiSafetyModeFromEnv, sanitizeReportForAi } from "./ai/safety.js";
 export type { AiSafetyMode, AiSafetyResult } from "./ai/safety.js";
 export { aiReadinessMetadataFromEnv } from "./ai/readiness.js";

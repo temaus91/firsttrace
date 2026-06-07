@@ -1,4 +1,5 @@
 import { createOciGenAiJsonClient, type OciGenAiJsonClient } from "../ai/oci-genai-json-client.js";
+import type { ResolvedAiRequestOptions } from "../ai/request-options.js";
 import { agentBaseSystemPrompt } from "./agent-prompts.js";
 import { normalizeAgentFinalResponse, normalizeAgentTurnResponse } from "./agent-schemas.js";
 import { agentUserPrompt, buildSystemPrompt } from "./prompt-contract.js";
@@ -68,17 +69,17 @@ export const createOciGenAiAgentModelClientFromConfig = ({
   dedicatedEndpointId,
   endpoint,
   env,
-  maxTokens,
   model,
   region,
+  requestOptions,
 }: {
   compartmentId: string;
   dedicatedEndpointId?: string;
   endpoint?: string;
   env?: NodeJS.ProcessEnv;
-  maxTokens?: number;
   model: string;
   region?: string;
+  requestOptions?: ResolvedAiRequestOptions;
 }) =>
   createOciGenAiAgentModelClient({
     jsonClient: createOciGenAiJsonClient({
@@ -86,8 +87,8 @@ export const createOciGenAiAgentModelClientFromConfig = ({
       dedicatedEndpointId,
       endpoint,
       env,
-      maxTokens,
       model,
       region,
+      requestOptions,
     }),
   });

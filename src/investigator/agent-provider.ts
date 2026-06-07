@@ -1,7 +1,9 @@
 import OpenAI from "openai";
+import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 import { buildAiReasonerRequest } from "../ai/evidence.js";
 import { groundAiResult } from "../ai/grounding.js";
+import { applyOpenAiResponsesRequestOptions, type ResolvedAiRequestOptions } from "../ai/request-options.js";
 import type { AiInvestigationResultPayload } from "../ai/schema.js";
 import { agentBaseSystemPrompt } from "./agent-prompts.js";
 import { AgentFinalResponseSchema, AgentTurnResponseSchema } from "./agent-schemas.js";
@@ -48,13 +50,20 @@ export type AgentModelClient = {
   next(input: AgentModelInput): Promise<AgentTurn>;
 };
 
-const createOpenAiAgentModelClient = (apiKey: string, model: string): AgentModelClient => {
+type OpenAiAgentTurnPayload = z.infer<typeof AgentTurnResponseSchema>;
+type OpenAiAgentFinalPayload = z.infer<typeof AgentFinalResponseSchema>;
+
+const createOpenAiAgentModelClient = (
+  apiKey: string,
+  model: string,
+  requestOptions?: ResolvedAiRequestOptions,
+): AgentModelClient => {
   const client = new OpenAI({ apiKey });
 
   return {
     async next(input) {
       const prompt = input.prompt ?? buildSystemPrompt({ basePrompt: agentBaseSystemPrompt });
-      const response = await client.responses.parse({
+      const response = await client.responses.parse(applyOpenAiResponsesRequestOptions({
         input: [
           { role: "system", content: prompt.systemPrompt },
           { role: "user", content: agentUserPrompt(input) },
@@ -63,39 +72,40 @@ const createOpenAiAgentModelClient = (apiKey: string, model: string): AgentModel
         text: {
           format: zodTextFormat(AgentTurnResponseSchema, "firsttrace_agent_turn"),
         },
-      });
-      if (!response.output_parsed) {
+      }, requestOptions) as never);
+      const parsed = response.output_parsed as OpenAiAgentTurnPayload | null;
+      if (!parsed) {
         throw new Error("OpenAI did not return a structured investigation agent turn.");
       }
-      if (response.output_parsed.type === "final") {
-        if (!response.output_parsed.result) {
+      if (parsed.type === "final") {
+        if (!parsed.result) {
           throw new Error("OpenAI returned a final agent turn without result.");
         }
-        return { result: response.output_parsed.result, type: "final" };
+        return { result: parsed.result, type: "final" };
       }
-      if (!response.output_parsed.tool) {
+      if (!parsed.tool) {
         throw new Error("OpenAI returned a tool agent turn without tool.");
       }
       let args: Record<string, unknown>;
       try {
-        const argsJson = response.output_parsed.argsJson.trim() || "{}";
+        const argsJson = parsed.argsJson.trim() || "{}";
         const parsedArgs = JSON.parse(argsJson) as unknown;
         args = parsedArgs && typeof parsedArgs === "object" && !Array.isArray(parsedArgs)
           ? (parsedArgs as Record<string, unknown>)
           : {};
       } catch {
-        throw new Error(`OpenAI returned invalid tool args JSON: ${response.output_parsed.argsJson}`);
+        throw new Error(`OpenAI returned invalid tool args JSON: ${parsed.argsJson}`);
       }
       return {
         args,
-        reason: response.output_parsed.reason,
-        tool: response.output_parsed.tool,
+        reason: parsed.reason,
+        tool: parsed.tool,
         type: "tool",
       };
     },
     async final(input) {
       const prompt = input.prompt ?? buildSystemPrompt({ basePrompt: agentBaseSystemPrompt });
-      const response = await client.responses.parse({
+      const response = await client.responses.parse(applyOpenAiResponsesRequestOptions({
         input: [
           { role: "system", content: prompt.systemPrompt },
           { role: "user", content: agentUserPrompt(input, true) },
@@ -104,11 +114,12 @@ const createOpenAiAgentModelClient = (apiKey: string, model: string): AgentModel
         text: {
           format: zodTextFormat(AgentFinalResponseSchema, "firsttrace_agent_final"),
         },
-      });
-      if (!response.output_parsed) {
+      }, requestOptions) as never);
+      const parsed = response.output_parsed as OpenAiAgentFinalPayload | null;
+      if (!parsed) {
         throw new Error("OpenAI did not return a structured final investigation result.");
       }
-      return response.output_parsed.result;
+      return parsed.result;
     },
   };
 };
@@ -894,16 +905,18 @@ export type AgentInvestigatorOptions =
       env?: NodeJS.ProcessEnv;
       model: string;
       modelClient?: never;
+      requestOptions?: ResolvedAiRequestOptions;
     }
   | {
       env?: NodeJS.ProcessEnv;
       model: string;
       modelClient: AgentModelClient;
       apiKey?: never;
+      requestOptions?: never;
     };
 
 export const createAgentInvestigator = (options: AgentInvestigatorOptions): InvestigatorProvider => {
-  const modelClient = options.modelClient ?? createOpenAiAgentModelClient(options.apiKey, options.model);
+  const modelClient = options.modelClient ?? createOpenAiAgentModelClient(options.apiKey, options.model, options.requestOptions);
 
   return {
     model: options.model,

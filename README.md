@@ -37,9 +37,9 @@ The current version is read-only:
 5. The same investigation path can run through local evals or the local worker
    queue under `.firsttrace/jobs`.
 
-The `0-1-6-release` branch makes `manager-owner-triage` the default bug-report
-response contract. That means a stable manager Markdown reply from validated
-JSON, no customer-specific prompt overlay required.
+Current releases make `manager-owner-triage` the default bug-report response
+contract. That means a stable manager Markdown reply from validated JSON, no
+customer-specific prompt overlay required.
 
 The hosted channel version is chat-triggered:
 
@@ -156,7 +156,7 @@ deployment guide lives under [deploy/oci](deploy/oci).
 For an external project or deployment wrapper, install FirstTrace from npm:
 
 ```bash
-npm install firsttrace@0.1.6
+npm install firsttrace@0.1.7
 ```
 
 The package provides:
@@ -175,7 +175,7 @@ template:
 mkdir firsttrace-vercel
 cd firsttrace-vercel
 npm init -y
-npm install firsttrace@0.1.6
+npm install firsttrace@0.1.7
 cp -R node_modules/firsttrace/deploy/vercel/* .
 cp node_modules/firsttrace/deploy/vercel/gitignore.template .gitignore
 npm install
@@ -249,7 +249,7 @@ OCI GenAI-assisted run:
 
 ```bash
 FIRSTTRACE_AI_PROVIDER=oci-genai \
-FIRSTTRACE_MODEL_CHAT=openai.gpt-oss-120b \
+FIRSTTRACE_MODEL_CHAT=openai.gpt-5-codex \
 OCI_COMPARTMENT_ID=ocid1.compartment.oc1..replace \
 OCI_REGION=us-sanjose-1 \
 OCI_GENAI_REGION=us-chicago-1 \
@@ -257,6 +257,65 @@ firsttrace investigate \
   --config firsttrace.config.yaml \
   --report "README deployment plan is unclear" \
   --ai
+```
+
+### AI Request Parameters
+
+FirstTrace does not send an output-token limit by default. This avoids
+provider-specific request failures when a model expects a different field name,
+such as `maxCompletionTokens` instead of `maxTokens`. Configure the field only
+when the selected model needs it:
+
+```bash
+FIRSTTRACE_AI_OUTPUT_TOKEN_LIMIT=6000 \
+FIRSTTRACE_AI_OUTPUT_TOKEN_LIMIT_FIELD=maxCompletionTokens \
+FIRSTTRACE_AI_REASONING_EFFORT=medium \
+FIRSTTRACE_AI_VERBOSITY=low \
+firsttrace investigate \
+  --config firsttrace.config.yaml \
+  --report "README deployment plan is unclear" \
+  --ai
+```
+
+`FIRSTTRACE_AI_OUTPUT_TOKEN_LIMIT_FIELD=auto` maps to `max_output_tokens` for
+OpenAI Responses and to `maxCompletionTokens` for OpenAI-family OCI GenAI
+models. Use `none` to omit a configured field, or set an explicit
+dot-separated request path when a provider uses a different name. The legacy
+`FIRSTTRACE_AI_MAX_TOKENS` env var is still accepted as an alias for
+`FIRSTTRACE_AI_OUTPUT_TOKEN_LIMIT`.
+
+Common request controls are provider-neutral:
+
+```text
+FIRSTTRACE_AI_TEMPERATURE
+FIRSTTRACE_AI_REASONING_EFFORT
+FIRSTTRACE_AI_VERBOSITY
+FIRSTTRACE_AI_TOP_P
+FIRSTTRACE_AI_TOP_K
+FIRSTTRACE_AI_STOP_SEQUENCES
+FIRSTTRACE_AI_STORE
+```
+
+Each control also supports a matching `_FIELD` variable, for example
+`FIRSTTRACE_AI_TEMPERATURE_FIELD=none`. For provider-specific escape hatches,
+`FIRSTTRACE_AI_REQUEST_EXTRA_JSON` deep-merges into the final request last;
+set a key to `null` in that JSON object to remove it.
+
+The same settings can live in `firsttrace.config.yaml`:
+
+```yaml
+investigation:
+  ai:
+    request:
+      output_token_limit:
+        value: 6000
+        field: maxCompletionTokens
+      reasoning_effort: medium
+      verbosity: low
+      temperature:
+        field: none
+      extra:
+        serviceTier: priority
 ```
 
 ### Prompt Profiles And Overlays
@@ -560,7 +619,7 @@ firsttrace hosted accept \
   --config firsttrace.config.yaml \
   --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
   --report "README deployment plan is unclear" \
-  --expected-build-ref "npm:firsttrace@0.1.6"
+  --expected-build-ref "npm:firsttrace@0.1.7"
 ```
 
 The acceptance command posts a real Slack seed message, sends the same signed
@@ -588,7 +647,7 @@ package:
    off by default; FirstTrace is built for hosted Slack Events delivery.
 4. Install the Slack app, copy `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET`,
    and invite the bot to the triage channel.
-5. Create a small operations wrapper, install `firsttrace@0.1.6`, and copy
+5. Create a small operations wrapper, install `firsttrace@0.1.7`, and copy
    `node_modules/firsttrace/deploy/vercel` into that wrapper.
 6. Create a Supabase project and apply every packaged migration from
    `node_modules/firsttrace/supabase/migrations` with the Supabase CLI.
@@ -597,7 +656,7 @@ package:
 8. Store `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
    `FIRSTTRACE_QUEUE_PROVIDER=supabase`, `FIRSTTRACE_RECEIVER_TOKEN`,
    `FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false`, and
-   `FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.6` in Vercel.
+   `FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.7` in Vercel.
 9. Configure repositories with either a read-only GitHub App
    (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`) or
    local validation `GITHUB_TOKEN`.
@@ -628,7 +687,7 @@ config into the image. A user deploying from a separate operations repo can star
 with:
 
 ```bash
-npm install firsttrace@0.1.6
+npm install firsttrace@0.1.7
 cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
 ```
 
@@ -642,7 +701,7 @@ Runtime secrets should be stored in OCI Vault, not Terraform state. After the
 Terraform stack creates Vault/KMS, run:
 
 ```bash
-npm install firsttrace@0.1.6
+npm install firsttrace@0.1.7
 npx firsttrace-oci-sync-secrets --prompt
 ```
 
@@ -804,7 +863,7 @@ firsttrace hosted accept \
   --config firsttrace.config.yaml \
   --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
   --report "README deployment plan is unclear" \
-  --expected-build-ref "npm:firsttrace@0.1.6"
+  --expected-build-ref "npm:firsttrace@0.1.7"
 ```
 
 The Vercel/Supabase live acceptance command is:
@@ -816,7 +875,7 @@ firsttrace hosted accept \
   --config firsttrace.config.yaml \
   --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
   --report "README deployment plan is unclear" \
-  --expected-build-ref "npm:firsttrace@0.1.6"
+  --expected-build-ref "npm:firsttrace@0.1.7"
 ```
 
 Release follow-up:

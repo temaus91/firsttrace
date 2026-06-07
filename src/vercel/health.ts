@@ -15,16 +15,18 @@ export const config = {
 const handleHealthRequest = async (request: Request) => {
   if (request.method !== "GET") return jsonResponse(405, { error: "Method not allowed." });
   let promptConfig;
+  let requestConfig;
   let repos: RepositoryReadiness[] = [];
   try {
     const config = loadConfig(hostedConfigPath());
     promptConfig = config.investigation.prompt;
+    requestConfig = config.investigation.ai?.request;
     repos = repositoryReadinessFromDiagnostics(diagnoseConfiguredRepositoryPaths(config));
   } catch {
     promptConfig = undefined;
   }
   return jsonResponse(200, {
-    ai: aiReadinessMetadataFromEnv(process.env, promptConfig),
+    ai: aiReadinessMetadataFromEnv(process.env, promptConfig, requestConfig),
     buildRef: buildRef(),
     ok: true,
     queueProvider: hostedQueueProviderName(),

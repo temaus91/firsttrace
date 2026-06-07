@@ -1,8 +1,11 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { parse } from "yaml";
+import { normalizeAiRequestField } from "./ai/request-options.js";
 import { MANAGER_OWNER_TRIAGE_PROFILE } from "./manager-triage.js";
 import type {
+  AiRequestConfig,
+  AiRequestControl,
   ArchiveRepoConfig,
   ChatConfig,
   ChatTrigger,
@@ -11,6 +14,8 @@ import type {
   GitRepoCredentialConfig,
   GitRepoMaterializationConfig,
   InvestigationConfig,
+  JsonObject,
+  JsonValue,
   OwnerRule,
   RepoConfig,
   SearchConfig,
@@ -70,6 +75,115 @@ const optionalBoolean = (value: unknown, label: string, fallback: boolean) => {
     throw new Error(`${label} must be a boolean when provided.`);
   }
   return value;
+};
+
+const optionalField = (value: unknown, label: string) => {
+  if (value === undefined) return undefined;
+  return normalizeAiRequestField(value, label);
+};
+
+const finiteNumber = (value: unknown, label: string) => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`${label} must be a finite number.`);
+  }
+  return value;
+};
+
+const positiveIntegerValue = (value: unknown, label: string) => {
+  if (!Number.isInteger(value) || (value as number) <= 0) {
+    throw new Error(`${label} must be a positive integer.`);
+  }
+  return value as number;
+};
+
+const nonNegativeIntegerValue = (value: unknown, label: string) => {
+  if (!Number.isInteger(value) || (value as number) < 0) {
+    throw new Error(`${label} must be a non-negative integer.`);
+  }
+  return value as number;
+};
+
+const topPValue = (value: unknown, label: string) => {
+  const parsed = finiteNumber(value, label);
+  if (parsed < 0 || parsed > 1) throw new Error(`${label} must be between 0 and 1.`);
+  return parsed;
+};
+
+const stringValue = (value: unknown, label: string) => {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`${label} must be a non-empty string.`);
+  }
+  return value;
+};
+
+const booleanValue = (value: unknown, label: string) => {
+  if (typeof value !== "boolean") throw new Error(`${label} must be a boolean.`);
+  return value;
+};
+
+const isJsonValue = (value: unknown): value is JsonValue => {
+  if (value === null) return true;
+  if (["boolean", "number", "string"].includes(typeof value)) return typeof value !== "number" || Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  if (!value || typeof value !== "object") return false;
+  return Object.values(value as Record<string, unknown>).every(isJsonValue);
+};
+
+const jsonObject = (value: unknown, label: string): JsonObject | undefined => {
+  if (value === undefined) return undefined;
+  const item = asObject(value, label);
+  for (const [key, nested] of Object.entries(item)) {
+    if (!isJsonValue(nested)) throw new Error(`${label}.${key} must be JSON-compatible.`);
+  }
+  return item as JsonObject;
+};
+
+const requestControlFrom = <T>(
+  value: unknown,
+  label: string,
+  valueFrom: (value: unknown, label: string) => T,
+): AiRequestControl<T> | undefined => {
+  if (value === undefined) return undefined;
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const item = value as Record<string, unknown>;
+    if (Object.prototype.hasOwnProperty.call(item, "value") || Object.prototype.hasOwnProperty.call(item, "field")) {
+      const control: AiRequestControl<T> = {};
+      if (Object.prototype.hasOwnProperty.call(item, "value")) {
+        control.value = valueFrom(item.value, `${label}.value`);
+      }
+      control.field = optionalField(item.field, `${label}.field`);
+      return control;
+    }
+  }
+  return { value: valueFrom(value, label) };
+};
+
+const aiRequestFrom = (value: unknown): AiRequestConfig | undefined => {
+  if (value === undefined) return undefined;
+  const item = asObject(value, "investigation.ai.request");
+  return {
+    extra: jsonObject(item.extra, "investigation.ai.request.extra"),
+    outputTokenLimit: requestControlFrom(
+      item.output_token_limit,
+      "investigation.ai.request.output_token_limit",
+      positiveIntegerValue,
+    ),
+    reasoningEffort: requestControlFrom(
+      item.reasoning_effort,
+      "investigation.ai.request.reasoning_effort",
+      stringValue,
+    ),
+    stopSequences: requestControlFrom(
+      item.stop_sequences,
+      "investigation.ai.request.stop_sequences",
+      (nested, label) => stringArray(nested, label),
+    ),
+    store: requestControlFrom(item.store, "investigation.ai.request.store", booleanValue),
+    temperature: requestControlFrom(item.temperature, "investigation.ai.request.temperature", finiteNumber),
+    topK: requestControlFrom(item.top_k, "investigation.ai.request.top_k", nonNegativeIntegerValue),
+    topP: requestControlFrom(item.top_p, "investigation.ai.request.top_p", topPValue),
+    verbosity: requestControlFrom(item.verbosity, "investigation.ai.request.verbosity", stringValue),
+  };
 };
 
 const gitCloneDepthFrom = (value: unknown, label: string): GitRepoConfig["cloneDepth"] => {
@@ -246,6 +360,9 @@ const searchFrom = (value: unknown): SearchConfig => {
 };
 
 const DEFAULT_INVESTIGATION: InvestigationConfig = {
+  ai: {
+    request: {},
+  },
   prompt: {
     overlayFiles: [],
     profile: MANAGER_OWNER_TRIAGE_PROFILE,
@@ -255,6 +372,7 @@ const DEFAULT_INVESTIGATION: InvestigationConfig = {
 const investigationFrom = (value: unknown, configDir: string): InvestigationConfig => {
   if (value === undefined) return DEFAULT_INVESTIGATION;
   const item = asObject(value, "investigation");
+  const aiRaw = item.ai === undefined ? {} : asObject(item.ai, "investigation.ai");
   const promptRaw = item.prompt === undefined ? {} : asObject(item.prompt, "investigation.prompt");
   const profile = optionalString(promptRaw.profile, "investigation.prompt.profile") ?? MANAGER_OWNER_TRIAGE_PROFILE;
   const overlayFiles = stringArray(
@@ -263,6 +381,9 @@ const investigationFrom = (value: unknown, configDir: string): InvestigationConf
   ).map((file) => path.resolve(configDir, file));
 
   return {
+    ai: {
+      request: aiRequestFrom(aiRaw.request),
+    },
     prompt: {
       overlayFiles,
       profile,

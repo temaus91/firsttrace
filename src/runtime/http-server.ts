@@ -71,12 +71,14 @@ const jsonResponse = (status: number, body: unknown) =>
 
 const readinessForHealth = (configPath: string): {
   promptConfig?: ReturnType<typeof loadConfig>["investigation"]["prompt"];
+  requestConfig?: NonNullable<ReturnType<typeof loadConfig>["investigation"]["ai"]>["request"];
   repos: RepositoryReadiness[];
 } => {
   try {
     const config = loadConfig(configPath);
     return {
       promptConfig: config.investigation.prompt,
+      requestConfig: config.investigation.ai?.request,
       repos: repositoryReadinessFromDiagnostics(diagnoseConfiguredRepositoryPaths(config)),
     };
   } catch {
@@ -108,7 +110,7 @@ export const createFirstTraceHttpServer = async () => {
           outgoing,
           jsonResponse(200, {
             buildRef: buildRef(),
-            ai: aiReadinessMetadataFromEnv(process.env, readiness.promptConfig),
+            ai: aiReadinessMetadataFromEnv(process.env, readiness.promptConfig, readiness.requestConfig),
             ok: true,
             queueProvider: queueSelection.provider,
             repos: readiness.repos,

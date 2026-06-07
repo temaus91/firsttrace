@@ -17,7 +17,24 @@ locals {
   effective_runtime_secret_names = trimspace(var.runtime_secret_names) != "" ? var.runtime_secret_names : local.secret_profiles[var.secret_profile]
   runtime_env = {
     FIRSTTRACE_AI_ENABLED                     = tostring(var.ai_enabled)
+    FIRSTTRACE_AI_OUTPUT_TOKEN_LIMIT          = var.ai_output_token_limit
+    FIRSTTRACE_AI_OUTPUT_TOKEN_LIMIT_FIELD    = var.ai_output_token_limit_field
     FIRSTTRACE_AI_PROVIDER                    = var.ai_provider
+    FIRSTTRACE_AI_REASONING_EFFORT            = var.ai_reasoning_effort
+    FIRSTTRACE_AI_REASONING_EFFORT_FIELD      = var.ai_reasoning_effort_field
+    FIRSTTRACE_AI_REQUEST_EXTRA_JSON          = var.ai_request_extra_json
+    FIRSTTRACE_AI_STOP_SEQUENCES              = var.ai_stop_sequences
+    FIRSTTRACE_AI_STOP_SEQUENCES_FIELD        = var.ai_stop_sequences_field
+    FIRSTTRACE_AI_STORE                       = var.ai_store
+    FIRSTTRACE_AI_STORE_FIELD                 = var.ai_store_field
+    FIRSTTRACE_AI_TEMPERATURE                 = var.ai_temperature
+    FIRSTTRACE_AI_TEMPERATURE_FIELD           = var.ai_temperature_field
+    FIRSTTRACE_AI_TOP_K                       = var.ai_top_k
+    FIRSTTRACE_AI_TOP_K_FIELD                 = var.ai_top_k_field
+    FIRSTTRACE_AI_TOP_P                       = var.ai_top_p
+    FIRSTTRACE_AI_TOP_P_FIELD                 = var.ai_top_p_field
+    FIRSTTRACE_AI_VERBOSITY                   = var.ai_verbosity
+    FIRSTTRACE_AI_VERBOSITY_FIELD             = var.ai_verbosity_field
     FIRSTTRACE_CONFIG_PATH                    = var.config_path
     FIRSTTRACE_MODEL_CHAT                     = var.ai_model
     FIRSTTRACE_QUEUE_PROVIDER                 = "oci"

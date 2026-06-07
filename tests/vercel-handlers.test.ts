@@ -84,11 +84,11 @@ describe("packaged Vercel handlers", () => {
   });
 
   it("reports health metadata for the configured hosted backend", async () => {
-    process.env.FIRSTTRACE_BUILD_REF = "npm:firsttrace@0.1.5";
+    process.env.FIRSTTRACE_BUILD_REF = "npm:firsttrace@0.1.7";
     process.env.FIRSTTRACE_AI_ENABLED = "true";
     process.env.FIRSTTRACE_AI_PROVIDER = "oci-genai";
     process.env.FIRSTTRACE_CONFIG_PATH = tempGitConfigPath();
-    process.env.FIRSTTRACE_MODEL_CHAT = "openai.gpt-oss-120b";
+    process.env.FIRSTTRACE_MODEL_CHAT = "openai.gpt-5-codex";
     process.env.FIRSTTRACE_INVESTIGATOR = "agent";
     process.env.FIRSTTRACE_QUEUE_PROVIDER = "supabase";
     process.env.FIRSTTRACE_SLACK_REPLY_FORMAT = "compact-v1";
@@ -104,12 +104,12 @@ describe("packaged Vercel handlers", () => {
         aiProvider: "oci-genai",
         aiReady: true,
         investigator: "agent",
-        model: "openai.gpt-oss-120b",
+        model: "openai.gpt-5-codex",
         promptProfile: "manager-owner-triage",
         promptVersion: "firsttrace-agent-v1",
         slackAiGate: "enabled",
       },
-      buildRef: "npm:firsttrace@0.1.5",
+      buildRef: "npm:firsttrace@0.1.7",
       ok: true,
       queueProvider: "supabase",
       repos: [

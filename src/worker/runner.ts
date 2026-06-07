@@ -2,10 +2,17 @@ import { createInvestigatorProviderFromEnv } from "../investigator/provider-fact
 import { loadConfig } from "../config.js";
 import { executeInvestigation } from "../investigation-runner.js";
 import type { RepoPreparationOptions } from "../repositories/prepare.js";
-import type { InvestigatorProvider, JobProgressNotifier, JobQueue, JobResultNotifier, WorkerRunResult } from "../types.js";
+import type {
+  FirstTraceConfig,
+  InvestigatorProvider,
+  JobProgressNotifier,
+  JobQueue,
+  JobResultNotifier,
+  WorkerRunResult,
+} from "../types.js";
 
 export type RunWorkerOnceOptions = {
-  investigatorProviderFactory?: () => InvestigatorProvider;
+  investigatorProviderFactory?: (config: FirstTraceConfig) => InvestigatorProvider;
   progressNotifier?: JobProgressNotifier;
   resultNotifier?: JobResultNotifier;
   queue: JobQueue;
@@ -13,7 +20,8 @@ export type RunWorkerOnceOptions = {
 };
 
 export const runWorkerOnce = async ({
-  investigatorProviderFactory = createInvestigatorProviderFromEnv,
+  investigatorProviderFactory = (config) =>
+    createInvestigatorProviderFromEnv(process.env, { requestConfig: config.investigation.ai?.request }),
   progressNotifier,
   resultNotifier,
   queue,
@@ -42,7 +50,7 @@ export const runWorkerOnce = async ({
     const result = await executeInvestigation({
       aiFailureMode: "throw",
       config,
-      investigatorProvider: job.aiEnabled ? investigatorProviderFactory() : undefined,
+      investigatorProvider: job.aiEnabled ? investigatorProviderFactory(config) : undefined,
       report: job.report,
       repoPreparation,
       source: job.source,

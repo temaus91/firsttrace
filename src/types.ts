@@ -388,12 +388,38 @@ export type SearchConfig = {
   maxFiles: number;
 };
 
+export type JsonPrimitive = boolean | null | number | string;
+export type JsonValue = JsonObject | JsonPrimitive | JsonValue[];
+export type JsonObject = { [key: string]: JsonValue };
+
 export type InvestigationPromptConfig = {
   overlayFiles: string[];
   profile: string;
 };
 
+export type AiRequestControl<T> = {
+  field?: string;
+  value?: T;
+};
+
+export type AiRequestConfig = {
+  extra?: JsonObject;
+  outputTokenLimit?: AiRequestControl<number>;
+  reasoningEffort?: AiRequestControl<string>;
+  stopSequences?: AiRequestControl<string[]>;
+  store?: AiRequestControl<boolean>;
+  temperature?: AiRequestControl<number>;
+  topK?: AiRequestControl<number>;
+  topP?: AiRequestControl<number>;
+  verbosity?: AiRequestControl<string>;
+};
+
+export type InvestigationAiConfig = {
+  request?: AiRequestConfig;
+};
+
 export type InvestigationConfig = {
+  ai?: InvestigationAiConfig;
   prompt: InvestigationPromptConfig;
 };
 

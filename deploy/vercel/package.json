@@ -8,7 +8,7 @@
     "vercel-build": "node -e \"console.log('FirstTrace Vercel wrapper build')\""
   },
   "dependencies": {
-    "firsttrace": "0.1.5"
+    "firsttrace": "0.1.7"
   },
   "engines": {
     "node": "22.x"

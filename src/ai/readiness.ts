@@ -5,7 +5,7 @@ import {
   INVESTIGATION_PROMPT_VERSION,
 } from "../investigator/prompt-contract.js";
 import { createInvestigatorProviderFromEnv, investigatorProviderFrom } from "../investigator/provider-factory.js";
-import type { InvestigationPromptConfig } from "../types.js";
+import type { AiRequestConfig, InvestigationPromptConfig } from "../types.js";
 
 export type AiReadinessMetadata = {
   aiDryRun: boolean;
@@ -25,6 +25,7 @@ export type AiReadinessMetadata = {
 export const aiReadinessMetadataFromEnv = (
   env: NodeJS.ProcessEnv = process.env,
   promptConfig?: InvestigationPromptConfig,
+  requestConfig?: AiRequestConfig,
 ): AiReadinessMetadata => {
   const aiEnabled = env.FIRSTTRACE_AI_ENABLED?.trim().toLowerCase() === "true";
   const promptOverlayFiles = (env.FIRSTTRACE_PROMPT_OVERLAY_FILES ?? "")
@@ -68,7 +69,7 @@ export const aiReadinessMetadataFromEnv = (
       throw new Error("codex-cli investigator is not implemented yet.");
     }
 
-    const validatedProvider = createInvestigatorProviderFromEnv(env);
+    const validatedProvider = createInvestigatorProviderFromEnv(env, { requestConfig });
     return {
       aiDryRun: aiDryRunFromEnv(env),
       aiEnabled,

@@ -28,7 +28,7 @@ Supabase schema migrations are provided by the npm package under
 mkdir firsttrace-vercel
 cd firsttrace-vercel
 npm init -y
-npm install firsttrace@0.1.6
+npm install firsttrace@0.1.7
 cp -R node_modules/firsttrace/deploy/vercel/* .
 cp node_modules/firsttrace/deploy/vercel/gitignore.template .gitignore
 npm install
@@ -93,9 +93,19 @@ The Terraform defaults set:
 FIRSTTRACE_QUEUE_PROVIDER=supabase
 FIRSTTRACE_CONFIG_PATH=firsttrace.config.yaml
 FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false
-FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.6
+FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.7
 FIRSTTRACE_SLACK_REPLY_FORMAT=compact-v1
 ```
+
+Set provider-specific AI request controls in `production_environment` only when
+the selected model needs them. For example, use
+`FIRSTTRACE_AI_OUTPUT_TOKEN_LIMIT=6000` with
+`FIRSTTRACE_AI_OUTPUT_TOKEN_LIMIT_FIELD=maxCompletionTokens` when a provider
+expects that token-limit field. The template also supports
+`FIRSTTRACE_AI_TEMPERATURE`, `FIRSTTRACE_AI_REASONING_EFFORT`,
+`FIRSTTRACE_AI_VERBOSITY`, `FIRSTTRACE_AI_TOP_P`, `FIRSTTRACE_AI_TOP_K`,
+`FIRSTTRACE_AI_STOP_SEQUENCES`, `FIRSTTRACE_AI_STORE`, matching `_FIELD`
+variables, and `FIRSTTRACE_AI_REQUEST_EXTRA_JSON`.
 
 ## Deploy
 

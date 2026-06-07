@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildAiReasonerRequest } from "../src/ai/evidence.js";
 import { createOciGenAiJsonClient, type OciGenAiChatClient } from "../src/ai/oci-genai-json-client.js";
 import { createOciGenAiProvider } from "../src/ai/oci-genai-provider.js";
+import { resolveAiRequestOptions } from "../src/ai/request-options.js";
 import { createOciGenAiAgentModelClient } from "../src/investigator/oci-genai-agent-client.js";
 import type { AiInvestigationResultPayload } from "../src/ai/schema.js";
 import type { InvestigationResult } from "../src/types.js";
@@ -76,7 +77,7 @@ describe("OCI GenAI provider", () => {
     const client = createOciGenAiJsonClient({
       chatClient: fakeChatClient('{"ok":true}', requests),
       compartmentId: "ocid1.compartment.oc1..test",
-      model: "openai.gpt-oss-120b",
+      model: "openai.gpt-5-codex",
       region: "us-chicago-1",
     });
 
@@ -93,15 +94,48 @@ describe("OCI GenAI provider", () => {
         chatRequest: {
           apiFormat: "GENERIC",
           responseFormat: { type: "JSON_OBJECT" },
-          temperature: 0,
         },
         compartmentId: "ocid1.compartment.oc1..test",
         servingMode: {
-          modelId: "openai.gpt-oss-120b",
+          modelId: "openai.gpt-5-codex",
           servingType: "ON_DEMAND",
         },
       },
     });
+    const chatRequest = (requests[0] as { chatDetails: { chatRequest: Record<string, unknown> } }).chatDetails.chatRequest;
+    expect(chatRequest).not.toHaveProperty("maxTokens");
+    expect(chatRequest).not.toHaveProperty("maxCompletionTokens");
+    expect(chatRequest).not.toHaveProperty("temperature");
+  });
+
+  it("applies configured request options to chat requests", async () => {
+    const requests: unknown[] = [];
+    const model = "openai.gpt-5-codex";
+    const client = createOciGenAiJsonClient({
+      chatClient: fakeChatClient('{"ok":true}', requests),
+      compartmentId: "ocid1.compartment.oc1..test",
+      model,
+      requestOptions: resolveAiRequestOptions({
+        config: {
+          extra: { serviceTier: "priority" },
+          outputTokenLimit: { value: 4096 },
+          temperature: { value: 0 },
+        },
+        env: {},
+        model,
+        provider: "oci-genai",
+      }),
+    });
+
+    await client.generateJson({ responseName: "test_response", systemPrompt: "System", userPrompt: "User" });
+
+    const chatRequest = (requests[0] as { chatDetails: { chatRequest: Record<string, unknown> } }).chatDetails.chatRequest;
+    expect(chatRequest).toMatchObject({
+      maxCompletionTokens: 4096,
+      serviceTier: "priority",
+      temperature: 0,
+    });
+    expect(chatRequest).not.toHaveProperty("maxTokens");
   });
 
   it("supports dedicated OCI GenAI endpoint serving mode", async () => {
@@ -129,7 +163,7 @@ describe("OCI GenAI provider", () => {
     const client = createOciGenAiJsonClient({
       chatClient: fakeChatClient("not json"),
       compartmentId: "ocid1.compartment.oc1..test",
-      model: "openai.gpt-oss-120b",
+      model: "openai.gpt-5-codex",
     });
 
     await expect(
@@ -145,13 +179,13 @@ describe("OCI GenAI provider", () => {
         },
       },
       compartmentId: "ocid1.compartment.oc1..test",
-      model: "openai.gpt-oss-120b",
+      model: "openai.gpt-5-codex",
       region: "us-sanjose-1",
     });
 
     await expect(
       client.generateJson({ responseName: "test_response", systemPrompt: "System", userPrompt: "User" }),
-    ).rejects.toThrow("OCI GenAI chat failed for model openai.gpt-oss-120b in region us-sanjose-1: fetch failed");
+    ).rejects.toThrow("OCI GenAI chat failed for model openai.gpt-5-codex in region us-sanjose-1: fetch failed");
   });
 
   it("grounds one-shot evidence results from OCI GenAI", async () => {
@@ -160,7 +194,7 @@ describe("OCI GenAI provider", () => {
         async generateJson() {
           return aiPayload();
         },
-        model: "openai.gpt-oss-120b",
+        model: "openai.gpt-5-codex",
       },
     });
 
@@ -176,7 +210,7 @@ describe("OCI GenAI provider", () => {
         async generateJson() {
           return { result: aiPayload() };
         },
-        model: "openai.gpt-oss-120b",
+        model: "openai.gpt-5-codex",
       },
     });
 
@@ -200,7 +234,7 @@ describe("OCI GenAI provider", () => {
             type: "final",
           };
         },
-        model: "openai.gpt-oss-120b",
+        model: "openai.gpt-5-codex",
       },
     });
 
@@ -229,7 +263,7 @@ describe("OCI GenAI provider", () => {
           }
           return { result: aiPayload() };
         },
-        model: "openai.gpt-oss-120b",
+        model: "openai.gpt-5-codex",
       },
     });
 
@@ -254,7 +288,7 @@ describe("OCI GenAI provider", () => {
         async generateJson() {
           return aiPayload();
         },
-        model: "openai.gpt-oss-120b",
+        model: "openai.gpt-5-codex",
       },
     });
 
@@ -283,7 +317,7 @@ describe("OCI GenAI provider", () => {
             type: "final",
           };
         },
-        model: "openai.gpt-oss-120b",
+        model: "openai.gpt-5-codex",
       },
     });
 
@@ -309,7 +343,7 @@ describe("OCI GenAI provider", () => {
             type: "tool",
           };
         },
-        model: "openai.gpt-oss-120b",
+        model: "openai.gpt-5-codex",
       },
     });
 

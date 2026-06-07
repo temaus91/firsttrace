@@ -11,8 +11,9 @@ high level; this plan describes what to build and in what order.
 
 ## Current Validation Status
 
-- `firsttrace@0.1.6` is published on npm and is the preferred reusable install
-  artifact for new deployments.
+- `firsttrace@0.1.6` is published on npm and remains the current reusable
+  install artifact until 0.1.7 is published. The 0.1.7 release branch updates
+  package metadata, deployment defaults, and docs for the next npm publish.
 - The OCI backend has passed a clean npm-install acceptance flow: a fresh
   operations directory installed the package, copied the packaged Terraform and
   deployment files, provisioned a new OCI stack, synced runtime secrets into OCI
@@ -389,6 +390,54 @@ Release boundary:
 - Historical customer-specific eval cases should stay private/downstream; public
   evals should remain generic.
 
+## Version 0.1.7: Provider Request Controls - Implemented
+
+The customer-reported 0.1.7 issue is a real generic open-source problem:
+different AI providers and model families use different request parameter names.
+For example, an output-token limit might be `maxTokens`, `maxCompletionTokens`,
+or `max_output_tokens`, and some models should receive no token-limit parameter
+at all. FirstTrace should not force one provider's field name into every model
+adapter.
+
+Implemented 0.1.7 scope:
+
+- Package metadata is bumped to 0.1.7, but the npm package is not published from
+  this branch yet.
+- OCI GenAI defaults to `openai.gpt-5-codex` when no explicit
+  `FIRSTTRACE_MODEL_CHAT`, `OPENAI_MODEL_CHAT`, or `OCI_GENAI_MODEL_ID` is set.
+- FirstTrace omits output-token limits and sampling controls by default instead
+  of forcing `maxTokens` or `temperature` into provider requests.
+- A provider-neutral AI request config exists under `investigation.ai.request`
+  and through environment variables.
+- `output_token_limit` supports field-name control with `auto`, `none`, or an
+  explicit provider request path. The legacy `FIRSTTRACE_AI_MAX_TOKENS` env var
+  remains an alias for `FIRSTTRACE_AI_OUTPUT_TOKEN_LIMIT`.
+- Common controls are configurable for current and future models:
+  output token limit, temperature, reasoning effort, verbosity, top-p, top-k,
+  stop sequences, store flag, and raw provider request JSON.
+- Raw request JSON is deep-merged last; `null` removes an existing key so
+  deployments can strip provider defaults without code patches.
+- OpenAI Responses auto-maps output tokens to `max_output_tokens`, reasoning to
+  `reasoning.effort`, verbosity to `text.verbosity`, top-p to `top_p`, and
+  store to `store`.
+- OCI GenAI auto-maps output tokens to `maxCompletionTokens` for OpenAI-family
+  models and to `maxTokens` for other model ids.
+- Request controls flow through CLI investigation, evals, hosted verification,
+  worker execution, readiness checks, OpenAI providers, and OCI GenAI providers.
+- OCI Terraform exposes non-secret request-control variables and passes them to
+  both receiver and worker containers.
+- README, `.env.example`, hosted setup instructions, OCI deployment docs, Vercel
+  deployment docs, package-image defaults, and deployment package templates are
+  updated for 0.1.7 usage.
+
+Release boundary:
+
+- Do not publish `firsttrace@0.1.7` until typecheck, unit tests, package smoke,
+  npm dry-run, and hosted acceptance expectations pass on the release branch.
+- The request-control system is provider-neutral; future model adapters should
+  reuse it instead of introducing provider-specific env vars for the same
+  concepts.
+
 ## Phased Roadmap
 
 ### Phase 1: Deterministic Local CLI - Complete
@@ -456,14 +505,16 @@ Local configuration:
   default when `--ai` is enabled
 - explicit opt-in through `--ai`
 
-Planned model direction:
+Current model direction:
 
 - keep `FIRSTTRACE_MODEL_CHAT` as the shared model selector for `agent`,
   `evidence`, and later `codex-cli`
 - keep `OPENAI_MODEL_CHAT=gpt-5.4-mini` as a compatibility default for direct
   OpenAI runs
-- use OCI GenAI models such as `openai.gpt-oss-120b` for OCI-hosted deployments
+- use OCI GenAI models such as `openai.gpt-5-codex` for OCI-hosted deployments
   where direct OpenAI API use is not allowed
+- use `investigation.ai.request` or `FIRSTTRACE_AI_*` request controls when a
+  selected model needs provider-specific parameter names
 - avoid cross-model benchmarking for now; compare investigation modes, not model
   families
 
@@ -980,7 +1031,7 @@ Target behavior:
 - OCI deployments use OCI IAM/resource-principal authentication through the OCI
   SDK, not `OPENAI_API_KEY`
 - `FIRSTTRACE_MODEL_CHAT` selects the model for all providers; OCI deployments
-  can use an approved OCI model such as `openai.gpt-oss-120b` or a dedicated
+  can use an approved OCI model such as `openai.gpt-5-codex` or a dedicated
   endpoint model
 - `OCI_GENAI_REGION` can target a subscribed OCI GenAI model region separately
   from the runtime `OCI_REGION`, so Queue/Object Storage/Vault can stay local
@@ -1102,7 +1153,7 @@ The preferred customer installation path is an npm package plus a small
 operations wrapper:
 
 ```bash
-npm install firsttrace@0.1.6
+npm install firsttrace@0.1.7
 ```
 
 Vercel/Supabase deployments should copy `node_modules/firsttrace/deploy/vercel`
@@ -1426,9 +1477,9 @@ features.
 
 ## Future TODOs
 
-The 0.1.6 manager-owner triage scope above is implemented. The following items
-remain future work and should stay aligned with PM/manager triage as the primary
-product surface:
+The 0.1.6 manager-owner triage and 0.1.7 provider request-control scopes above
+are implemented. The following items remain future work and should stay aligned
+with PM/manager triage as the primary product surface:
 
 1. Parse CODEOWNERS and optional `firsttrace.owners.yaml` automatically, then
    map team aliases to Slack users, emails, Jira components, or escalation
@@ -1437,11 +1488,9 @@ product surface:
    and results across OCI Object Storage, Supabase, and filesystem queues.
 3. Add live Jira, GitHub Issues, OCI work-item, and fixture issue-provider
    adapters behind one generic issue-provider interface.
-4. Add a generic read-only `provider: git` clone/fetch adapter or an external
-   provider extension API for enterprise-specific repository sources.
-5. Add the later `codex-cli` investigator adapter only after the built-in agent
+4. Add the later `codex-cli` investigator adapter only after the built-in agent
    path has clear quality gaps, using the same `FIRSTTRACE_MODEL_CHAT` value.
-6. Add broader release gates once there are more public and private
+5. Add broader release gates once there are more public and private
    historical-bug eval cases.
 
 ## Open Questions

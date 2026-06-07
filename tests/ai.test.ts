@@ -7,6 +7,7 @@ import { MANAGER_OWNER_TRIAGE_PROFILE } from "../src/manager-triage.js";
 import {
   aiModelProviderFromEnv,
   createAiProviderFromEnv,
+  DEFAULT_OCI_GENAI_MODEL,
   DEFAULT_OPENAI_MODEL,
   ociGenAiConfigFromEnv,
   resolveChatModelFromEnv,
@@ -232,7 +233,7 @@ describe("AI provider support", () => {
     const env = {
       FIRSTTRACE_AI_PROVIDER: "oracle-genai",
       FIRSTTRACE_INVESTIGATOR: "agent",
-      FIRSTTRACE_MODEL_CHAT: "openai.gpt-oss-120b",
+      FIRSTTRACE_MODEL_CHAT: "openai.gpt-5-codex",
       OCI_COMPARTMENT_ID: "ocid1.compartment.oc1..test",
       OCI_REGION: "us-chicago-1",
     };
@@ -246,9 +247,9 @@ describe("AI provider support", () => {
     });
 
     expect(agent.name).toBe("agent");
-    expect(agent.model).toBe("openai.gpt-oss-120b");
+    expect(agent.model).toBe("openai.gpt-5-codex");
     expect(evidence.name).toBe("evidence");
-    expect(evidence.model).toBe("openai.gpt-oss-120b");
+    expect(evidence.model).toBe("openai.gpt-5-codex");
   });
 
   it("allows OCI GenAI region to differ from the runtime region", () => {
@@ -270,18 +271,21 @@ describe("AI provider support", () => {
     ).toBe("us-sanjose-1");
   });
 
-  it("fails clearly when OCI GenAI model or compartment config is missing", () => {
-    expect(() =>
-      createInvestigatorProviderFromEnv({
-        FIRSTTRACE_AI_PROVIDER: "oci-genai",
-        OCI_COMPARTMENT_ID: "ocid1.compartment.oc1..test",
-      }),
-    ).toThrow("FIRSTTRACE_MODEL_CHAT or OCI_GENAI_MODEL_ID is required");
+  it("uses openai.gpt-5-codex as the default OCI GenAI model", () => {
+    expect(DEFAULT_OCI_GENAI_MODEL).toBe("openai.gpt-5-codex");
+    const provider = createInvestigatorProviderFromEnv({
+      FIRSTTRACE_AI_PROVIDER: "oci-genai",
+      OCI_COMPARTMENT_ID: "ocid1.compartment.oc1..test",
+    });
 
+    expect(provider.model).toBe("openai.gpt-5-codex");
+  });
+
+  it("fails clearly when OCI GenAI compartment config is missing", () => {
     expect(() =>
       createInvestigatorProviderFromEnv({
         FIRSTTRACE_AI_PROVIDER: "oci-genai",
-        FIRSTTRACE_MODEL_CHAT: "openai.gpt-oss-120b",
+        FIRSTTRACE_MODEL_CHAT: "openai.gpt-5-codex",
       }),
     ).toThrow("OCI_COMPARTMENT_ID is required");
   });

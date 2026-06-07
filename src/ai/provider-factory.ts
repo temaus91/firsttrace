@@ -1,8 +1,10 @@
 import { createOpenAiProvider } from "./openai-provider.js";
 import { createOciGenAiProviderFromConfig } from "./oci-genai-provider.js";
-import type { AiProvider } from "../types.js";
+import { resolveAiRequestOptions } from "./request-options.js";
+import type { AiProvider, AiRequestConfig } from "../types.js";
 
 export const DEFAULT_OPENAI_MODEL = "gpt-5.4-mini";
+export const DEFAULT_OCI_GENAI_MODEL = "openai.gpt-5-codex";
 
 export type AiModelProviderName = "openai" | "oci-genai";
 
@@ -28,12 +30,8 @@ export const resolveOciGenAiModelFromEnv = (env: NodeJS.ProcessEnv = process.env
     trimmedEnv(env, "OCI_GENAI_MODEL_ID") ||
     (trimmedEnv(env, "OPENAI_MODEL_CHAT") && trimmedEnv(env, "OPENAI_MODEL_CHAT") !== DEFAULT_OPENAI_MODEL
       ? trimmedEnv(env, "OPENAI_MODEL_CHAT")
-      : undefined);
-  if (!model) {
-    throw new Error(
-      "FIRSTTRACE_MODEL_CHAT or OCI_GENAI_MODEL_ID is required when FIRSTTRACE_AI_PROVIDER=oci-genai.",
-    );
-  }
+      : undefined) ||
+    DEFAULT_OCI_GENAI_MODEL;
   return model;
 };
 
@@ -54,7 +52,6 @@ export type OciGenAiEnvConfig = {
   compartmentId: string;
   dedicatedEndpointId?: string;
   endpoint?: string;
-  maxTokens?: number;
   region?: string;
 };
 
@@ -63,33 +60,37 @@ export const ociGenAiConfigFromEnv = (env: NodeJS.ProcessEnv = process.env): Oci
   if (!compartmentId) {
     throw new Error("OCI_COMPARTMENT_ID is required when FIRSTTRACE_AI_PROVIDER=oci-genai.");
   }
-  const maxTokensRaw = trimmedEnv(env, "FIRSTTRACE_AI_MAX_TOKENS");
-  let maxTokens: number | undefined;
-  if (maxTokensRaw) {
-    const parsedMaxTokens = Number.parseInt(maxTokensRaw, 10);
-    if (!Number.isFinite(parsedMaxTokens) || parsedMaxTokens <= 0) {
-      throw new Error("FIRSTTRACE_AI_MAX_TOKENS must be a positive integer.");
-    }
-    maxTokens = parsedMaxTokens;
-  }
   return {
     compartmentId,
     dedicatedEndpointId: trimmedEnv(env, "OCI_GENAI_DEDICATED_ENDPOINT_ID"),
     endpoint: trimmedEnv(env, "OCI_GENAI_ENDPOINT"),
-    maxTokens,
     region: trimmedEnv(env, "OCI_GENAI_REGION") || trimmedEnv(env, "OCI_REGION"),
   };
 };
 
-export const createAiProviderFromEnv = (env: NodeJS.ProcessEnv = process.env): AiProvider => {
+export type CreateAiProviderFromEnvOptions = {
+  requestConfig?: AiRequestConfig;
+};
+
+export const createAiProviderFromEnv = (
+  env: NodeJS.ProcessEnv = process.env,
+  options: CreateAiProviderFromEnvOptions = {},
+): AiProvider => {
   const providerName = aiModelProviderFromEnv(env);
   const model = resolveChatModelFromEnv(env, providerName);
+  const requestOptions = resolveAiRequestOptions({
+    config: options.requestConfig,
+    env,
+    model,
+    provider: providerName,
+  });
 
   if (providerName === "oci-genai") {
     return createOciGenAiProviderFromConfig({
       ...ociGenAiConfigFromEnv(env),
       env,
       model,
+      requestOptions,
       resultProviderName: "evidence",
     });
   }
@@ -98,6 +99,7 @@ export const createAiProviderFromEnv = (env: NodeJS.ProcessEnv = process.env): A
     apiKey: requireOpenAiApiKey(env),
     env,
     model,
+    requestOptions,
     resultProviderName: "evidence",
   });
 };

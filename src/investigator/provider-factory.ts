@@ -5,10 +5,11 @@ import {
   requireOpenAiApiKey,
   resolveChatModelFromEnv,
 } from "../ai/provider-factory.js";
+import { resolveAiRequestOptions } from "../ai/request-options.js";
 import { createAgentInvestigator } from "./agent-provider.js";
 import { createEvidenceInvestigator } from "./evidence-provider.js";
 import { createOciGenAiAgentModelClientFromConfig } from "./oci-genai-agent-client.js";
-import type { InvestigatorProvider } from "../types.js";
+import type { AiRequestConfig, InvestigatorProvider } from "../types.js";
 
 export type InvestigatorProviderName = "agent" | "evidence" | "codex-cli";
 
@@ -20,12 +21,23 @@ export const investigatorProviderFrom = (value?: string): InvestigatorProviderNa
   );
 };
 
+export type CreateInvestigatorProviderFromEnvOptions = {
+  requestConfig?: AiRequestConfig;
+};
+
 export const createInvestigatorProviderFromEnv = (
   env: NodeJS.ProcessEnv = process.env,
+  options: CreateInvestigatorProviderFromEnvOptions = {},
 ): InvestigatorProvider => {
   const provider = investigatorProviderFrom(env.FIRSTTRACE_INVESTIGATOR);
   const aiProvider = aiModelProviderFromEnv(env);
   const model = resolveChatModelFromEnv(env, aiProvider);
+  const requestOptions = resolveAiRequestOptions({
+    config: options.requestConfig,
+    env,
+    model,
+    provider: aiProvider,
+  });
 
   if (provider === "codex-cli") {
     return {
@@ -38,7 +50,7 @@ export const createInvestigatorProviderFromEnv = (
   }
 
   if (provider === "evidence") {
-    return createEvidenceInvestigator(createAiProviderFromEnv(env));
+    return createEvidenceInvestigator(createAiProviderFromEnv(env, options));
   }
 
   if (aiProvider === "oci-genai") {
@@ -49,10 +61,11 @@ export const createInvestigatorProviderFromEnv = (
         ...ociGenAiConfigFromEnv(env),
         env,
         model,
+        requestOptions,
       }),
     });
   }
 
   const apiKey = requireOpenAiApiKey(env);
-  return createAgentInvestigator({ apiKey, env, model });
+  return createAgentInvestigator({ apiKey, env, model, requestOptions });
 };
