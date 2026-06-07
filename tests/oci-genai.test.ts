@@ -282,6 +282,98 @@ describe("OCI GenAI provider", () => {
     expect(calls).toEqual(["firsttrace_agent_turn", "firsttrace_agent_final"]);
   });
 
+  it("accepts OCI GenAI tool arguments as argsJson object", async () => {
+    const client = createOciGenAiAgentModelClient({
+      jsonClient: {
+        async generateJson() {
+          return {
+            argsJson: { path: "src/render.ts" },
+            tool: "readFile",
+            type: "tool",
+          };
+        },
+        model: "openai.gpt-5-codex",
+      },
+    });
+
+    await expect(
+      client.next({ maxSteps: 8, observations: [], request: buildAiReasonerRequest(investigationResult()), step: 1 }),
+    ).resolves.toMatchObject({
+      args: { path: "src/render.ts" },
+      reason: "Model requested tool execution.",
+      tool: "readFile",
+      type: "tool",
+    });
+  });
+
+  it("accepts OCI GenAI tool arguments as args object", async () => {
+    const client = createOciGenAiAgentModelClient({
+      jsonClient: {
+        async generateJson() {
+          return {
+            args: { query: "renderCitation" },
+            tool: "searchRepo",
+          };
+        },
+        model: "openai.gpt-5-codex",
+      },
+    });
+
+    await expect(
+      client.next({ maxSteps: 8, observations: [], request: buildAiReasonerRequest(investigationResult()), step: 1 }),
+    ).resolves.toMatchObject({
+      args: { query: "renderCitation" },
+      tool: "searchRepo",
+      type: "tool",
+    });
+  });
+
+  it("accepts OCI GenAI tool arguments as arguments JSON string", async () => {
+    const client = createOciGenAiAgentModelClient({
+      jsonClient: {
+        async generateJson() {
+          return {
+            arguments: "{\"symbolOrPath\":\"renderCitation\"}",
+            tool: "findReferences",
+            type: "tool",
+          };
+        },
+        model: "openai.gpt-5-codex",
+      },
+    });
+
+    await expect(
+      client.next({ maxSteps: 8, observations: [], request: buildAiReasonerRequest(investigationResult()), step: 1 }),
+    ).resolves.toMatchObject({
+      args: { symbolOrPath: "renderCitation" },
+      tool: "findReferences",
+      type: "tool",
+    });
+  });
+
+  it("accepts OCI GenAI tool arguments as tool_arguments object", async () => {
+    const client = createOciGenAiAgentModelClient({
+      jsonClient: {
+        async generateJson() {
+          return {
+            tool: "gitLog",
+            tool_arguments: { path: "src/render.ts" },
+            type: "tool",
+          };
+        },
+        model: "openai.gpt-5-codex",
+      },
+    });
+
+    await expect(
+      client.next({ maxSteps: 8, observations: [], request: buildAiReasonerRequest(investigationResult()), step: 1 }),
+    ).resolves.toMatchObject({
+      args: { path: "src/render.ts" },
+      tool: "gitLog",
+      type: "tool",
+    });
+  });
+
   it("normalizes simplified OCI GenAI final payloads", async () => {
     const client = createOciGenAiAgentModelClient({
       jsonClient: {
@@ -331,6 +423,33 @@ describe("OCI GenAI provider", () => {
     });
   });
 
+  it("accepts final turns without argsJson or reason", async () => {
+    const client = createOciGenAiAgentModelClient({
+      jsonClient: {
+        async generateJson() {
+          return {
+            result: {
+              ...aiPayload(),
+              bugLikelihood: "Likely Bug",
+            },
+            type: "final",
+          };
+        },
+        model: "openai.gpt-5-codex",
+      },
+    });
+
+    await expect(
+      client.next({ maxSteps: 8, observations: [], request: buildAiReasonerRequest(investigationResult()), step: 1 }),
+    ).resolves.toMatchObject({
+      result: {
+        bugLikelihood: "likely_bug",
+        likelyComponent: "src/render.ts",
+      },
+      type: "final",
+    });
+  });
+
   it("fails clearly on malformed OCI GenAI tool arguments", async () => {
     const client = createOciGenAiAgentModelClient({
       jsonClient: {
@@ -349,6 +468,6 @@ describe("OCI GenAI provider", () => {
 
     await expect(
       client.next({ maxSteps: 8, observations: [], request: buildAiReasonerRequest(investigationResult()), step: 1 }),
-    ).rejects.toThrow("OCI GenAI returned invalid tool args JSON");
+    ).rejects.toThrow("OCI GenAI returned invalid tool arguments");
   });
 });

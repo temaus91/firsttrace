@@ -104,6 +104,38 @@ describe("worker HTTP endpoint", () => {
     expect(notifier.notified).toHaveLength(1);
   });
 
+  it("returns a structured failed job summary when processing fails", async () => {
+    const queue = new FileSystemJobQueue(path.join(tmpdir(), `firsttrace-worker-http-failed-${Date.now()}`));
+    const job = await queue.enqueue({
+      aiEnabled: true,
+      configPath: tempConfigPath(),
+      report: "README deployment plan is unclear",
+    });
+    const previousApiKey = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    try {
+      const response = await handleWorkerRunOnceRequest(request("receiver-token", "POST"), {
+        queue,
+        receiverToken: "receiver-token",
+      });
+      const body = await json(response);
+
+      expect(response.status).toBe(200);
+      expect(body.ok).toBe(false);
+      expect(body.jobId).toBe(job.id);
+      expect(body.jobStatus).toBe("failed");
+      expect(body.errorType).toBe("provider_failure");
+      expect(body.errorSummary).toContain("OPENAI_API_KEY");
+      expect((body.job as InvestigationJob).status).toBe("failed");
+    } finally {
+      if (previousApiKey === undefined) {
+        delete process.env.OPENAI_API_KEY;
+      } else {
+        process.env.OPENAI_API_KEY = previousApiKey;
+      }
+    }
+  });
+
   it("accepts CRON_SECRET for Vercel cron calls", async () => {
     const queue = new FileSystemJobQueue(path.join(tmpdir(), `firsttrace-worker-http-cron-${Date.now()}`));
 

@@ -3,7 +3,10 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { groundAiResult } from "./grounding.js";
 import { evidenceBaseSystemPrompt, evidenceUserPrompt } from "./prompts.js";
 import { applyOpenAiResponsesRequestOptions, type ResolvedAiRequestOptions } from "./request-options.js";
-import { AiInvestigationResultPayloadSchema, type AiInvestigationResultPayload } from "./schema.js";
+import {
+  AiInvestigationResultPayloadWireSchema,
+  normalizeAiInvestigationResultPayload,
+} from "./schema.js";
 import { buildSystemPrompt } from "../investigator/prompt-contract.js";
 import type { AiInvestigationResult, AiProvider, AiReasonerRequest } from "../types.js";
 
@@ -40,14 +43,14 @@ export const createOpenAiProvider = ({
         ],
         model,
         text: {
-          format: zodTextFormat(AiInvestigationResultPayloadSchema, "firsttrace_ai_investigation_result"),
+          format: zodTextFormat(AiInvestigationResultPayloadWireSchema, "firsttrace_ai_investigation_result"),
         },
       }, requestOptions) as never);
 
-      const parsed = response.output_parsed as AiInvestigationResultPayload | null;
-      if (!parsed) {
+      if (!response.output_parsed) {
         throw new Error("OpenAI did not return a structured investigation result.");
       }
+      const parsed = normalizeAiInvestigationResultPayload(response.output_parsed);
 
       return groundAiResult({
         ...parsed,

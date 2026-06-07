@@ -353,7 +353,10 @@ GET|POST /api/worker/run-once
 ```
 
 Manual repair runs can call the same endpoint with either `CRON_SECRET` or
-`FIRSTTRACE_RECEIVER_TOKEN` as a bearer token. On Vercel,
+`FIRSTTRACE_RECEIVER_TOKEN` as a bearer token. When the claimed job fails, the
+endpoint responds with `ok: false`, `jobId`, `jobStatus`, `errorType`, and a
+short `errorSummary` so operators can see the failure class without opening the
+backing queue store. On Vercel,
 `FIRSTTRACE_GITHUB_CACHE_ROOT` should point at `/tmp/firsttrace/github` or be
 left unset so the worker uses `/tmp` instead of the read-only deployment
 directory for GitHub clones.

@@ -310,13 +310,21 @@ investigation:
       output_token_limit:
         value: 6000
         field: maxCompletionTokens
-      reasoning_effort: medium
+      reasoning_effort:
+        value: medium
+        field: reasoning.effort
       verbosity: low
       temperature:
         field: none
       extra:
         serviceTier: priority
 ```
+
+FirstTrace also normalizes common provider-output variants before applying its
+strict final schema. This covers OCI/OpenAI tool arguments returned as
+`argsJson`, `args`, `arguments`, or `tool_arguments`, final turns without tool
+fields, common `bugLikelihood` spelling variants, object `likelyOwners`, and
+manager-owner commit evidence that a provider placed directly on a candidate.
 
 ### Prompt Profiles And Overlays
 
@@ -581,6 +589,7 @@ Hosted readiness verification:
 
 ```bash
 firsttrace doctor --config examples/minimal.local.config.yaml
+firsttrace doctor ai --config firsttrace.config.yaml
 firsttrace doctor repos --config firsttrace.config.yaml
 ```
 
@@ -588,6 +597,9 @@ firsttrace doctor repos --config firsttrace.config.yaml
 receiver/reply environment variables are present when Slack is configured, and
 the selected AI provider is available when AI is requested. Missing AI credentials
 are a warning unless `--ai` is passed or Slack-originated AI is enabled.
+`doctor ai` sends a tiny JSON request to the configured provider/model using the
+current request controls, verifies the provider-output parser against local
+compatibility fixtures, and prints redacted actionable failures.
 `doctor repos` actively materializes configured Git/archive/GitHub repositories
 when applicable and prints JSON readiness fields for each repo, including
 `git_history_available`, `is_shallow`, `head_sha`,
@@ -664,7 +676,10 @@ package:
    background processing to run one worker pass after Slack has been
    acknowledged. Keep the protected worker endpoint,
    `GET|POST /api/worker/run-once`, available for manual repair runs or
-   cron on plans that support the desired frequency.
+   cron on plans that support the desired frequency. If the claimed job fails,
+   the endpoint returns `ok: false`, `jobId`, `jobStatus`, `errorType`, and a
+   short `errorSummary` so operators do not need backing storage just to see
+   the failure class.
 11. Set Slack Event Subscriptions to
    `https://<host>/api/slack/events`.
 12. Run `firsttrace hosted accept --backend vercel-supabase` against the public

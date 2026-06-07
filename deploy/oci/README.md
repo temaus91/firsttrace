@@ -66,11 +66,14 @@ it does not require `OPENAI_API_KEY`.
 
    ```bash
    npx firsttrace doctor --config firsttrace.oci.config.yaml
+   npx firsttrace doctor ai --config firsttrace.oci.config.yaml
    ```
 
    The validator fails on missing config/repo paths and unavailable Slack
    receivers, warns when Slack replies or AI are not configured, and fails AI
-   checks only when `--ai` or hosted Slack AI is explicitly enabled.
+   checks only when `--ai` or hosted Slack AI is explicitly enabled. `doctor ai`
+   performs the live provider/model JSON smoke check and parser fixture check
+   when AI is configured.
 
    If your organization requires service catalog or backend identity
    registration before Slack is connected, register the OCI deployment with the
@@ -122,6 +125,11 @@ it does not require `OPENAI_API_KEY`.
    `ai_request_extra_json`. Each field variable accepts `auto`, `none`, or an
    explicit provider request path.
 
+   Run `firsttrace doctor ai --config firsttrace.config.yaml` before deploying
+   when AI is enabled. It sends a tiny JSON request to the selected provider and
+   model with the same request controls and verifies FirstTrace's local
+   provider-output parser fixtures.
+
    For the strict production path, leave `enable_vault_secret_loading = true`
    and `oci_vault_secrets_required = true`. For a first bootstrap health check
    before any secrets exist, temporarily set both to `false`, apply, verify
@@ -150,6 +158,12 @@ it does not require `OPENAI_API_KEY`.
      --key-shape '{"algorithm":"AES","length":32}' \
      --protection-mode SOFTWARE
    ```
+
+   If Terraform suddenly reports `can not create client, bad configuration` or
+   cannot find a proper key id after changing Cloud Shell networks or sessions,
+   refresh the Cloud Shell session and confirm the OCI CLI works with a harmless
+   read command before re-running Terraform. That failure usually indicates
+   stale OCI auth/session state rather than a FirstTrace application bug.
 
 4. Apply once. This creates the base infrastructure and OCIR repository.
 

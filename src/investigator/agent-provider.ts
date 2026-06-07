@@ -1,12 +1,16 @@
 import OpenAI from "openai";
-import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 import { buildAiReasonerRequest } from "../ai/evidence.js";
 import { groundAiResult } from "../ai/grounding.js";
 import { applyOpenAiResponsesRequestOptions, type ResolvedAiRequestOptions } from "../ai/request-options.js";
 import type { AiInvestigationResultPayload } from "../ai/schema.js";
 import { agentBaseSystemPrompt } from "./agent-prompts.js";
-import { AgentFinalResponseSchema, AgentTurnResponseSchema } from "./agent-schemas.js";
+import {
+  AgentFinalWireResponseSchema,
+  AgentTurnWireResponseSchema,
+  normalizeAgentFinalResponse,
+  normalizeAgentTurnResponse,
+} from "./agent-schemas.js";
 import { agentUserPrompt, buildSystemPrompt, type InvestigationPromptContract } from "./prompt-contract.js";
 import { createInvestigationToolset } from "./tools.js";
 import type {
@@ -50,9 +54,6 @@ export type AgentModelClient = {
   next(input: AgentModelInput): Promise<AgentTurn>;
 };
 
-type OpenAiAgentTurnPayload = z.infer<typeof AgentTurnResponseSchema>;
-type OpenAiAgentFinalPayload = z.infer<typeof AgentFinalResponseSchema>;
-
 const createOpenAiAgentModelClient = (
   apiKey: string,
   model: string,
@@ -70,13 +71,13 @@ const createOpenAiAgentModelClient = (
         ],
         model,
         text: {
-          format: zodTextFormat(AgentTurnResponseSchema, "firsttrace_agent_turn"),
+          format: zodTextFormat(AgentTurnWireResponseSchema, "firsttrace_agent_turn"),
         },
       }, requestOptions) as never);
-      const parsed = response.output_parsed as OpenAiAgentTurnPayload | null;
-      if (!parsed) {
+      if (!response.output_parsed) {
         throw new Error("OpenAI did not return a structured investigation agent turn.");
       }
+      const parsed = normalizeAgentTurnResponse(response.output_parsed);
       if (parsed.type === "final") {
         if (!parsed.result) {
           throw new Error("OpenAI returned a final agent turn without result.");
@@ -86,18 +87,8 @@ const createOpenAiAgentModelClient = (
       if (!parsed.tool) {
         throw new Error("OpenAI returned a tool agent turn without tool.");
       }
-      let args: Record<string, unknown>;
-      try {
-        const argsJson = parsed.argsJson.trim() || "{}";
-        const parsedArgs = JSON.parse(argsJson) as unknown;
-        args = parsedArgs && typeof parsedArgs === "object" && !Array.isArray(parsedArgs)
-          ? (parsedArgs as Record<string, unknown>)
-          : {};
-      } catch {
-        throw new Error(`OpenAI returned invalid tool args JSON: ${parsed.argsJson}`);
-      }
       return {
-        args,
+        args: parsed.args,
         reason: parsed.reason,
         tool: parsed.tool,
         type: "tool",
@@ -112,13 +103,13 @@ const createOpenAiAgentModelClient = (
         ],
         model,
         text: {
-          format: zodTextFormat(AgentFinalResponseSchema, "firsttrace_agent_final"),
+          format: zodTextFormat(AgentFinalWireResponseSchema, "firsttrace_agent_final"),
         },
       }, requestOptions) as never);
-      const parsed = response.output_parsed as OpenAiAgentFinalPayload | null;
-      if (!parsed) {
+      if (!response.output_parsed) {
         throw new Error("OpenAI did not return a structured final investigation result.");
       }
+      const parsed = normalizeAgentFinalResponse(response.output_parsed);
       return parsed.result;
     },
   };

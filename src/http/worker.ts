@@ -43,6 +43,20 @@ const resolveNotifier = async (resultNotifier: WorkerRunOnceOptions["resultNotif
 const resolveProgressNotifier = async (progressNotifier: WorkerRunOnceOptions["progressNotifier"]) =>
   typeof progressNotifier === "function" ? progressNotifier() : progressNotifier;
 
+const errorTypeFrom = (error: string) => {
+  const normalized = error.toLowerCase();
+  if (normalized.includes("schema") || normalized.includes("agent output") || normalized.includes("zod")) {
+    return "provider_agent_schema_validation";
+  }
+  if (normalized.includes("provider") || normalized.includes("openai") || normalized.includes("oci genai")) {
+    return "provider_failure";
+  }
+  return "job_failed";
+};
+
+const errorSummaryFrom = (error: string) =>
+  error.replace(/\s+/g, " ").trim().slice(0, 500);
+
 export const handleWorkerRunOnceRequest = async (
   request: Request,
   options: WorkerRunOnceOptions,
@@ -59,11 +73,18 @@ export const handleWorkerRunOnceRequest = async (
       repoPreparation: options.repoPreparation,
       resultNotifier: await resolveNotifier(options.resultNotifier),
     });
+    const jobStatus = result.job?.status;
+    const failedError = jobStatus === "failed" ? result.job?.error?.trim() : undefined;
 
     return jsonResponse(200, {
+      errorSummary: failedError ? errorSummaryFrom(failedError) : undefined,
+      errorType: failedError ? errorTypeFrom(failedError) : undefined,
       job: result.job,
+      jobId: result.job?.id,
+      jobStatus,
       message: result.message,
       notifications: result.notifications ?? [],
+      ok: jobStatus !== "failed",
       status: result.status,
     });
   } catch (error) {

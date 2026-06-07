@@ -8,6 +8,7 @@ import {
   type SlackManifestProfile,
 } from "./chat/slack/manifest-validator.js";
 import { loadConfig } from "./config.js";
+import { renderAiDoctor, runAiDoctor } from "./diagnostics/ai-doctor.js";
 import { diagnoseConfiguredRepositories, renderRepositoryDiagnostics } from "./diagnostics/repositories.js";
 import { renderSetupValidation, validateFirstTraceSetup } from "./diagnostics/setup-validation.js";
 import { loadLocalEnv } from "./env.js";
@@ -55,6 +56,7 @@ type ParsedArgs = {
 const usage = () => `Usage:
   firsttrace investigate --config firsttrace.config.yaml --report "bug text"
   firsttrace doctor --config firsttrace.config.yaml
+  firsttrace doctor ai --config firsttrace.config.yaml
   firsttrace doctor repos --config firsttrace.config.yaml
   firsttrace investigate --config firsttrace.config.yaml --report "bug text" --ai
   firsttrace eval --config firsttrace.config.yaml --cases evals/example.yaml
@@ -286,8 +288,15 @@ const main = async () => {
   }
 
   if (args.command === "doctor") {
-    if (args.doctorAction && args.doctorAction !== "repos") {
+    if (args.doctorAction && args.doctorAction !== "ai" && args.doctorAction !== "repos") {
       throw new Error(`Unknown doctor action: ${args.doctorAction}.`);
+    }
+    if (args.doctorAction === "ai") {
+      const config = loadConfig(args.configPath);
+      const result = await runAiDoctor({ config });
+      console.log(renderAiDoctor(result));
+      if (!result.passed) process.exit(1);
+      return;
     }
     if (args.doctorAction === "repos") {
       const config = loadConfig(args.configPath);

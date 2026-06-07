@@ -24,6 +24,9 @@ const managerOwnerTriageContract = `Manager-owner triage profile:
 - Include managerTriage in the final JSON for bug reports; when using an agent turn shape, include it as result.managerTriage.
 - result.managerTriage must follow the manager-owner-triage schema exactly.
 - Create likely_owner_candidates only from owner_evidence items that include ownerCandidate data.
+- Return at most 2 likely_owner_candidates.
+- For each likely_owner_candidates item, put commit_id, commit_time, commit_title, repo, file, line, evidence_code, and why_relevant inside evidence_commits[].
+- Do not put commit fields directly on the candidate object; candidate-level commit fields are accepted only as a provider compatibility fallback.
 - Copy owner candidate names, emails, evidence_source values, commit ids, commit times, titles, files, lines, snippets, and why_relevant text exactly from ownerCandidate evidence.
 - Never create a person candidate from team aliases, CODEOWNERS-only matches, broad file history, likelyOwners, or recency without ownerCandidate evidence commits.
 - If person owner evidence is missing or incomplete, leave likely_owner_candidates empty, explain the missing evidence in missing_info, and recommend collecting exact-line blame or provider metadata.

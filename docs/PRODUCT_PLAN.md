@@ -390,7 +390,7 @@ Release boundary:
 - Historical customer-specific eval cases should stay private/downstream; public
   evals should remain generic.
 
-## Version 0.1.7: Provider Request Controls - Implemented
+## Version 0.1.7: Provider Request Controls And Output Compatibility - Implemented
 
 The customer-reported 0.1.7 issue is a real generic open-source problem:
 different AI providers and model families use different request parameter names.
@@ -429,6 +429,28 @@ Implemented 0.1.7 scope:
 - README, `.env.example`, hosted setup instructions, OCI deployment docs, Vercel
   deployment docs, package-image defaults, and deployment package templates are
   updated for 0.1.7 usage.
+- Provider-agent output is normalized before strict validation so OCI GenAI,
+  OpenAI, and future adapters can return useful common variants without failing
+  the investigation. Accepted variants include object `argsJson`, `args`,
+  `arguments`, `tool_arguments`, final turns without tool-only fields, common
+  `bugLikelihood` spellings, object `likelyOwners`, and structured
+  `relatedChange`.
+- OpenAI structured-output wire schemas are separated from FirstTrace's strict
+  internal schemas so the OpenAI SDK receives required nullable fields while
+  FirstTrace still validates normalized final results strictly.
+- Manager-owner triage output keeps at most two person-level candidates and
+  normalizes provider-returned candidate-level commit fields into
+  `evidence_commits[]`; prompt instructions tell providers to nest those fields
+  correctly and not invent people without commit/blame/provider evidence.
+- `GET|POST /api/worker/run-once` returns `ok`, `jobId`, `jobStatus`,
+  `errorType`, and a short `errorSummary` for failed claimed jobs so operators
+  are not forced into backing storage just to see provider/schema failure
+  classes.
+- `firsttrace doctor ai` sends a tiny JSON request to the configured
+  provider/model using the resolved request controls and verifies local parser
+  compatibility fixtures before deployment.
+- OCI deployment docs call out the stale Cloud Shell/auth-session Terraform
+  failure pattern as an operator issue, not a FirstTrace application bug.
 
 Release boundary:
 
@@ -1070,10 +1092,15 @@ Implemented direction for the package runtime:
   handoff behavior without forking
 - prompt overlays cannot remove required safety, citation grounding, or output
   schema rules
-- OCI GenAI response handling normalizes provider-wrapped final payloads before
-  strict schema parsing and preserves warnings when coercion happens
+- provider response handling normalizes OpenAI/OCI-style tool and final payload
+  variants before strict schema parsing and preserves warnings when coercion
+  happens
+- OpenAI structured-output wire schemas are kept SDK-compatible while strict
+  FirstTrace result validation remains internal
 - AI results can include mixed-audience handoff fields such as `bugLikelihood`,
   `userImpact`, `firstContact`, `relatedChange`, and `confidenceRationale`
+- `firsttrace doctor ai` is the package smoke command for provider request
+  controls and parser compatibility
 - grounded results include computed quality metadata: exact file found, owner
   found, related commit found, citation coverage, and actionability
 - `/healthz` exposes non-secret AI readiness metadata: AI gate status, provider,

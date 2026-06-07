@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildAiReasonerRequest } from "../src/ai/evidence.js";
 import { groundAiResult } from "../src/ai/grounding.js";
 import { aiReadinessMetadataFromEnv } from "../src/ai/readiness.js";
+import { normalizeAiInvestigationResultPayload } from "../src/ai/schema.js";
 import { buildSystemPrompt } from "../src/investigator/prompt-contract.js";
 import { MANAGER_OWNER_TRIAGE_PROFILE } from "../src/manager-triage.js";
 import {
@@ -615,5 +616,91 @@ describe("AI provider support", () => {
     });
     expect(grounded.managerTriage?.recommended_manager_action).toContain("weak normalized handoff");
     expect(grounded.quality?.triageQuality).toBe("weak");
+  });
+
+  it("normalizes recoverable provider final payload variants before grounding", () => {
+    const normalized = normalizeAiInvestigationResultPayload({
+      bugLikelihood: "Likely Bug",
+      explanation: "Renderer citation output is failing.",
+      likelyComponent: "src/render.ts",
+      likelyFiles: [],
+      likelyOwners: [{ email: "dev.owner@example.com", name: "Dev Owner" }],
+      managerTriage: {
+        issue: "Renderer crashes on citations.",
+        likely_owner_candidates: [
+          {
+            commit_id: "abcdef1234567890abcdef1234567890abcdef12",
+            commit_time: "2026-05-20T17:15:30Z",
+            commit_title: "Fix renderer citations",
+            confidence: "High",
+            email: "dev.owner@example.com",
+            evidence_source: "exact_line_blame",
+            file: "src/render.ts",
+            line: 12,
+            name: "Dev Owner",
+            rank: 1,
+            reason: "The exact blamed line owns citation rendering.",
+            repo: "repo",
+            snippet: "return renderCitation(citation)",
+            why_relevant: "The blamed code renders citations.",
+          },
+        ],
+        likely_root_cause: "Citation rendering throws.",
+        missing_info: [],
+        recommended_manager_action: "Route first to Dev Owner.",
+        user_impact: "Users cannot read citations.",
+      },
+      missingInfoQuestions: [],
+      relatedChange: { commit: "abcdef1234567890abcdef1234567890abcdef12", title: "Fix renderer citations" },
+    });
+
+    expect(normalized.bugLikelihood).toBe("likely_bug");
+    expect(normalized.confidence).toBe(0.85);
+    expect(normalized.likelyOwners).toEqual(["Dev Owner"]);
+    expect(normalized.relatedChange).toBe(JSON.stringify({ commit: "abcdef1234567890abcdef1234567890abcdef12", title: "Fix renderer citations" }));
+    expect(normalized.managerTriage?.title).toBe("Renderer crashes on citations.");
+    expect(normalized.managerTriage?.likely_owner_candidates[0]?.evidence_commits[0]).toMatchObject({
+      commit_id: "abcdef1234567890abcdef1234567890abcdef12",
+      evidence_code: "return renderCitation(citation)",
+      file: "src/render.ts",
+      line: 12,
+    });
+    expect(normalized.warnings).toEqual(expect.arrayContaining([
+      "Provider omitted top-level confidence; FirstTrace derived it from candidate confidence.",
+      "Provider returned structured relatedChange; FirstTrace serialized it.",
+      "Provider returned object likelyOwners; FirstTrace converted them to display strings.",
+    ]));
+  });
+
+  it("normalizes OpenAI wire payloads with nullable optional fields", () => {
+    const normalized = normalizeAiInvestigationResultPayload({
+      bugLikelihood: null,
+      confidence: "0.75",
+      confidenceRationale: null,
+      explanation: "Renderer citation output is failing.",
+      firstContact: null,
+      implementerHints: null,
+      likelyComponent: null,
+      likelyFiles: null,
+      likelyOwners: null,
+      managerTriage: null,
+      missingInfoQuestions: null,
+      relatedChange: null,
+      userImpact: null,
+      warnings: null,
+    });
+
+    expect(normalized).toMatchObject({
+      confidence: 0.75,
+      explanation: "Renderer citation output is failing.",
+      implementerHints: [],
+      likelyComponent: "unknown",
+      likelyFiles: [],
+      likelyOwners: [],
+      missingInfoQuestions: [],
+      relatedChange: null,
+      warnings: [],
+    });
+    expect(normalized.managerTriage).toBeUndefined();
   });
 });

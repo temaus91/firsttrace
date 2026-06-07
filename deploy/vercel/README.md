@@ -107,6 +107,11 @@ expects that token-limit field. The template also supports
 `FIRSTTRACE_AI_STOP_SEQUENCES`, `FIRSTTRACE_AI_STORE`, matching `_FIELD`
 variables, and `FIRSTTRACE_AI_REQUEST_EXTRA_JSON`.
 
+Run `firsttrace doctor ai --config firsttrace.config.yaml` from the wrapper
+before deploying when AI is enabled. It sends a tiny JSON request with the same
+request controls and checks FirstTrace's provider-output parser against local
+compatibility fixtures.
+
 ## Deploy
 
 Link the local wrapper directory to the Terraform-created project and deploy:
@@ -116,6 +121,9 @@ cd ..
 npx vercel@latest link --yes --project "$(terraform -chdir=terraform output -raw project_name)"
 npx vercel@latest --prod
 ```
+
+Manual calls to `GET|POST /api/worker/run-once` return `ok: false`, `jobId`,
+`jobStatus`, `errorType`, and a short `errorSummary` when the claimed job fails.
 
 After Vercel prints the production URL, set the Slack app Event Subscription
 request URL to:
