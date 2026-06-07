@@ -28,7 +28,7 @@ Supabase schema migrations are provided by the npm package under
 mkdir firsttrace-vercel
 cd firsttrace-vercel
 npm init -y
-npm install firsttrace@0.1.6
+npm install firsttrace@0.1.7
 cp -R node_modules/firsttrace/deploy/vercel/* .
 cp node_modules/firsttrace/deploy/vercel/gitignore.template .gitignore
 npm install
@@ -93,9 +93,24 @@ The Terraform defaults set:
 FIRSTTRACE_QUEUE_PROVIDER=supabase
 FIRSTTRACE_CONFIG_PATH=firsttrace.config.yaml
 FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false
-FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.6
+FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.7
 FIRSTTRACE_SLACK_REPLY_FORMAT=compact-v1
 ```
+
+Set provider-specific AI request controls in `production_environment` only when
+the selected model needs them. For example, use
+`FIRSTTRACE_AI_OUTPUT_TOKEN_LIMIT=6000` with
+`FIRSTTRACE_AI_OUTPUT_TOKEN_LIMIT_FIELD=maxCompletionTokens` when a provider
+expects that token-limit field. The template also supports
+`FIRSTTRACE_AI_TEMPERATURE`, `FIRSTTRACE_AI_REASONING_EFFORT`,
+`FIRSTTRACE_AI_VERBOSITY`, `FIRSTTRACE_AI_TOP_P`, `FIRSTTRACE_AI_TOP_K`,
+`FIRSTTRACE_AI_STOP_SEQUENCES`, `FIRSTTRACE_AI_STORE`, matching `_FIELD`
+variables, and `FIRSTTRACE_AI_REQUEST_EXTRA_JSON`.
+
+Run `firsttrace doctor ai --config firsttrace.config.yaml` from the wrapper
+before deploying when AI is enabled. It sends a tiny JSON request with the same
+request controls and checks FirstTrace's provider-output parser against local
+compatibility fixtures.
 
 ## Deploy
 
@@ -106,6 +121,9 @@ cd ..
 npx vercel@latest link --yes --project "$(terraform -chdir=terraform output -raw project_name)"
 npx vercel@latest --prod
 ```
+
+Manual calls to `GET|POST /api/worker/run-once` return `ok: false`, `jobId`,
+`jobStatus`, `errorType`, and a short `errorSummary` when the claimed job fails.
 
 After Vercel prints the production URL, set the Slack app Event Subscription
 request URL to:

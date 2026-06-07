@@ -7,11 +7,21 @@ export {
 export type { SlackManifestCheck, SlackManifestCheckLevel, SlackManifestProfile } from "./chat/slack/manifest-validator.js";
 export { renderSlackInvestigationReply } from "./chat/slack/render.js";
 export { loadConfig } from "./config.js";
+export { defaultAiDoctorLiveProbe, renderAiDoctor, runAiDoctor } from "./diagnostics/ai-doctor.js";
+export type { AiDoctorCheck, AiDoctorCheckLevel, AiDoctorLiveProbe, AiDoctorOptions, AiDoctorProbeContext, AiDoctorResult } from "./diagnostics/ai-doctor.js";
 export { renderSetupValidation, validateFirstTraceSetup } from "./diagnostics/setup-validation.js";
 export type { SetupCheck, SetupCheckLevel, SetupValidationOptions, SetupValidationResult } from "./diagnostics/setup-validation.js";
 export { createAiProviderFromEnv } from "./ai/provider-factory.js";
 export { createOciGenAiJsonClient } from "./ai/oci-genai-json-client.js";
 export type { OciGenAiJsonClient, OciGenAiJsonClientOptions } from "./ai/oci-genai-json-client.js";
+export {
+  aiRequestConfigFromEnv,
+  applyOciGenAiGenericChatRequestOptions,
+  applyOpenAiResponsesRequestOptions,
+  normalizeAiRequestField,
+  resolveAiRequestOptions,
+} from "./ai/request-options.js";
+export type { AiRequestProvider, ResolvedAiRequestOptions } from "./ai/request-options.js";
 export { aiDryRunFromEnv, aiSafetyModeFromEnv, sanitizeReportForAi } from "./ai/safety.js";
 export type { AiSafetyMode, AiSafetyResult } from "./ai/safety.js";
 export { aiReadinessMetadataFromEnv } from "./ai/readiness.js";

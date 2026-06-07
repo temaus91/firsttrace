@@ -8,6 +8,7 @@ import {
   type SlackManifestProfile,
 } from "./chat/slack/manifest-validator.js";
 import { loadConfig } from "./config.js";
+import { renderAiDoctor, runAiDoctor } from "./diagnostics/ai-doctor.js";
 import { diagnoseConfiguredRepositories, renderRepositoryDiagnostics } from "./diagnostics/repositories.js";
 import { renderSetupValidation, validateFirstTraceSetup } from "./diagnostics/setup-validation.js";
 import { loadLocalEnv } from "./env.js";
@@ -55,6 +56,7 @@ type ParsedArgs = {
 const usage = () => `Usage:
   firsttrace investigate --config firsttrace.config.yaml --report "bug text"
   firsttrace doctor --config firsttrace.config.yaml
+  firsttrace doctor ai --config firsttrace.config.yaml
   firsttrace doctor repos --config firsttrace.config.yaml
   firsttrace investigate --config firsttrace.config.yaml --report "bug text" --ai
   firsttrace eval --config firsttrace.config.yaml --cases evals/example.yaml
@@ -62,8 +64,8 @@ const usage = () => `Usage:
   firsttrace submit --queue filesystem --config firsttrace.config.yaml --report "bug text"
   firsttrace submit --queue supabase --config firsttrace.config.yaml --report "bug text" --ai
   firsttrace hosted verify --config examples/hosted.local.config.yaml --queue filesystem --report "bug text"
-  firsttrace hosted accept --backend oci --base-url https://example.com --config firsttrace.config.yaml --channel C0123456789 --report "bug text" --expected-build-ref npm:firsttrace@0.1.5
-  firsttrace hosted accept --backend vercel-supabase --base-url https://example.com --config firsttrace.config.yaml --channel C0123456789 --report "bug text" --expected-build-ref npm:firsttrace@0.1.5
+  firsttrace hosted accept --backend oci --base-url https://example.com --config firsttrace.config.yaml --channel C0123456789 --report "bug text" --expected-build-ref npm:firsttrace@0.1.7
+  firsttrace hosted accept --backend vercel-supabase --base-url https://example.com --config firsttrace.config.yaml --channel C0123456789 --report "bug text" --expected-build-ref npm:firsttrace@0.1.7
   firsttrace slack validate-manifest --profile slack-minimal --manifest slack-app-manifest.yaml
   firsttrace worker enqueue --queue filesystem --config firsttrace.config.yaml --report "bug text"
   firsttrace worker run --once --queue filesystem
@@ -286,8 +288,15 @@ const main = async () => {
   }
 
   if (args.command === "doctor") {
-    if (args.doctorAction && args.doctorAction !== "repos") {
+    if (args.doctorAction && args.doctorAction !== "ai" && args.doctorAction !== "repos") {
       throw new Error(`Unknown doctor action: ${args.doctorAction}.`);
+    }
+    if (args.doctorAction === "ai") {
+      const config = loadConfig(args.configPath);
+      const result = await runAiDoctor({ config });
+      console.log(renderAiDoctor(result));
+      if (!result.passed) process.exit(1);
+      return;
     }
     if (args.doctorAction === "repos") {
       const config = loadConfig(args.configPath);
@@ -413,7 +422,9 @@ const main = async () => {
     if (!args.casesPath?.trim()) {
       throw new Error("Missing required --cases.");
     }
-    const investigatorProvider = args.ai ? createInvestigatorProviderFromEnv() : undefined;
+    const investigatorProvider = args.ai
+      ? createInvestigatorProviderFromEnv(process.env, { requestConfig: config.investigation.ai?.request })
+      : undefined;
     const evalResult = await runEval({
       cases: loadEvalCases(args.casesPath),
       config,
@@ -430,7 +441,9 @@ const main = async () => {
 
   const result = await executeInvestigation({
     config,
-    investigatorProvider: args.ai ? createInvestigatorProviderFromEnv() : undefined,
+    investigatorProvider: args.ai
+      ? createInvestigatorProviderFromEnv(process.env, { requestConfig: config.investigation.ai?.request })
+      : undefined,
     report: args.report,
   });
 

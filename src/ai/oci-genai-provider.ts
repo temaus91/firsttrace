@@ -1,6 +1,7 @@
 import { groundAiResult } from "./grounding.js";
 import { createOciGenAiJsonClient, type OciGenAiJsonClient } from "./oci-genai-json-client.js";
 import { evidenceBaseSystemPrompt, evidenceUserPrompt } from "./prompts.js";
+import type { ResolvedAiRequestOptions } from "./request-options.js";
 import { normalizeAiInvestigationResultPayload } from "./schema.js";
 import { buildSystemPrompt } from "../investigator/prompt-contract.js";
 import type { AiInvestigationResult, AiProvider, AiReasonerRequest } from "../types.js";
@@ -49,18 +50,18 @@ export const createOciGenAiProviderFromConfig = ({
   dedicatedEndpointId,
   endpoint,
   env,
-  maxTokens,
   model,
   region,
+  requestOptions,
   resultProviderName,
 }: {
   compartmentId: string;
   dedicatedEndpointId?: string;
   endpoint?: string;
   env?: NodeJS.ProcessEnv;
-  maxTokens?: number;
   model: string;
   region?: string;
+  requestOptions?: ResolvedAiRequestOptions;
   resultProviderName?: string;
 }) =>
   createOciGenAiProvider({
@@ -70,9 +71,9 @@ export const createOciGenAiProviderFromConfig = ({
       dedicatedEndpointId,
       endpoint,
       env,
-      maxTokens,
       model,
       region,
+      requestOptions,
     }),
     resultProviderName,
   });

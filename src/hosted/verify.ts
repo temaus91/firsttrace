@@ -28,7 +28,7 @@ type EnvRecord = Record<string, string | undefined>;
 
 export type HostedVerifyOptions = {
   aiEnabled: boolean;
-  investigatorProviderFactory?: () => InvestigatorProvider;
+  investigatorProviderFactory?: (config: FirstTraceConfig) => InvestigatorProvider;
   channelId?: string;
   config: FirstTraceConfig;
   env?: EnvRecord;
@@ -264,15 +264,19 @@ export const createHostedVerifyQueue = (provider: QueueProviderName) => {
 
 export const runHostedVerify = async ({
   aiEnabled,
-  investigatorProviderFactory = createInvestigatorProviderFromEnv,
   channelId,
   config,
   env = process.env,
+  investigatorProviderFactory: suppliedInvestigatorProviderFactory,
   liveSlackPost,
   queue,
   queueProvider,
   report,
 }: HostedVerifyOptions): Promise<HostedVerifyResult> => {
+  const investigatorProviderFactory =
+    suppliedInvestigatorProviderFactory ??
+    ((effectiveConfig: FirstTraceConfig) =>
+      createInvestigatorProviderFromEnv(env, { requestConfig: effectiveConfig.investigation.ai?.request }));
   const checks: HostedVerifyCheck[] = [];
   checks.push(...externalReadinessChecks(env, queueProvider, liveSlackPost));
 

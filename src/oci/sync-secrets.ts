@@ -18,7 +18,7 @@ const DEFAULT_SECRET_NAMES = [
 
 const REQUIRED_OCI_ENV_NAMES = ["OCI_COMPARTMENT_ID", "OCI_REGION", "OCI_VAULT_ID", "OCI_VAULT_KEY_ID"] as const;
 const DEFAULT_MODEL = "gpt-5.4-mini";
-const DEFAULT_OCI_MODEL = "openai.gpt-oss-120b";
+const DEFAULT_OCI_MODEL = "openai.gpt-5-codex";
 
 export type OciSyncSecretsArgs = {
   envFile?: string;

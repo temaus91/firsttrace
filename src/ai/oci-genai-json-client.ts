@@ -1,4 +1,5 @@
 import type * as OciGenAi from "oci-generativeaiinference";
+import { applyOciGenAiGenericChatRequestOptions, type ResolvedAiRequestOptions } from "./request-options.js";
 import { createOciAuthProvider } from "../oci/auth.js";
 
 export type OciGenAiChatClient = {
@@ -18,9 +19,9 @@ export type OciGenAiJsonClientOptions = {
   dedicatedEndpointId?: string;
   endpoint?: string;
   env?: NodeJS.ProcessEnv;
-  maxTokens?: number;
   model: string;
   region?: string;
+  requestOptions?: ResolvedAiRequestOptions;
 };
 
 export type OciGenAiJsonRequest = {
@@ -28,8 +29,6 @@ export type OciGenAiJsonRequest = {
   systemPrompt: string;
   userPrompt: string;
 };
-
-const DEFAULT_MAX_TOKENS = 3000;
 
 const createDefaultChatClient = async (
   env: NodeJS.ProcessEnv,
@@ -105,9 +104,9 @@ export const createOciGenAiJsonClient = ({
   dedicatedEndpointId,
   endpoint,
   env = process.env,
-  maxTokens = DEFAULT_MAX_TOKENS,
   model,
   region,
+  requestOptions,
 }: OciGenAiJsonClientOptions): OciGenAiJsonClient => {
   let clientPromise: Promise<OciGenAiChatClient> | undefined;
   const getClient = () => {
@@ -129,17 +128,15 @@ export const createOciGenAiJsonClient = ({
       try {
         response = await client.chat({
           chatDetails: {
-            chatRequest: {
+            chatRequest: applyOciGenAiGenericChatRequestOptions({
               apiFormat: "GENERIC",
               isStream: false,
-              maxTokens,
               messages: [
                 textMessage("SYSTEM", `${systemPrompt}\n\nReturn only valid JSON.`),
                 textMessage("USER", userPrompt),
               ],
               responseFormat: { type: "JSON_OBJECT" },
-              temperature: 0,
-            } as OciGenAi.models.GenericChatRequest,
+            }, requestOptions) as OciGenAi.models.GenericChatRequest,
             compartmentId,
             servingMode,
           },

@@ -96,7 +96,7 @@ variable "ai_enabled" {
 variable "ai_model" {
   description = "Chat model id used by the selected AI provider. For OCI GenAI, choose a model available in the configured region."
   type        = string
-  default     = "openai.gpt-oss-120b"
+  default     = "openai.gpt-5-codex"
 }
 
 variable "oci_genai_dedicated_endpoint_id" {
@@ -107,6 +107,108 @@ variable "oci_genai_dedicated_endpoint_id" {
 
 variable "oci_genai_region" {
   description = "Optional OCI GenAI inference region. Leave empty to use the runtime region. Set this when queues/runtime run in a region that does not host the selected model."
+  type        = string
+  default     = ""
+}
+
+variable "ai_output_token_limit" {
+  description = "Optional output token limit passed to the selected AI provider. Leave empty to let the provider choose."
+  type        = string
+  default     = ""
+}
+
+variable "ai_output_token_limit_field" {
+  description = "Request field for ai_output_token_limit. Use auto, none, or an explicit provider field path such as maxCompletionTokens."
+  type        = string
+  default     = "auto"
+}
+
+variable "ai_temperature" {
+  description = "Optional temperature value passed to the selected AI provider. Leave empty to omit."
+  type        = string
+  default     = ""
+}
+
+variable "ai_temperature_field" {
+  description = "Request field for ai_temperature. Use auto, none, or an explicit provider field path."
+  type        = string
+  default     = "auto"
+}
+
+variable "ai_reasoning_effort" {
+  description = "Optional reasoning-effort value passed to providers that support it."
+  type        = string
+  default     = ""
+}
+
+variable "ai_reasoning_effort_field" {
+  description = "Request field for ai_reasoning_effort. Use auto, none, or an explicit provider field path."
+  type        = string
+  default     = "auto"
+}
+
+variable "ai_verbosity" {
+  description = "Optional verbosity value passed to providers that support it."
+  type        = string
+  default     = ""
+}
+
+variable "ai_verbosity_field" {
+  description = "Request field for ai_verbosity. Use auto, none, or an explicit provider field path."
+  type        = string
+  default     = "auto"
+}
+
+variable "ai_top_p" {
+  description = "Optional top_p value passed to the selected AI provider. Leave empty to omit."
+  type        = string
+  default     = ""
+}
+
+variable "ai_top_p_field" {
+  description = "Request field for ai_top_p. Use auto, none, or an explicit provider field path."
+  type        = string
+  default     = "auto"
+}
+
+variable "ai_top_k" {
+  description = "Optional top_k value passed to the selected AI provider. Leave empty to omit."
+  type        = string
+  default     = ""
+}
+
+variable "ai_top_k_field" {
+  description = "Request field for ai_top_k. Use auto, none, or an explicit provider field path."
+  type        = string
+  default     = "auto"
+}
+
+variable "ai_stop_sequences" {
+  description = "Optional comma-separated or JSON-array stop sequences passed to the selected AI provider. Leave empty to omit."
+  type        = string
+  default     = ""
+}
+
+variable "ai_stop_sequences_field" {
+  description = "Request field for ai_stop_sequences. Use auto, none, or an explicit provider field path."
+  type        = string
+  default     = "auto"
+}
+
+variable "ai_store" {
+  description = "Optional store flag passed to providers that support it. Use true or false, or leave empty to omit."
+  type        = string
+  default     = ""
+}
+
+variable "ai_store_field" {
+  description = "Request field for ai_store. Use auto, none, or an explicit provider field path."
+  type        = string
+  default     = "auto"
+}
+
+variable "ai_request_extra_json" {
+  description = "Optional JSON object deep-merged into the final provider request. A null value removes that key."
   type        = string
   default     = ""
 }

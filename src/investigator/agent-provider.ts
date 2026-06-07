@@ -2,9 +2,15 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { buildAiReasonerRequest } from "../ai/evidence.js";
 import { groundAiResult } from "../ai/grounding.js";
+import { applyOpenAiResponsesRequestOptions, type ResolvedAiRequestOptions } from "../ai/request-options.js";
 import type { AiInvestigationResultPayload } from "../ai/schema.js";
 import { agentBaseSystemPrompt } from "./agent-prompts.js";
-import { AgentFinalResponseSchema, AgentTurnResponseSchema } from "./agent-schemas.js";
+import {
+  AgentFinalWireResponseSchema,
+  AgentTurnWireResponseSchema,
+  normalizeAgentFinalResponse,
+  normalizeAgentTurnResponse,
+} from "./agent-schemas.js";
 import { agentUserPrompt, buildSystemPrompt, type InvestigationPromptContract } from "./prompt-contract.js";
 import { createInvestigationToolset } from "./tools.js";
 import type {
@@ -48,67 +54,63 @@ export type AgentModelClient = {
   next(input: AgentModelInput): Promise<AgentTurn>;
 };
 
-const createOpenAiAgentModelClient = (apiKey: string, model: string): AgentModelClient => {
+const createOpenAiAgentModelClient = (
+  apiKey: string,
+  model: string,
+  requestOptions?: ResolvedAiRequestOptions,
+): AgentModelClient => {
   const client = new OpenAI({ apiKey });
 
   return {
     async next(input) {
       const prompt = input.prompt ?? buildSystemPrompt({ basePrompt: agentBaseSystemPrompt });
-      const response = await client.responses.parse({
+      const response = await client.responses.parse(applyOpenAiResponsesRequestOptions({
         input: [
           { role: "system", content: prompt.systemPrompt },
           { role: "user", content: agentUserPrompt(input) },
         ],
         model,
         text: {
-          format: zodTextFormat(AgentTurnResponseSchema, "firsttrace_agent_turn"),
+          format: zodTextFormat(AgentTurnWireResponseSchema, "firsttrace_agent_turn"),
         },
-      });
+      }, requestOptions) as never);
       if (!response.output_parsed) {
         throw new Error("OpenAI did not return a structured investigation agent turn.");
       }
-      if (response.output_parsed.type === "final") {
-        if (!response.output_parsed.result) {
+      const parsed = normalizeAgentTurnResponse(response.output_parsed);
+      if (parsed.type === "final") {
+        if (!parsed.result) {
           throw new Error("OpenAI returned a final agent turn without result.");
         }
-        return { result: response.output_parsed.result, type: "final" };
+        return { result: parsed.result, type: "final" };
       }
-      if (!response.output_parsed.tool) {
+      if (!parsed.tool) {
         throw new Error("OpenAI returned a tool agent turn without tool.");
       }
-      let args: Record<string, unknown>;
-      try {
-        const argsJson = response.output_parsed.argsJson.trim() || "{}";
-        const parsedArgs = JSON.parse(argsJson) as unknown;
-        args = parsedArgs && typeof parsedArgs === "object" && !Array.isArray(parsedArgs)
-          ? (parsedArgs as Record<string, unknown>)
-          : {};
-      } catch {
-        throw new Error(`OpenAI returned invalid tool args JSON: ${response.output_parsed.argsJson}`);
-      }
       return {
-        args,
-        reason: response.output_parsed.reason,
-        tool: response.output_parsed.tool,
+        args: parsed.args,
+        reason: parsed.reason,
+        tool: parsed.tool,
         type: "tool",
       };
     },
     async final(input) {
       const prompt = input.prompt ?? buildSystemPrompt({ basePrompt: agentBaseSystemPrompt });
-      const response = await client.responses.parse({
+      const response = await client.responses.parse(applyOpenAiResponsesRequestOptions({
         input: [
           { role: "system", content: prompt.systemPrompt },
           { role: "user", content: agentUserPrompt(input, true) },
         ],
         model,
         text: {
-          format: zodTextFormat(AgentFinalResponseSchema, "firsttrace_agent_final"),
+          format: zodTextFormat(AgentFinalWireResponseSchema, "firsttrace_agent_final"),
         },
-      });
+      }, requestOptions) as never);
       if (!response.output_parsed) {
         throw new Error("OpenAI did not return a structured final investigation result.");
       }
-      return response.output_parsed.result;
+      const parsed = normalizeAgentFinalResponse(response.output_parsed);
+      return parsed.result;
     },
   };
 };
@@ -894,16 +896,18 @@ export type AgentInvestigatorOptions =
       env?: NodeJS.ProcessEnv;
       model: string;
       modelClient?: never;
+      requestOptions?: ResolvedAiRequestOptions;
     }
   | {
       env?: NodeJS.ProcessEnv;
       model: string;
       modelClient: AgentModelClient;
       apiKey?: never;
+      requestOptions?: never;
     };
 
 export const createAgentInvestigator = (options: AgentInvestigatorOptions): InvestigatorProvider => {
-  const modelClient = options.modelClient ?? createOpenAiAgentModelClient(options.apiKey, options.model);
+  const modelClient = options.modelClient ?? createOpenAiAgentModelClient(options.apiKey, options.model, options.requestOptions);
 
   return {
     model: options.model,

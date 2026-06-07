@@ -20,7 +20,28 @@ config_path = "firsttrace.config.yaml"
 # to runtime_secret_names when direct OpenAI API use is intentional.
 ai_provider = "oci-genai"
 ai_enabled  = false
-ai_model    = "openai.gpt-oss-120b"
+ai_model    = "openai.gpt-5-codex"
+
+# Optional provider request controls. Leave unset unless the selected model
+# requires a request parameter. Use *_field = "none" to omit a control, or an
+# explicit provider field path such as maxCompletionTokens when auto is wrong.
+ai_output_token_limit       = ""
+ai_output_token_limit_field = "auto"
+ai_temperature              = ""
+ai_temperature_field        = "auto"
+ai_reasoning_effort         = ""
+ai_reasoning_effort_field   = "auto"
+ai_verbosity                = ""
+ai_verbosity_field          = "auto"
+ai_top_p                    = ""
+ai_top_p_field              = "auto"
+ai_top_k                    = ""
+ai_top_k_field              = "auto"
+ai_stop_sequences           = ""
+ai_stop_sequences_field     = "auto"
+ai_store                    = ""
+ai_store_field              = "auto"
+ai_request_extra_json       = ""
 
 # Use only when you deploy a dedicated OCI GenAI endpoint.
 oci_genai_dedicated_endpoint_id = ""

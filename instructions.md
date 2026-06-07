@@ -204,7 +204,7 @@ packaged Vercel template:
 mkdir firsttrace-vercel
 cd firsttrace-vercel
 npm init -y
-npm install firsttrace@0.1.4
+npm install firsttrace@0.1.7
 cp -R node_modules/firsttrace/deploy/vercel/* .
 cp node_modules/firsttrace/deploy/vercel/gitignore.template .gitignore
 npm install
@@ -284,7 +284,7 @@ The Terraform defaults include:
 FIRSTTRACE_QUEUE_PROVIDER=supabase
 FIRSTTRACE_CONFIG_PATH=firsttrace.config.yaml
 FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=false
-FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.4
+FIRSTTRACE_BUILD_REF=npm:firsttrace@0.1.7
 FIRSTTRACE_SLACK_REPLY_FORMAT=compact-v1
 ```
 
@@ -297,6 +297,9 @@ FIRSTTRACE_AI_PROVIDER=openai
 FIRSTTRACE_AI_ENABLED=false
 FIRSTTRACE_INVESTIGATOR=agent
 FIRSTTRACE_MODEL_CHAT=gpt-5.4-mini
+FIRSTTRACE_AI_OUTPUT_TOKEN_LIMIT=
+FIRSTTRACE_AI_OUTPUT_TOKEN_LIMIT_FIELD=auto
+FIRSTTRACE_AI_REQUEST_EXTRA_JSON=
 OPENAI_API_KEY=
 SLACK_BOT_TOKEN=
 SLACK_SIGNING_SECRET=
@@ -307,6 +310,14 @@ GITHUB_TOKEN=
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
+
+Leave `FIRSTTRACE_AI_OUTPUT_TOKEN_LIMIT` empty unless the selected provider
+requires an output-token parameter. Use
+`FIRSTTRACE_AI_OUTPUT_TOKEN_LIMIT_FIELD=maxCompletionTokens`, `maxTokens`, or
+another explicit provider path when `auto` is not correct. The same pattern is
+available for `FIRSTTRACE_AI_TEMPERATURE`, `FIRSTTRACE_AI_REASONING_EFFORT`,
+`FIRSTTRACE_AI_VERBOSITY`, `FIRSTTRACE_AI_TOP_P`, `FIRSTTRACE_AI_TOP_K`,
+`FIRSTTRACE_AI_STOP_SEQUENCES`, and `FIRSTTRACE_AI_STORE`.
 
 The generic hosted HTTP receiver fails closed unless `FIRSTTRACE_RECEIVER_TOKEN`
 is configured. Set `FIRSTTRACE_ALLOW_UNAUTHENTICATED_RECEIVER=true` only for
@@ -342,7 +353,10 @@ GET|POST /api/worker/run-once
 ```
 
 Manual repair runs can call the same endpoint with either `CRON_SECRET` or
-`FIRSTTRACE_RECEIVER_TOKEN` as a bearer token. On Vercel,
+`FIRSTTRACE_RECEIVER_TOKEN` as a bearer token. When the claimed job fails, the
+endpoint responds with `ok: false`, `jobId`, `jobStatus`, `errorType`, and a
+short `errorSummary` so operators can see the failure class without opening the
+backing queue store. On Vercel,
 `FIRSTTRACE_GITHUB_CACHE_ROOT` should point at `/tmp/firsttrace/github` or be
 left unset so the worker uses `/tmp` instead of the read-only deployment
 directory for GitHub clones.
@@ -364,7 +378,7 @@ npx firsttrace hosted accept \
   --config firsttrace.config.yaml \
   --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
   --report "README deployment plan is unclear" \
-  --expected-build-ref "npm:firsttrace@0.1.4"
+  --expected-build-ref "npm:firsttrace@0.1.7"
 ```
 
 Acceptance posts a seed Slack message, sends the same signed Slack event twice,

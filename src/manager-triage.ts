@@ -82,6 +82,105 @@ export type ManagerOwnerTriageEvidenceCommit = z.infer<typeof ManagerOwnerTriage
 export type ManagerOwnerTriageCandidate = z.infer<typeof ManagerOwnerTriageCandidateSchema>;
 export type ManagerOwnerTriageResult = z.infer<typeof ManagerOwnerTriageResultSchema>;
 
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const stringFrom = (value: unknown, fallback = "") =>
+  typeof value === "string" ? value : value === undefined || value === null ? fallback : String(value);
+
+const nullablePositiveLineFrom = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number.parseInt(String(value), 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const confidenceFrom = (value: unknown): ManagerOwnerTriageCandidate["confidence"] => {
+  const normalized = stringFrom(value, "Low").trim().toLowerCase();
+  if (normalized === "high") return "High";
+  if (normalized === "medium") return "Medium";
+  return "Low";
+};
+
+const evidenceSourceFrom = (value: unknown): ManagerOwnerTriageCandidate["evidence_source"] => {
+  const parsed = ManagerOwnerTriageEvidenceSourceSchema.safeParse(value);
+  return parsed.success ? parsed.data : "unknown";
+};
+
+const stringArrayFrom = (value: unknown) =>
+  Array.isArray(value) ? value.map((item) => stringFrom(item)).filter(Boolean) : [];
+
+const evidenceCommitFrom = (
+  value: Record<string, unknown>,
+): ManagerOwnerTriageEvidenceCommit => ({
+  commit_id: stringFrom(value.commit_id ?? value.commitId ?? value.commit),
+  commit_time: stringFrom(value.commit_time ?? value.commitTime ?? value.time),
+  commit_title: stringFrom(value.commit_title ?? value.commitTitle ?? value.title),
+  evidence_code: stringFrom(value.evidence_code ?? value.evidenceCode ?? value.snippet ?? value.code),
+  file: stringFrom(value.file ?? value.path),
+  line: nullablePositiveLineFrom(value.line),
+  repo: stringFrom(value.repo),
+  why_relevant: stringFrom(value.why_relevant ?? value.whyRelevant ?? value.reason),
+});
+
+const candidateHasInlineCommit = (value: Record<string, unknown>) =>
+  ["commit_id", "commitId", "commit", "commit_time", "commitTime", "commit_title", "commitTitle", "file", "path", "snippet"].some(
+    (key) => value[key] !== undefined,
+  );
+
+const evidenceCommitsFrom = (value: Record<string, unknown>) => {
+  const nested = Array.isArray(value.evidence_commits) ? value.evidence_commits : [];
+  const commits = nested.flatMap((item) => isObject(item) ? [evidenceCommitFrom(item)] : []);
+  if (!commits.length && candidateHasInlineCommit(value)) {
+    commits.push(evidenceCommitFrom(value));
+  }
+  return commits;
+};
+
+const candidateFrom = (
+  value: unknown,
+  index: number,
+): ManagerOwnerTriageCandidate | undefined => {
+  if (!isObject(value)) return undefined;
+  const candidate = {
+    confidence: confidenceFrom(value.confidence),
+    email: stringFrom(value.email),
+    evidence_commits: evidenceCommitsFrom(value),
+    evidence_source: evidenceSourceFrom(value.evidence_source ?? value.evidenceSource),
+    name: stringFrom(value.name ?? value.owner ?? value.owner_name),
+    rank: Number.isInteger(value.rank) && Number(value.rank) > 0 ? Number(value.rank) : index + 1,
+    reason: stringFrom(value.reason ?? value.why_relevant ?? value.whyRelevant),
+  };
+  return ManagerOwnerTriageCandidateSchema.parse(candidate);
+};
+
+export const normalizeManagerOwnerTriageResult = (value: unknown): ManagerOwnerTriageResult => {
+  const strict = ManagerOwnerTriageResultSchema.safeParse(value);
+  if (strict.success) return strict.data;
+  if (!isObject(value)) return ManagerOwnerTriageResultSchema.parse(value);
+
+  const issue = stringFrom(value.issue);
+  const candidates = (Array.isArray(value.likely_owner_candidates) ? value.likely_owner_candidates : [])
+    .flatMap((candidate, index) => {
+      try {
+        const normalized = candidateFrom(candidate, index);
+        return normalized ? [normalized] : [];
+      } catch {
+        return [];
+      }
+    })
+    .slice(0, 2);
+
+  return ManagerOwnerTriageResultSchema.parse({
+    issue,
+    likely_owner_candidates: candidates,
+    likely_root_cause: stringFrom(value.likely_root_cause ?? value.likelyRootCause),
+    missing_info: stringArrayFrom(value.missing_info ?? value.missingInfo),
+    recommended_manager_action: stringFrom(value.recommended_manager_action ?? value.recommendedManagerAction),
+    title: stringFrom(value.title, issue ? issue.slice(0, 80) : "Bug Triage"),
+    user_impact: stringFrom(value.user_impact ?? value.userImpact),
+  });
+};
+
 export const parseManagerOwnerTriageResult = (value: unknown) =>
   ManagerOwnerTriageResultSchema.parse(value);
 

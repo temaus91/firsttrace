@@ -45,7 +45,7 @@ it does not require `OPENAI_API_KEY`.
    mkdir firsttrace-oci
    cd firsttrace-oci
    npm init -y
-   npm install firsttrace@0.1.6
+   npm install firsttrace@0.1.7
    cp -R node_modules/firsttrace/deploy/oci ./deploy/oci
    ```
 
@@ -66,11 +66,14 @@ it does not require `OPENAI_API_KEY`.
 
    ```bash
    npx firsttrace doctor --config firsttrace.oci.config.yaml
+   npx firsttrace doctor ai --config firsttrace.oci.config.yaml
    ```
 
    The validator fails on missing config/repo paths and unavailable Slack
    receivers, warns when Slack replies or AI are not configured, and fails AI
-   checks only when `--ai` or hosted Slack AI is explicitly enabled.
+   checks only when `--ai` or hosted Slack AI is explicitly enabled. `doctor ai`
+   performs the live provider/model JSON smoke check and parser fixture check
+   when AI is configured.
 
    If your organization requires service catalog or backend identity
    registration before Slack is connected, register the OCI deployment with the
@@ -88,7 +91,7 @@ it does not require `OPENAI_API_KEY`.
    region
    project_name = firsttrace
    ai_provider = oci-genai
-   ai_model = openai.gpt-oss-120b
+   ai_model = openai.gpt-5-codex
    ai_enabled = false
    oci_genai_region = ""
    container_image_url = ""
@@ -107,6 +110,25 @@ it does not require `OPENAI_API_KEY`.
    for PHI, PCI, legal/dispute, and customer production-data markers. Set
    `FIRSTTRACE_AI_DRY_RUN=true` during review if you want to inspect sanitized
    AI input without calling OCI GenAI.
+
+   Leave AI request controls empty unless the selected model requires them. For
+   OpenAI-family OCI models that expect `maxCompletionTokens`, set:
+
+   ```text
+   ai_output_token_limit = "6000"
+   ai_output_token_limit_field = "maxCompletionTokens"
+   ```
+
+   The Terraform template also exposes `ai_temperature`,
+   `ai_reasoning_effort`, `ai_verbosity`, `ai_top_p`, `ai_top_k`,
+   `ai_stop_sequences`, `ai_store`, matching `*_field` variables, and
+   `ai_request_extra_json`. Each field variable accepts `auto`, `none`, or an
+   explicit provider request path.
+
+   Run `firsttrace doctor ai --config firsttrace.config.yaml` before deploying
+   when AI is enabled. It sends a tiny JSON request to the selected provider and
+   model with the same request controls and verifies FirstTrace's local
+   provider-output parser fixtures.
 
    For the strict production path, leave `enable_vault_secret_loading = true`
    and `oci_vault_secrets_required = true`. For a first bootstrap health check
@@ -137,6 +159,12 @@ it does not require `OPENAI_API_KEY`.
      --protection-mode SOFTWARE
    ```
 
+   If Terraform suddenly reports `can not create client, bad configuration` or
+   cannot find a proper key id after changing Cloud Shell networks or sessions,
+   refresh the Cloud Shell session and confirm the OCI CLI works with a harmless
+   read command before re-running Terraform. That failure usually indicates
+   stale OCI auth/session state rather than a FirstTrace application bug.
+
 4. Apply once. This creates the base infrastructure and OCIR repository.
 
 5. Build and push the package image to OCIR. Authenticate Docker to the
@@ -144,8 +172,8 @@ it does not require `OPENAI_API_KEY`.
 
    ```bash
    export FIRSTTRACE_DOCKERFILE="deploy/oci/Dockerfile.package"
-   export FIRSTTRACE_PACKAGE_SPEC="firsttrace@0.1.6"
-   export FIRSTTRACE_BUILD_REF="npm:firsttrace@0.1.6"
+   export FIRSTTRACE_PACKAGE_SPEC="firsttrace@0.1.7"
+   export FIRSTTRACE_BUILD_REF="npm:firsttrace@0.1.7"
    export FIRSTTRACE_CONFIG_FILE="firsttrace.oci.config.yaml"
    export FIRSTTRACE_CONFIG_DEST="firsttrace.config.yaml"
    export FIRSTTRACE_REPOS_DIR="repos" # Optional local repo snapshots copied to /app/repos.
@@ -242,7 +270,7 @@ it does not require `OPENAI_API_KEY`.
      --config firsttrace.oci.config.yaml \
      --channel "$SLACK_AI_TRIAGE_CHANNEL_ID" \
      --report "README deployment plan is unclear" \
-     --expected-build-ref "npm:firsttrace@0.1.6"
+     --expected-build-ref "npm:firsttrace@0.1.7"
    ```
 
    This posts a real Slack seed message, sends the same signed event to OCI
@@ -264,7 +292,7 @@ export COMPARTMENT_OCID="<compartment_ocid>"
 export OCI_REGION="<oci-region>"        # Example: us-sanjose-1
 export OCI_REGION_KEY="<ocir-region-key>" # Example: sjc
 export PROJECT_NAME="firsttrace"
-export FIRSTTRACE_VERSION="0.1.5"
+export FIRSTTRACE_VERSION="0.1.7"
 export IMAGE_TAG="${FIRSTTRACE_VERSION}"
 ```
 
@@ -490,6 +518,11 @@ Vault on `region`. Free tenancies can be limited to one subscribed region, so
 confirm the subscribed region list before enabling Slack AI. If you
 intentionally use direct OpenAI instead, set `ai_provider = "openai"` and add
 `OPENAI_API_KEY` to `runtime_secret_names`.
+FirstTrace omits output-token and sampling controls unless configured. Use the
+Terraform `ai_output_token_limit`, `ai_output_token_limit_field`,
+`ai_temperature`, `ai_reasoning_effort`, `ai_verbosity`, `ai_top_p`, `ai_top_k`,
+`ai_stop_sequences`, `ai_store`, and `ai_request_extra_json` variables for
+provider-specific request requirements without rebuilding the package image.
 Hosted Slack events only enqueue AI jobs when both Terraform `ai_enabled = true`
 and the Slack channel config has `ai_enabled: true`.
 When `oci_vault_secrets_required = false`, the runtime logs a warning for a
